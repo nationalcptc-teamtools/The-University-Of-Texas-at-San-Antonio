@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Office 365 - Error</title>
+    <style>
+        body {
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f2f1;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            background-color: #0078d4; /* Microsoft blue */
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+        }
+
+        .header img {
+            height: 32px;
+            vertical-align: middle;
+        }
+
+        .error-container {
+            max-width: 500px;
+            background-color: white;
+            margin: 60px auto;
+            padding: 40px;
+            border-radius: 6px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 {
+            color: #d13438; /* red error color */
+            font-size: 28px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            color: #333333;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        .error-code {
+            font-weight: bold;
+            background-color: #eaeaea;
+            padding: 5px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        a.button {
+            display: inline-block;
+            text-decoration: none;
+            background-color: #0078d4;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        a.button:hover {
+            background-color: #005a9e;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+	<h2>Microsoft</h2>
+        <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" alt="Microsoft Logo">
+    </div>
+
+    <div class="error-container">
+        <h1>Something went wrong</h1>
+        <p>We're having trouble signing you in. Please try again later or contact your administrator.</p>
+        <div class="error-code">Error code: 0x80070005</div>
+        <p><a href="https://www.office.com" class="button" target="_blank">Back to Office 365</a></p>
+    </div>
+</body>
+</html>
+
