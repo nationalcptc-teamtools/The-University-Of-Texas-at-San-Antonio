@@ -1,20 +1,22 @@
 #!/bin/bash
 
-# List of IPs to exclude (whitelist)
+# List of IPs to exclude
 OUT_OF_SCOPE_IPS=(
   "192.168.1.10"
   "203.0.113.25"
   "198.51.100.42"
 )
 
-# Flush existing rules (optional)
-# iptables -F
+# create blacklist list 
+ipset create blacklist hash:ip hashsize 4096
 
-# Apply whitelist rules
+
+# drop all connections with the said list
+iptables -I INPUT  -m set --match-set blacklist src -j DROP 
+iptables -I FORWARD  -m set --match-set blacklist src -j DROP 
+
+
+# one by one, add the IPs or ranges
 for IP in "${OUT_OF_SCOPE_IPS[@]}"; do
-    echo "Whitelisting $IP..."
-    iptables -I INPUT -s "$IP" -j ACCEPT
-    iptables -I OUTPUT -d "$IP" -j ACCEPT
+    ipset add blacklist "$IP"
 done
-
-echo "Done. Out-of-scope IPs have been excluded."
