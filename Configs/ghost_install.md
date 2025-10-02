@@ -23,7 +23,7 @@ Install Ghostwriter:
 ```
 mkdir ~/tools/ && cd ~/tools/
 git clone https://github.com/GhostManager/Ghostwriter.git 
-sudo ~/tools/Ghostwriter/ghostwriter-cli-linux install
+~/tools/Ghostwriter/ghostwriter-cli-linux install
 
 # Get the admin password
 ~/tools/Ghostwriter/ghostwriter-cli-linux config get admin_password
