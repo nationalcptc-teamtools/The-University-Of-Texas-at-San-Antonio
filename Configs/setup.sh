@@ -7,6 +7,9 @@
 # Kali 2023.4-vmware
 # Linux kali 6.5.0-kali3-amd64 #1 SMP PREEMPT_DYNAMIC Debian 6.5.6-1kali1 (2023-10-09) x86_64 GNU/Linux
 
+
+### !! INSTALL XTERM ON WINDOWS FIRST MANUALLY AND THEN IMPORT THE MOBA CONFIG. !!
+
 read -p "Please run this script using the bash command, inside the context of the bash shell. Enter \"/bin/bash\", then execute the script with \"bash setup-script.sh\""
 
 # The basics
