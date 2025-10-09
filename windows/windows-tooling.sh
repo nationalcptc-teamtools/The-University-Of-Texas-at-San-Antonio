@@ -7,14 +7,14 @@ mkdir ~/tools
 chown -R $who:$who ~/tools
 
 # PowerView + Pywerview
-mkdir -p ~/tools/AD/
-wget -4 https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Recon/PowerView.ps1 -O ~/tools/AD/PowerView.ps1
-mkdir -p ~/tools/AD/Pywerview/
-git clone https://github.com/aniqfakhrul/powerview.py.git ~/tools/AD/Pywerview/
-chmod +x ~/tools/AD/Pywerview/setup.py
-chmod +x ~/tools/AD/Pywerview/powerview.py
-pip3 install -r ~/tools/AD/Pywerview/requirements.txt
-sudo python3 ~/tools/AD/Pywerview/setup.py install
+#mkdir -p ~/tools/AD/
+#wget -4 https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Recon/PowerView.ps1 -O ~/tools/AD/PowerView.ps1
+#mkdir -p ~/tools/AD/Pywerview/
+#git clone https://github.com/aniqfakhrul/powerview.py.git ~/tools/AD/Pywerview/
+#chmod +x ~/tools/AD/Pywerview/setup.py
+#chmod +x ~/tools/AD/Pywerview/powerview.py
+#pip3 install -r ~/tools/AD/Pywerview/requirements.txt
+#sudo python3 ~/tools/AD/Pywerview/setup.py install
 # Can't believe I had to do this... >_>
 sudo cp /usr/local/lib/python3.11/dist-packages/gnureadline-8.1.2-py3.11-linux-x86_64.egg/gnureadline.libs/libncurses-a6f90868.so.5.9 /usr/lib/x86_64-linux-gnu/
 sudo cp /usr/local/lib/python3.11/dist-packages/gnureadline-8.1.2-py3.11-linux-x86_64.egg/gnureadline.libs/libtinfo-10270e32.so.5.9 /usr/lib/x86_64-linux-gnu/

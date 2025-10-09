@@ -10,22 +10,22 @@
 
 ### !! INSTALL XTERM ON WINDOWS FIRST MANUALLY AND THEN IMPORT THE MOBA CONFIG. !!
 
-read -p "Please run this script using the bash command, inside the context of the bash shell. Enter \"/bin/bash\", then execute the script with \"bash setup-script.sh\""
+#read -p "Please run this script using the bash command, inside the context of the bash shell. Enter \"/bin/bash\", then execute the script with \"bash setup-script.sh\""
 
 # The basics
 sudo apt install tmux -y
 
 # tmux + zsh config changes
-echo "export HISTSIZE=100000" >> ~/.bashrc
-echo "export HISTFILESIZE=100000" >> ~/.bashrc
-source ~/.bashrc
+echo "export HISTSIZE=100000" >> ~/.zshrc
+echo "export HISTFILESIZE=100000" >> ~/.zshrc
+source ~/.zshrc
 export DEBIAN_FRONTEND=noninteractive
 
 # Get user context
 who=$(whoami)
 
 # Setting default shell to bash
-chsh -s /bin/bash $who
+#chsh -s /bin/bash $who
 
 # Before we install tools, let's change/update our repos
 sudo apt update -y
@@ -56,9 +56,9 @@ sudo apt install -y \
 
 
 # XRDP lol
-sudo apt install -y kali-desktop-xfce xorg xrdp
-sudo systemctl enable xrdp --now
-sudo systemctl start xrdp
+#sudo apt install -y kali-desktop-xfce xorg xrdp
+#sudo systemctl enable xrdp --now
+#sudo systemctl start xrdp
 
 # Make tools directory
 mkdir ~/tools
@@ -68,9 +68,6 @@ chown -R $who:$who ~/tools
 mkdir -p ~/tools/privesc/
 cp /usr/share/peass/linpeas/linpeas.sh ~/tools/privesc
 cp /usr/share/peass/winpeas/winPEASany.exe ~/tools/privesc
-wget -4 https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Privesc/PowerUp.ps1 -O ~/tools/privesc/PowerUp.ps1
-
-
 
 
 
