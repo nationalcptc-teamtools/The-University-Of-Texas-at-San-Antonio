@@ -9,3 +9,4 @@ SharpGPOAbuse is for abusing GPOs
 mimikatz is for credential harvesting
 nc is for connecting to ports
 winpeas is for local privilege escalation and enumeration
+group3r is a GPO enumeration tool
