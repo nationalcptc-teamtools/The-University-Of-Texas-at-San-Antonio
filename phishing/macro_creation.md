@@ -29,3 +29,9 @@ End Sub
 
 
 https://medium.com/@mavrogiannispan/phishing-2-0-9f49654de4a6
+
+## THINGS TO ENSURE:
+- excel account settings -> trust & security center -> enable macros
+- file explorer -> properties -> unblock file
+- also macros can now only be triggered in the licensed version of office, active content is not enabled on the free version
+  
