@@ -1,0 +1,6 @@
+{
+  "allowed_cidrs": ["127.0.0.0/8"],
+  "excluded_cidrs": [],
+  "allowed_hosts": ["localhost"],
+  "allow_http_login": false
+}

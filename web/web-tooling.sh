@@ -1,5 +1,6 @@
 #!/bin/bash
 TMP_DIR="$(mktemp -d)"
+ZAP_DIR="${ZAP_DIR:-$HOME/tools/web/zap}"
 
 # update system
 sudo apt update 
