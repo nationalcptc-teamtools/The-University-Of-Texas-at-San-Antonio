@@ -1,0 +1,78 @@
+{
+  "classification": "public-development-metadata",
+  "scope": "this project only; runtime provider is engagement-specific",
+  "agents": [
+    {
+      "role": "planner",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "xhigh",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity not exposed by collaboration status; no model substitution requested",
+      "task": "Contracts, typed host followup and handover plan",
+      "outcome": "read-only",
+      "owned_files": [
+        "docs/harness/APPROVED-PLAN.md (read-only planning inputs)",
+        "contracts and ordered work-package briefs"
+      ],
+      "validation": "Final integrated validation is recorded in RELEASE-STATUS.json and ACCEPTANCE.md; worker intermediate claims are not release approval."
+    },
+    {
+      "role": "enforcement_builder",
+      "requested_model": "gpt-5.6-terra",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity not exposed by collaboration status; no model substitution requested",
+      "task": "Initial broker, audit, ledger, network, isolation and browser implementations",
+      "outcome": "Integrated with subsequent main fixes",
+      "owned_files": [
+        "cptc_harness/broker.py",
+        "cptc_harness/ledger.py (initial)",
+        "cptc_harness/audit.py (initial)",
+        "cptc_harness/network.py",
+        "cptc_harness/isolation.py",
+        "cptc_harness/browser.py",
+        "cptc_harness/browser_worker.py"
+      ],
+      "validation": "Final integrated validation is recorded in RELEASE-STATUS.json and ACCEPTANCE.md; worker intermediate claims are not release approval."
+    },
+    {
+      "role": "tooling_implementer",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity not exposed by collaboration status; no model substitution requested",
+      "task": "Registry, parsers, collectors, fixtures, skills, handover ledger",
+      "outcome": "Integrated with subsequent main fixes",
+      "owned_files": [
+        "cptc_harness/registry.py",
+        "cptc_harness/collectors/",
+        "cptc_harness/parsers/",
+        "cptc_harness/skills.py",
+        "cptc_harness/preambles.py (initial)",
+        "cptc_harness/ledger.py (handover followup)",
+        "scripts/collect-linux.py",
+        "scripts/collect-windows.ps1",
+        "skills/cptc-harness/",
+        "tests/test_guarded_tools.py",
+        "tests/test_handover.py",
+        "tests/fixtures/"
+      ],
+      "validation": "Final integrated validation is recorded in RELEASE-STATUS.json and ACCEPTANCE.md; worker intermediate claims are not release approval."
+    },
+    {
+      "role": "review_cptc_controls",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity not exposed by collaboration status; no model substitution requested",
+      "task": "Independent adversarial review",
+      "outcome": "Findings tracked and corrected before packaging",
+      "owned_files": [],
+      "validation": "Final integrated validation is recorded in RELEASE-STATUS.json and ACCEPTANCE.md; worker intermediate claims are not release approval."
+    }
+  ],
+  "integration": {
+    "owner": "main",
+    "responsibility": "Contracts, migration, runtime, provider/secret/signing/audit process composition, reports, CLI/MCP/workflows, evidence exports, corrective enforcement edits and final validation."
+  }
+}

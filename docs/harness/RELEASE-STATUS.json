@@ -1,0 +1,174 @@
+{
+  "version": "0.1.0a1",
+  "classification": "public-development-metadata",
+  "status": "private_alpha_not_competition_accepted",
+  "checked_at_utc": "2026-09-07T23:40:32.455505Z",
+  "full_approved_plan_complete": false,
+  "active_profiles_live_accepted": 0,
+  "remote_push_authorized": false,
+  "validation": {
+    "pytest": {
+      "command": "python3 -m pytest -q tests web",
+      "passed": 128,
+      "subtests_passed": 17,
+      "seconds": 34.73,
+      "skipped": 0
+    },
+    "legacy_unittest": {
+      "command": "python3 -m unittest discover -s web -p 'test_*.py'",
+      "passed": 34,
+      "seconds": 15.131
+    },
+    "independent_review": {
+      "requested_model": "gpt-5.6-luna",
+      "scope": "Multiple enforcement/integration reviews and final orphan-result/audit/report verification",
+      "final_focused_passed": 37,
+      "reported_blockers_in_reviewed_surface": 0,
+      "full_live_release_approval": false
+    },
+    "source_secret_scan": {
+      "tool": "gitleaks",
+      "result": "passed_with_one_reviewed_exact_source_hash_false_positive",
+      "configuration": ".gitleaks.toml"
+    },
+    "worker_and_executable_pins": "all 9 match on tested host",
+    "compileall": "passed",
+    "diff_check": "passed"
+  },
+  "efficiency": {
+    "classification": "synthetic",
+    "tokenizer": "tiktoken 0.12.0 / o200k_base",
+    "baseline_version": "24-observations-6-turns-v1",
+    "input_tokens_baseline": 40752,
+    "input_tokens_compact": 4644,
+    "input_token_reduction_percent": 88.6,
+    "comparison": "Same compact preamble on all six turns; accumulated raw transcript versus typed state changes.",
+    "actual_model_calls": 0,
+    "network_target_requests": 0,
+    "synthetic_stdout_bytes_retained": 43398,
+    "fixture_sha256": "a26dfd153cf1184faee469da9cb0ca44dcc5b8126638ea4dd62af2679096202a",
+    "audit_verified": true,
+    "limitations": "Input-token fixture comparison only; no claim about actual provider tokenizer, billing, output tokens, or reasoning usage."
+  },
+  "profiles": [
+    {
+      "id": "network.nmap_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "network.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "network.nmap_inventory",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "web.capture_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "web.headers",
+      "mode": "bounded",
+      "admission": "synthetic_integration_only_live_pending",
+      "live_evidence": false
+    },
+    {
+      "id": "web.session",
+      "mode": "bounded",
+      "admission": "synthetic_integration_only_live_pending",
+      "live_evidence": false
+    },
+    {
+      "id": "web.nuclei",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "web.zap",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "linux.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "linux.inventory",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "windows_ad.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "windows_ad.inventory",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.result_intake",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.zerologon",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.dos",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.spraying",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.domain_change",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "reporting.records",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    }
+  ],
+  "blocking_gates": [
+    "Native scanner and remote host containment profiles are not implemented/admitted.",
+    "Authenticated session and active controlled-account testing are not admitted.",
+    "No automated proof profile is admitted.",
+    "Client browser login and recipient-bound client MCP transport are not admitted.",
+    "Actual supplied AI authorization, retention and upstream tool controls are not verified.",
+    "Dell profile live acceptance remains pending; Juice Shop access remains unavailable.",
+    "PowerShell execution and Python 3.11-3.13 validation remain pending.",
+    "The full future-profile and failure-mode adversarial corpus is incomplete."
+  ],
+  "package_note": "Wheel and sdist are local evaluation artifacts. Final artifact hashes are recorded beside the packages; build success does not satisfy live release gates."
+}

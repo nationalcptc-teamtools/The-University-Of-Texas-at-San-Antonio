@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools==81.0.0", "wheel==0.48.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cptc-guarded-harness"
+version = "0.1.0a1"
+description = "Local deterministic CPTC workflows with bounded AI capabilities and UTC audit trails"
+readme = "docs/harness/README.md"
+requires-python = ">=3.11"
+dependencies = ["cryptography==50.0.1"]
+
+[project.optional-dependencies]
+browser = ["playwright==1.62.0"]
+mcp = ["mcp==1.29.0"]
+test = ["pytest==9.1.0"]
+benchmark = ["tiktoken==0.12.0"]
+
+[project.scripts]
+cptc = "cptc_harness.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cptc_harness*"]
+
+[tool.setuptools.package-data]
+cptc_harness = ["resources/*", "native/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "web"]
+pythonpath = [".", "web"]
+addopts = "-ra"

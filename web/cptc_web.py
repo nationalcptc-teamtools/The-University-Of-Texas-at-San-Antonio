@@ -583,7 +583,7 @@ def export(root, db):
     write_export(out / "coverage.md", "\n".join(lines) + "\n")
     write_export(out / "evidence.json", json.dumps(data, indent=2) + "\n")
     # Small AI brief excludes response hashes, artifacts, and freeform notes/history.
-    brief = {"schema": 1, "scope": data["scope"], "agent_contract": data["agent_contract"], "apps": [{"id": a["id"], "url": a["url"], "owner": a["owner"]} for a in data["apps"]], "next_actions": data["next_actions"]}
+    brief = {"schema": 1, "classification": "client_confidential", "disclosure": "Approved client AI only; removing identifiers does not declassify engagement data.", "scope": data["scope"], "agent_contract": data["agent_contract"], "apps": [{"id": a["id"], "url": a["url"], "owner": a["owner"]} for a in data["apps"]], "next_actions": data["next_actions"]}
     write_export(out / "ai-brief.json", json.dumps(brief, indent=2) + "\n")
     return out
 

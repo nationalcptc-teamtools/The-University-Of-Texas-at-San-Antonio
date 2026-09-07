@@ -1,0 +1,153 @@
+import tempfile
+import pytest
+from pathlib import Path
+import json
+from cptc_harness.audit import AuditWriter
+from cptc_harness.contracts import AuditEvent, PolicySnapshot, ScopeSpec
+from cptc_harness.contracts import PolicyError
+from cptc_harness.storage import write_json
+
+def policy(): return PolicySnapshot("e","r","w","d","o",ScopeSpec())
+
+def test_rotate_reopen_and_append():
+    with tempfile.TemporaryDirectory() as root:
+        audit=AuditWriter(root,policy()); audit.emit(AuditEvent("one")); seal=audit.seal(); audit.close()
+        assert seal.events == 1
+        reopened=AuditWriter(root,policy()); reopened.emit(AuditEvent("two")); assert reopened._seq == 2
+        assert len(list((reopened.segments_root).glob("*/audit.jsonl"))) == 1
+
+def test_missing_state_and_tampered_closed_segment_fail_closed():
+    with tempfile.TemporaryDirectory() as root:
+        audit=AuditWriter(root,policy()); audit.emit(AuditEvent("one")); audit.rotate(); audit.close()
+        segment=next((Path(root)/"segments").glob("*/audit.jsonl")); segment.write_bytes(segment.read_bytes()+b"x")
+        with pytest.raises(PolicyError): AuditWriter(root,policy())
+
+
+@pytest.mark.parametrize("checkpoint", ["pending", "directory", "audit.jsonl", "transcript.log", "segment_manifest", "active_files", "pointer", "pending_removed", "committed"])
+def test_each_durable_rotation_boundary_recovers_without_rewriting_events(tmp_path, checkpoint, monkeypatch):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy())
+    audit.emit(AuditEvent("first"))
+    audit.rotate()
+    audit.emit(AuditEvent("second"))
+    original = audit.path.read_bytes()
+    def crash(label):
+        if label == checkpoint:
+            raise OSError("synthetic power-loss checkpoint")
+    monkeypatch.setattr(audit, "_checkpoint", crash)
+    with pytest.raises(OSError):
+        audit.rotate()
+    assert not audit.ready()
+    audit.close()
+    reopened = AuditWriter(tmp_path, policy())
+    try:
+        assert reopened.verify().valid and reopened.verify().events == 2
+        archived = sorted(reopened.segments_root.glob("*/audit.jsonl"))
+        assert archived[-1].read_bytes() == original
+        assert not (tmp_path / "rotation.pending.json").exists()
+        reopened.emit(AuditEvent("third"))
+        assert reopened.verify().valid and reopened._seq == 3
+    finally:
+        reopened.close()
+
+
+def test_checkpoint_failure_latches_and_reopen_refuses_inconsistent_tail(tmp_path, monkeypatch):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy())
+    def fail():
+        raise OSError("synthetic disk failure")
+    monkeypatch.setattr(audit, "_write_state", fail)
+    with pytest.raises(OSError):
+        audit.emit(AuditEvent("not_checkpointed"))
+    assert not audit.ready()
+    with pytest.raises(PolicyError):
+        audit.emit(AuditEvent("must_not_append"))
+    audit.close()
+    with pytest.raises(PolicyError):
+        AuditWriter(tmp_path, policy())
+
+
+@pytest.mark.parametrize("damage", ["artifact", "manifest", "pointer", "parent", "permission", "symlink"])
+def test_closed_records_evidence_and_manifest_chain_remain_verifiable(tmp_path, damage):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy())
+    reference = audit.capture("fixture", "stdout", b"synthetic output\x1b[0m", "synthetic")
+    audit.rotate()
+    audit.emit(AuditEvent("second"))
+    audit.rotate()
+    assert audit.verify().valid
+    if damage == "artifact":
+        (tmp_path / reference.artifact_relpath).unlink()
+    elif damage == "manifest":
+        path = sorted(audit.segments_root.glob("*/manifest.json"))[0]
+        value = json.loads(path.read_text())
+        value["events"] = 999
+        write_json(path, value)
+    elif damage == "pointer":
+        (tmp_path / "audit.manifest.json").unlink()
+    elif damage == "parent":
+        import hashlib
+        from cptc_harness.contracts import canonical_json
+        path = sorted(audit.segments_root.glob("*/manifest.json"))[1]
+        value = json.loads(path.read_text())
+        value["parent_sha256"] = "0" * 64
+        value.pop("sha256")
+        value["sha256"] = hashlib.sha256(canonical_json(value)).hexdigest()
+        write_json(path, value)
+        write_json(tmp_path / "audit.manifest.json", value)
+    elif damage == "permission":
+        (tmp_path / reference.artifact_relpath).chmod(0o644)
+    else:
+        path = tmp_path / reference.artifact_relpath
+        saved = tmp_path / "saved-fixture"
+        path.rename(saved)
+        path.symlink_to(saved)
+    assert not audit.verify().valid
+    audit.close()
+    with pytest.raises(PolicyError):
+        AuditWriter(tmp_path, policy())
+
+
+def test_empty_seal_is_idempotent_and_later_export_can_log(tmp_path):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy())
+    first = audit.seal()
+    assert audit.seal() == first
+    audit.emit(AuditEvent("export_complete"))
+    assert audit.seal().events == 1
+    assert audit.verify().valid
+    audit.close()
+
+
+@pytest.mark.parametrize("failure", ["cap", "classification", "encryption", "allocation"])
+def test_capture_failure_remains_stopped_after_reopen(tmp_path, monkeypatch, failure):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy(), evidence_cap=3)
+    with pytest.raises(PolicyError):
+        if failure == "cap":
+            audit.capture("failure", "stdout", b"overflow", "synthetic")
+        elif failure == "classification":
+            audit.capture("failure", "stdout", b"x", "unknown")
+        elif failure == "encryption":
+            audit.capture("failure", "stdout", b"x", "restricted_raw")
+        else:
+            def fail(*args):
+                raise OSError("synthetic allocation failure")
+            monkeypatch.setattr("os.posix_fallocate", fail)
+            audit.reserve_output("failure", 3)
+    audit.close()
+    reopened = AuditWriter(tmp_path, policy(), evidence_cap=3)
+    assert not reopened.ready()
+    with pytest.raises(PolicyError):
+        reopened.emit(AuditEvent("must_not_restart"))
+    reopened.close()
+    from cptc_harness.audit import verified_events
+    from cptc_harness.exports import offline_timeline
+    with pytest.raises(PolicyError):
+        verified_events(tmp_path)
+    with pytest.raises(PolicyError):
+        offline_timeline((tmp_path,), tmp_path / "must-not-export.json")
+    with tempfile.TemporaryDirectory() as root:
+        audit=AuditWriter(root,policy()); audit.emit(AuditEvent("one")); audit.close()
+        (Path(root)/".audit-state.json").unlink()
+        with pytest.raises(PolicyError): AuditWriter(root,policy())

@@ -1,0 +1,2 @@
+<?xml version="1.0"?>
+<nmaprun><host><status state="up"/><address addr="198.51.100.20" addrtype="ipv4"/><ports><port protocol="tcp" portid="22"><state state="filtered"/></port></ports></host></nmaprun>

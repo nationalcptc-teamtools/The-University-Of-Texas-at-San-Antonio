@@ -1,0 +1,39 @@
+{
+  "engagement_id": "synthetic-preparation",
+  "revision": "v1",
+  "workspace_id": "workspace-1",
+  "device_id": "device-1",
+  "operator_id": "operator-1",
+  "scope": {
+    "allowed_cidrs": [
+      "192.0.2.0/24"
+    ],
+    "excluded_cidrs": [],
+    "allowed_hosts": [],
+    "allow_http_login": false
+  },
+  "targets": [],
+  "approvals": [],
+  "window_start": "",
+  "window_end": "",
+  "sow_reference": "unverified",
+  "roe_reference": "unverified",
+  "exclusions": [
+    "OT",
+    "management infrastructure",
+    "other teams",
+    "fragile systems"
+  ],
+  "outside_assistance": "Only as explicitly permitted by the current CPTC rules and ROE.",
+  "staging_rules": "No publication without the approved CPTC staging process.",
+  "reporting": "Preserve evidence; distinguish observed, blocked, attempted, and confirmed outcomes.",
+  "escalation": "Stop and contact the registered operator on unknown impact or scope.",
+  "encrypted_storage": false,
+  "model_calls": 6,
+  "model_actions": 12,
+  "format_repairs": 1,
+  "excerpt_bytes": 2048,
+  "decision_bytes": 8192,
+  "http_rate": 1.0,
+  "contract_version": 1
+}

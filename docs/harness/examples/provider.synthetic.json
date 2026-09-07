@@ -1,0 +1,38 @@
+{
+  "name": "synthetic-example",
+  "kind": "openai",
+  "origin": "https://provider.example",
+  "path": "/v1/chat/completions",
+  "model": "operator-selected-model",
+  "allowed_addresses": [
+    "192.0.2.1"
+  ],
+  "approved_client": false,
+  "permitted_categories": [
+    "public",
+    "synthetic"
+  ],
+  "upstream_tools": "unknown",
+  "upstream_evidence": "",
+  "authorization": "",
+  "retention": "",
+  "reviewed_by": "",
+  "response_format": "json",
+  "response_path": [
+    "choices",
+    "0",
+    "message",
+    "content"
+  ],
+  "request_template": {},
+  "headers": {},
+  "timeout_s": 180.0,
+  "max_request_bytes": 32768,
+  "max_response_bytes": 262144,
+  "certificate_sha256": "",
+  "contract_version": 1,
+  "capability_path": "",
+  "capability_key": "",
+  "capability_config_sha256": "",
+  "browser_config": {}
+}

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "workers": {
+    "provider_worker.py": "88be6b83232a99797a04096f69edbce6ae9492cadc3611dc82436911488c5070",
+    "browser_worker.py": "578cb2aef094d2963e7bceac1635911c13d11c64afccc1254f818bbd18149d48",
+    "secret_worker.py": "640fcd52bb4026d2b62190b5b427f99dd22a686d00f05b441572b7a70f25260d",
+    "signing_worker.py": "dd3ee2b41d36d17a4ebaf2e7c95f683490a7a1e87a803946bcde1f7a5147d9b0",
+    "audit_worker.py": "28094ae798f59bef0671c6d62c1e439c5a78dc193cb4610f41f29cb63066e45c"
+  },
+  "executables": {
+    "/usr/bin/bwrap": "8dea6d013ac3a476f1964ffc6d407a3b6223f43cd4a0c43207146a5cefe59882",
+    "/usr/bin/python3": "dd65a07e8f535525443d63e2bd6dd10efbf22bf22e0b6d65e634266acc7ac976",
+    "/usr/sbin/chromium": "3f10e456d0275686e7ed1636f61abf9ce57d479f1290bd70a04937be768523a5",
+    "/usr/lib/chromium/chromium": "66f5195ba3ee5e250cf1b8b96af9f98528fac6d1454569562998fae4d0b18c47"
+  }
+}

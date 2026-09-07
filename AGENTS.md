@@ -12,4 +12,11 @@
   The `public-upstream` remote is for fetching only; its push URL is disabled.
 - Preserve the existing local history and tooling. Do not publish reports,
   engagement evidence, credentials, or other data as part of repository setup.
-- Use only `gpt-5.6-luna` for any subagents, including planning and review.
+- For the approved guarded CPTC harness build, use `gpt-5.6-luna` for the
+  named planner, implementer and independent reviewer; use `gpt-5.6-terra`
+  workers for enforcement, audit and transport. This project-only exception
+  was explicitly approved on 2026-09-07. Do not change global model settings.
+- At most two write agents may run concurrently, with disjoint file ownership.
+  Main owns shared interfaces, migrations, integration and release acceptance.
+- Build agents use source and synthetic fixtures only, never credentials or
+  raw engagement data. No automatic provider fallback or model substitution.

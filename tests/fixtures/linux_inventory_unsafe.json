@@ -1,0 +1,1 @@
+{"schema":"cptc.linux.inventory.v1","target":"192.0.2.10","controls":{"network_access":true,"sudo_used":false,"service_changes":false},"records":[{"kind":"permission","path":"/tmp/demo","mode":"0777","owner":"root","world_writable":true}]}

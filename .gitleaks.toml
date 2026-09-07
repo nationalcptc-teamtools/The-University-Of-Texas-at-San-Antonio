@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reviewed false positive: exact public source-code SHA256 for the pinned secret worker, not a credential"
+regexTarget = "match"
+regexes = ['''secret_worker\.py": "640fcd52bb4026d2b62190b5b427f99dd22a686d00f05b441572b7a70f25260d"''']

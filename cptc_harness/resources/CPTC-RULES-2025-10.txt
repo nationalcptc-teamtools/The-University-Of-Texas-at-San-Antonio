@@ -1,0 +1,496 @@
+                               Official Competition Rules
+Organization: Collegiate Penetration Testing Competition Ltd.
+Last updated: October 2025
+Adopted: [DATE] Last reviewed: [DATE]
+
+    These Rules of Engagement govern participation in Global Collegiate Penetration Testing
+    Competition (Global CPTC) events. They are not an organizational governance policy, but
+    they are Board-approved and maintained under the same review and approval workflow as the
+    other policies in this repository.
+
+
+
+
+Terms
+Throughout these rules, the following terms are used:
+
+       • Operations Team - Volunteers that provide technical support, overall administrative
+         support to the competition, observe team performance in their competition area, and
+         evaluate team performance and rule compliance.
+       • Competition Officials - CPTC Directors charged with the development or execution of
+         the competition and may include volunteers operating in an official capacity.
+       • Engagement Team - The institution competitive teams consisting of students competing
+         in a CPTC event.
+       • Team Captain - A student member of the Engagement Team identified as the primary
+         liaison between the Competition Officials and Operations Team.
+       • Team Co-Captain - A student member of the Engagement Team identified as the secondary
+         or backup liaison between the Engagement Team and the Operations Team, should the Team
+         Captain be unavailable (i.e. not in the competition room).
+       • Team Advisor/Coach - A faculty or staff representative of the Engagement Team's host
+         institution responsible for serving as a liaison between competition officials and the
+         team's institution.
+
+
+
+
+Official Competition Rules              Collegiate Penetration Testing Competition Ltd.           Page 1 of 11
+Team and Competitor Requirements
+
+Educational Impact
+The primary goal of all CPTC events is educational value for the student competitors.
+Competition Officials will make every effort to accommodate additional learning experiences
+that do not otherwise jeopardize the integrity of the competition. If additional
+educational opportunities are observed during any CPTC event, please share this feedback
+with the Competition Officials.
+
+Competitor Eligibility
+Competitors in CPTC events must be full-time students of the institution they are
+representing. Team members must qualify as full-time students as defined by the institution
+they are attending. Competitors may only be a member of one team per CPTC season.
+Competitors may participate in a maximum of five (5) CPTC seasons. Competitors may not be
+full time employees of any sponsoring organization. An institution is only allowed to field
+one team in any CPTC event or season.
+
+Team Composition
+Each team must submit a roster of between three and eight (3-8) competitors to the
+competition director. Rosters will be finalized one week prior to the start of that event.
+All competitors on the roster must meet all stated eligibility requirements. The Engagement
+Team must be chosen from the submitted roster. An Engagement Team is defined as the group of
+individuals competing in a CPTC event.
+
+Each Engagement Team may consist of up to six (6) members chosen from the submitted roster.
+If the member of an Engagement Team advancing to a qualifying, state, regional, or
+international competition is unable to attend that competition, that team may substitute
+another student from the roster in their place prior to the start of that competition. The
+remaining two (2) team members will be designated as alternates.
+
+During regional competitions, designated alternates may travel to the regional event and
+participate in group presentations, after hours events, and general events. Alternates are
+not permitted to assist with after-hours competition activities, such as report writing and
+proofreading. These alternates may not interact with team members, the competition
+environment, or otherwise influence participants or competition officials during
+competition hours.
+
+Designated alternates will not be permitted to travel to or otherwise assist other team
+members during the CPTC Global Finals.
+
+Changes in Team Composition
+Once a CPTC event has begun, a team must complete the competition with the team that started
+the competition. Substitutions, additions, or removals of team members are prohibited except
+for special circumstances as deemed by Competition Officials. Team Representatives must
+
+Official Competition Rules            Collegiate Penetration Testing Competition Ltd.          Page 2 of 11
+petition a member of the Operations Team in writing for the right to make a change to the
+Engagement Team. Working with Competition Officials, the Operations Team must approve any
+substitutions or additions prior to those actions occurring.
+
+Teams or team members arriving after an event's official start time, for reasons beyond
+their control, may be allowed to join the competition provided a substitution has not
+already been made. Event coordinators will review the reason for tardiness and make the
+final determination.
+
+Each team will designate a Team Captain for the duration of the competition to act as the
+team liaison between the competition staff and the teams before and during the competition.
+In the event of the Team Captain's absence, teams must have an identified team liaison
+serving as the captain in the competition space at all times during competition hours.
+
+Institutional Representatives
+Each team must have at least one representative present at every CPTC event. The
+representative must be an active faculty or staff member of the institution the team is
+representing. Once a CPTC event has started, representatives may not coach, assist, or advise
+their team until the completion of that event (including overnight hours for multi-day
+competitions).
+
+Institutional Representatives may not enter their team's competition space during any CPTC
+event. Representatives may not have any contact with members of the Engagement Team during
+the period that the Engagement Team has access to the competition environment. In the event
+of extenuating circumstances, the Institutional Representative may petition the Operations
+Team for an exception to this rule. Representatives must not interfere with any other
+competing team. The representative, or any non-team member, must not discuss any aspect of
+the competition event, specifically event injections, configurations, operations, team
+performance, deliverables, or presentations with their team during CPTC competition hours
+and must not attempt to influence their team's performance in any way.
+
+Representatives will be expected to travel with the Engagement Team to all CPTC events and
+participate in activities at the direction of the Competition Officials. Representatives will
+assist the Operations Team in scored activities during competition hours at the direction of
+Competition Officials. Representatives will be expected to fairly and consistently evaluate
+any scored activities in which they are asked to participate. CPTC officials reserve the
+right to disqualify any scoring data provided by a representative that is believed to
+unfairly influence the outcome of the Competition.
+
+
+Competition Conduct
+Operations Team members may occasionally need access to a team's systems. Teams must
+immediately allow Operations Team members' access when requested. Teams must not connect any
+devices or peripherals to the competition network unless specifically authorized to do so by
+Operations Team members. Personal input devices, such as keyboards and mice, are permitted
+
+Official Competition Rules          Collegiate Penetration Testing Competition Ltd.             Page 3 of 11
+provided they do not contain any embedded storage, automation mechanisms, wireless
+communication hardware, or any other feature that might provide an advantage to a team member
+beyond ergonomic accommodations.
+
+Teams may not modify the hardware configurations of competition systems. Teams must not open
+the case of any server, printer, PC, monitor, KVM, router, switch, firewall, or any other
+piece of equipment used during the competition unless specifically authorized to do so as
+part of an official competition activity. All hardware-related questions and issues should be
+referred to the Operations Team. Teams may not remove any item from the competition area
+unless specifically authorized to do so by Operations Team members including items brought
+into the team areas at the start of the competition. Teams must also abide by any hosting
+institution lab rules, such as those prohibiting food or drink in classroom areas.
+
+Team members are forbidden from entering or attempting to enter another team's competition
+workspace or room during CPTC events.
+
+Teams must compete without "outside assistance" from non-team members including team
+representatives from the start of the competition to the end of the competition (including
+overnight hours for multi-day events and development of competition deliverables). All
+private communications (calls, emails, chat, texting, directed emails, forum postings,
+conversations, requests for assistance, etc.) with non-team members including team
+representatives that would help the team gain an unfair advantage are not allowed and are
+grounds for disqualification and/or a penalty assigned to the appropriate team(s). Cell
+phones and other communication devices must be powered off and placed in a designated area
+within a team's competition room and may not be accessed during the competition hours.
+
+Printed reference materials (books, magazines, checklists) are permitted in competition areas
+and teams may bring printed reference materials to the competition.
+
+Team representatives, sponsors, and observers are not competitors and are prohibited from
+directly assisting any competitor through direct advice, "suggestions", or hands-on
+assistance. Any team sponsor or observer found assisting a team will be asked to leave the
+competition area for the duration of the competition and/or a penalty will be assigned to the
+appropriate team(s).
+
+Teams may only take offensive activity against the target infrastructure in accordance with
+the Scope of Work (SOW) provided by the Competition Officials. No actions against other
+competing teams, the Operations Team, supporting infrastructure, monitoring and management
+systems, software agents on competition hosts, hosting institutions, or publicly available
+Internet resources will be tolerated. This includes port scans, unauthorized connection
+attempts, vulnerability scans, etc. Any team performing offensive activity against other
+teams, the Operations Team, Competition Officials, volunteers, or any system or person not
+identified as in scope may be grounds for penalties up to and including immediate
+disqualification from the competition and referral to official authorities under the
+discretion of Competition Officials. If there are any questions or concerns during the
+
+
+Official Competition Rules           Collegiate Penetration Testing Competition Ltd.            Page 4 of 11
+competition about whether or not specific targets are considered acceptable, contact the
+Operations Team before engaging those targets.
+
+Teams may use any allowed mechanisms to engage the targets, within the confines of the Scope
+of Work (SOW) and Rules of Engagement (ROE). Any action that interferes with the
+functionality of the competition environment and supporting infrastructure will result in
+penalties or ejection against the offending Engagement Team.
+
+All team members and the team's Institutional Representative must be present for team
+registration and present a photo ID when checking in with the CPTC staff. A government or
+school issued photo ID is acceptable. During registration, all team members and
+Institutional Representatives will sign an attestation acknowledging that they have read the
+CPTC rules and agree to abide by them during the competition weekend.
+
+Team members will be given their badges for the event at the time of registration, and badges
+must be worn at all times during the competition. Anyone without a badge will not be
+permitted to enter competition areas, including team rooms. Only Competition Officials will be
+allowed in competition areas outside of competition hours.
+
+
+Internet Usage
+Internet resources such as FAQs, how-to's, existing forums and responses, source code, tools,
+and company websites, are valid for competition use provided there is no fee required to
+access those resources and access to those resources has not been granted based on a previous
+membership, purchase, or fee. Only resources that could reasonably be available to all teams
+before, during, and after the competition are permitted. For example, accessing resources
+through a corporate sign-in (such as Cisco or VMware) or a private GitHub account are not
+available and should not be used. The Operations Team will have final discretion on a
+case-by-case basis and will have final discretion on what material will and will not be
+allowed in the competition.
+
+The use of pre-written scripts or code will be permitted under the following circumstances:
+
+       • Teams must use a publicly available version-controlled mechanism provided and managed by
+         CPTC for student use for storing any pre-staged scripts or code (eg, a public GitHub
+         repository). The mechanism must clearly identify any changes made to code and the
+         modification dates of any changes. This storage mechanism will be provided by the CPTC
+         Organization for use by competitors.
+       • Repositories will be identified with the competing institution's name.
+       • The Operations Team must be provided a request for access to or the creation of a repository
+         for approval prior to the competition. The submission deadline will be a minimum of two (2)
+         weeks prior to any CPTC event.
+       • Requests for repository creation should be created from an email address associated with a
+         competing institution and should include the institution name and account names of team
+         members who will require access.
+
+Official Competition Rules             Collegiate Penetration Testing Competition Ltd.                Page 5 of 11
+       • Teams may make changes to their repository up to 1 week before the start of their scheduled
+         competition. Teams must not make any changes to their assigned repositories during the week
+         prior to the start of their event.
+       • Repositories must be publicly available to anyone, including other CPTC teams and the public
+         Internet at large.
+       • Teams will be provided access to make changes to their repository.
+       • All competing teams will be provided, at a minimum, read access to these repositories prior
+         to the CPTC event.
+       • Teams may be asked to demonstrate or explain their pre-written scripts or code during the
+         event.
+       • The use of any unauthorized or unapproved repositories will result in penalties or
+         disqualification to the offending team.
+       • Team coaches must not commit any content to the team's repository.
+       • Teams will audit the members who have access to their repository and request that members
+         who have graduated or are no longer associated with their institution be removed. Teams are
+         solely responsible for any and all modifications to the content of their repository by any
+         individual who has access to their respective repository.
+
+Example Timeline for Repository Creation and Update Deadlines:
+
+       • CPTC Regional Event is scheduled for October 17th at 9:00am Eastern Time.
+       • Team may request the creation of a repository any time before October 3rd at 9:00am Eastern
+         Time.
+       • Team may make changes to the content on their repository before October 10th at 9:00am
+         Eastern Time.
+       • Teams may make changes to the content on their repository during Competition hours from the
+         Competition Environment.
+       • The same timeframes will apply for subsequent CPTC events, such as the Global Finals event.
+
+Teams may not use any external, private electronic staging area or FTP site for patches,
+software, etc. during the competition. Teams are not allowed to access private
+Internet-accessible libraries, FTP sites, web sites, network storage, email accounts, or
+shared drives during the competition. All Internet resources used during the competition must
+be freely available to all other teams. The use of external collaboration and storage
+environments such as Google Docs/Drive, Microsoft 365, DropBox, etc. is prohibited unless the
+environment was provided by and is administered by competition officials. Accessing private
+staging areas, private email accounts, or storage environments provided for other teams is
+grounds for disqualification and/or a penalty assigned to the appropriate Engagement Team.
+
+No peer to peer or distributed file sharing clients or servers are permitted on competition
+networks unless specifically authorized by the competition officials.
+
+Internet activity, where allowed, will be monitored and any team member viewing inappropriate
+or unauthorized content will be subject to disqualification and/or a penalty assigned to the
+
+Official Competition Rules             Collegiate Penetration Testing Competition Ltd.                 Page 6 of 11
+appropriate team. This includes direct contact with outside sources through chat/email or any
+other public or non-public services including sites such as Facebook. For the purposes of
+this competition inappropriate content includes pornography or explicit materials, pirated
+media files, sites containing key generators and pirated software, etc. If there are any
+questions or concerns during the competition about whether or not specific materials are
+unauthorized contact the Operations Team immediately.
+
+All network activity that takes place on the competition network may be logged and subject to
+public release. Competition Officials are not responsible for the security of any information,
+including login credentials, which competitors place on the competition network.
+
+
+Social Engineering
+Social Engineering will only be permitted when explicitly included within the scope by the
+Competition Officials. Any social engineering activities included in the event will be limited
+to the scope and targets detailed by the Competition Officials within the context of the
+Competition Environment. Social engineering must not be conducted against any targets that are
+not explicitly authorized by the Competition Officials.
+
+Teams that conduct social engineering attacks against any targets outside of the identified
+target or scope will be subject to disqualification or assessment of a penalty at the
+discretion of Competition Officials.
+
+
+Permitted Materials
+No memory sticks, flash drives, removable drives, CDROMs, electronic media, or other similar
+electronic devices are allowed on the competition network or machines unless specifically
+authorized by the Operations Team in advance. Any violation of these rules will result in
+disqualification of the team member and/or a penalty assigned to the appropriate team.
+
+Teams may not bring any type of computer, laptop, tablet, PDA, cell phone, smart phone, or
+wireless device into the competition area unless specifically authorized by Competition
+Officials in advance. Cell phones and other communication devices must be powered off and
+placed in a designated area within a team's competition room and may not be accessed during
+the competition hours. Any violation of these rules may result in disqualification of the team
+member and/or a penalty assigned to the appropriate team.
+
+Printed reference materials (books, magazines, checklists) are permitted in competition areas
+and teams may bring printed reference materials to the competition as specified by the
+Competition Officials.
+
+Personal input devices, such as keyboards and mice, are permitted for ergonomic purposes
+provided they do not contain any embedded storage, automation mechanisms, wireless
+communication mechanisms or any other feature that might provide an advantage to a team member
+beyond ergonomic accommodations.
+
+
+Official Competition Rules           Collegiate Penetration Testing Competition Ltd.             Page 7 of 11
+Competition Attire
+To help eliminate any potential scoring biases during the event, teams should not wear any
+attire during scored events that identifies their school or institution.
+
+Examples of when identifying attire may NOT be worn:
+
+       • During the on-site assessment phase of the competition (e.g., when the team is actively
+         engaging with the competition environment)
+       • During any meals or social events prior to an awards ceremony (such as a banquet or social
+         event during the Global Finals)
+       • During any in-character/scored presentations during the competition
+
+Examples of when identifying attire is acceptable:
+
+       • Team registration at events
+       • Awards ceremonies
+       • Outside of competition hours
+
+
+Professional Conduct
+All participants, including competitors, coaches, Engagement Team, Operations Team, and
+Competition Officials, and all volunteers are expected to behave professionally at all times
+during all CPTC events including preparation meetings, receptions, mixers, banquets,
+competition, etc. and within all delivered documents and presentations. In addition to
+published CPTC rules, host institution policies and rules apply throughout the competition and
+must be respected by all CPTC participants.
+
+All CPTC events are alcohol free events. No drinking is permitted at any time during
+competition hours.
+
+Activities such as consumption of alcohol or illegal drugs, disrespectful or unruly behavior,
+sexual harassment, improper physical contact, racism, discrimination, becoming argumentative,
+willful violence, or willful physical damage have no place at the competition and will not be
+tolerated and will result in immediate ejection.
+
+Violations of the rules can be deemed unprofessional conduct if determined to be intentional,
+malicious, or of sufficient impact by Operations Team officials. Attempts to circumvent or
+otherwise violate the spirit of the CPTC rules may be deemed unprofessional conduct at the
+discretion of the Competition Officials.
+
+Competitors behaving in an unprofessional manner may receive a warning from the Operations
+Team for their first offense. For egregious actions or for subsequent violations following a
+warning, competitors may have a penalty assessed against their team, be disqualified, and/or
+expelled from the competition site. For actions deemed sufficiently negligent or malicious, at
+
+
+
+Official Competition Rules              Collegiate Penetration Testing Competition Ltd.               Page 8 of 11
+the sole discretion of Competition Officials, all other warnings or reprimands may be bypassed
+and Engagement Team(s) may be penalized or expelled.
+
+Competitors expelled for unprofessional conduct will be banned from future CPTC competitions
+for a period of no less than twenty-four (24) months and no more than forty-eight (48) months
+from the date of their expulsion at the discretion of Competition Officials. Competition
+Officials may also elect to extend the expulsion and ban to the entire current Engagement Team
+or further to the entire Institution for the period identified.
+
+Individual(s), other than competitors, behaving in an unprofessional manner may be warned
+against such behavior by the Operations Team or asked to leave the competition entirely by the
+Competition Director.
+
+
+Questions, Disputes, and Disclosures
+
+Prior to the Competition
+Team captains are encouraged to work with the Competition Director and Operations Team members
+to resolve any questions regarding the rules of the competition or scoring methods before the
+competition begins.
+
+During the Competition
+Protests by any team must be presented in writing by the Team Captain to the Operations Team
+as soon as possible. The competition officials will be the final arbitrators for any protests
+or questions arising before, during, or after the competition. Rulings by the competition
+officials are final. All competition results are official and final as of the Closing
+Ceremony.
+
+In the event of an individual disqualification, that team member must leave the competition
+area immediately upon notification of disqualification and must not re-enter the competition
+area at any time. Disqualified individuals are also ineligible for individual or team awards.
+
+In the event of a team disqualification, the entire team must leave the competition area
+immediately upon notice of disqualification and is ineligible for any individual or team
+award.
+
+Any vulnerabilities discovered by event participants in vendor equipment or public open source
+software will be considered private information and are not to be disclosed publicly without
+the coordination through industry accepted responsible disclosure practices with the vendor or
+author(s) and Competition Officials.
+
+Engagement Team members may not disclose technical information regarding competition
+infrastructure, technical configurations, and in-character competition information until the
+conclusion of final events. Upon conclusion of the events, teams are encouraged to share all
+information and may publish any technical information which does not contain personal
+information of Competition Officials, volunteers, Engagement Teams, etc. Information regarding
+
+Official Competition Rules           Collegiate Penetration Testing Competition Ltd.             Page 9 of 11
+fictional characters created explicitly for the execution of the competition that does not
+relate to the aforementioned persons will not be considered personal information for this
+clause. Examples of publication venues include but are not limited to: blog posts, white
+papers, conference proceedings, mailing lists, or other such venues.
+
+
+Scoring
+Scoring will be based on the communication of issues discovered during the assessment,
+communication during the proposal process, and team actions during the event. Explicit
+descriptions of how and when the vulnerabilities were discovered and exploited must be
+provided along with effective and executable mitigation plans for the simulated organization.
+Issues that might affect ongoing business will need to be addressed as they arise with the
+simulated organization or Operations Team.
+
+Teams can lose points by violating the Rules of Engagement or Scope of Work agreements or by
+missing deadlines for deliverables.
+
+Scores will be maintained by the competition officials and may be shared at the end of the
+competition. By nature, no ongoing scoring will be possible as teams are scored based on
+deliverables provided to Operations Team members at various points of the competition.
+
+Any team action that interrupts the competition environment is exclusively the responsibility
+of that team and will result in a lower score. Any team member that modifies a competition
+system or system component, or host institution system, with or without intent, may be
+disqualified and/or the team assessed penalties. Should any question arise about scoring or
+how scoring functions, the Team Captain should immediately contact the competition officials
+to address the issue.
+
+Teams are strongly encouraged to document and address any potential issues they may be causing
+to an Operations Team member as soon as possible. Reports addressing such incidents can be
+completed as needed throughout the competition and presented to the Operations Team for
+collection. Incident reports must contain a description of what occurred (including source and
+destination IP addresses, timelines of activity, issues or damage potentially caused, etc), a
+discussion of what was affected, and a remediation plan. A thorough and timely incident report
+that correctly identifies and addresses such an issue may reduce the potential penalty for
+that event - no partial points will be given for incomplete, vague, or untimely incident
+reports.
+
+
+Team Deliverables Archive
+Teams are encouraged to review publicly available information from previous CPTC events when
+preparing for the competition. Reports and presentations from prior year's competitions are
+available on GitHub: https://github.com/globalcptc/report_examples
+
+
+
+
+Official Competition Rules           Collegiate Penetration Testing Competition Ltd.            Page 10 of 11
+Revision History
+This section provides a high-level summary of changes to the Official Rules Document. This is
+not meant to be a comprehensive listing of all changes made for each revision but is provided
+for convenience and to call attention to updates.
+
+October 2025
+
+       • Simplified Rules Attestation section to be a single page, added signature line for 2nd coach
+       • GitHub request instructions clarified to require submission from school e-mail address and
+         include relevant details (school name and user IDs) in the initial request
+
+August 2024
+
+       • Clarified Team registration and ID verification in Competition Conduct section
+       • Expansion of Professional Conduct section
+       • Clarified allowed actions of Institutional Representatives during the event
+       • Expansion and clarification of guidelines and timelines for CPTC-provided Github
+         repositories in the Internet Usage section
+       • Added Competition Attire section
+       • Added Team Deliverables Archive section
+       • Added Revision History section
+       • Added Rules Attestation section
+       • Minor word choice/grammar/punctuation changes and corrections
+
+October 2022
+
+       • Added Social Engineering section
+       • Expansion of Competition Conduct section
+
+
+
+
+Official Competition Rules             Collegiate Penetration Testing Competition Ltd.                Page 11 of 11
+

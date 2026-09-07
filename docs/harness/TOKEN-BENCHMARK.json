@@ -1,0 +1,15 @@
+{
+  "classification": "synthetic",
+  "tokenizer": "tiktoken 0.12.0 / o200k_base",
+  "baseline_version": "24-observations-6-turns-v1",
+  "input_tokens_baseline": 40752,
+  "input_tokens_compact": 4644,
+  "input_token_reduction_percent": 88.6,
+  "comparison": "Same compact preamble on all six turns; accumulated raw transcript versus typed state changes.",
+  "actual_model_calls": 0,
+  "network_target_requests": 0,
+  "synthetic_stdout_bytes_retained": 43398,
+  "fixture_sha256": "a26dfd153cf1184faee469da9cb0ca44dcc5b8126638ea4dd62af2679096202a",
+  "audit_verified": true,
+  "limitations": "Input-token fixture comparison only; no claim about actual provider tokenizer, billing, output tokens, or reasoning usage."
+}

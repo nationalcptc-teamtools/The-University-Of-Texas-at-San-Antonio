@@ -1,0 +1,12 @@
+include README.md AGENTS.md pyproject.toml MANIFEST.in .gitleaks.toml
+recursive-include docs/harness *.md *.txt *.json *.lock
+recursive-include scripts *.py *.ps1
+recursive-include skills/cptc-harness *.md
+recursive-include tests *.py *.json *.xml
+include web/README.md web/AGENTS.md web/BUILDOUT-PROPOSAL.md
+include web/cptc_web.py web/test_cptc_web.py web/scope.example.json web/web-tooling.sh
+global-exclude __pycache__ *.py[cod] *.sqlite3 *.sqlite3-* .DS_Store
+prune .tools
+prune .superpowers
+prune .worktrees
+prune web/engagements

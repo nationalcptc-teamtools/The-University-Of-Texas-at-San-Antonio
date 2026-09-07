@@ -24,4 +24,5 @@
   and `next` to expose unfinished work. Generated Markdown is not the database.
 - Retain previous findings and evidence. A negative rerun is a new result
   for review, not permission to erase a previously demonstrated issue.
-- Only Luna subagents are permitted, per the user's current cost preference.
+- The guarded harness build permits Luna and Terra with the roles and narrow
+  ownership defined in the repository AGENTS.md. Other work remains Luna-only.
