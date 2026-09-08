@@ -1,5 +1,8 @@
 # CPTC11-validated competition testing toolkit
 
+> **Scope update (0.1.0a5):** Human-tooling deliverables in this historical plan were removed from this repository. The guarded AI harness and trusted operator control plane remain.
+
+
 Approved by the operator on 2026-09-07. This extends APPROVED-PLAN.md and
 NATIVE-TOOLS-PLAN.md; their stricter data, isolation, audit and publication
 requirements remain binding. Baseline: private alpha 0.1.0a3, commit 70097d1.

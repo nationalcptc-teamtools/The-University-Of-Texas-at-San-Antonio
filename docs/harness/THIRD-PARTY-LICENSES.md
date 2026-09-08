@@ -25,7 +25,7 @@ notices. Copyleft, source-available, noncommercial, custom, dual-license, and
 proprietary terms require an explicit distribution review before admission.
 Nmap is treated as a system dependency because its NPSL places material limits
 on redistribution and embedding. External binaries and their dependency trees
-remain outside the wheel, source archive, and human kit unless the inventory is
+remain outside the wheel and source archive unless the inventory is
 updated with every required notice and the package allowlist is reviewed.
 
 The machine-readable record is
@@ -33,16 +33,6 @@ The machine-readable record is
 source entry must name each repository path in `copied_files`; an empty list
 means no upstream source is incorporated. CI or local release review must fail
 when an admitted copied file lacks a reviewed inventory entry.
-
-## Current NXC helper
-
-[`nxc-fix.sh`](../../nxc-fix.sh) and
-[`scripts/fix-nxc-bloodhound-config.sh`](../../scripts/fix-nxc-bloodhound-config.sh)
-are identical project-authored files. They inspect installed distribution
-metadata and update a local configuration file. They contain no NetExec or
-BloodHound source code, do not install those projects, and do not run a
-collector. NetExec and BloodHound.py are recorded because the helper depends on
-their package names and configuration behavior.
 
 This inventory records third-party use and obligations. It does not assign a
 license to the private CPTC project itself.

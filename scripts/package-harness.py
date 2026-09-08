@@ -20,7 +20,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = Path("docs/harness/PACKAGE-CONTENTS.json")
-BUILD_ROOTS = {"cptc_harness", "human", "skills", "docs", "scripts", "testing", "tests"}
+BUILD_ROOTS = {"cptc_harness", "skills", "docs", "scripts", "testing", "tests"}
 EXCLUDED_BUILD_PARTS = {"__pycache__", ".pytest_cache", ".mypy_cache"}
 GENERATED_SOURCE = {"PKG-INFO", "setup.cfg", *(
     "cptc_guarded_harness.egg-info/" + name for name in (
@@ -30,9 +30,9 @@ WHEEL_METADATA = {"METADATA", "WHEEL", "entry_points.txt", "top_level.txt", "REC
 
 def reviewed_contents(root):
     value = json.loads((root / MANIFEST).read_text())
-    if set(value) != {"version", "classification", "runtime", "source", "human"} or value["version"] != 1:
+    if set(value) != {"version", "classification", "runtime", "source"} or value["version"] != 2:
         raise ValueError("invalid reviewed package manifest")
-    for group in ("runtime", "source", "human"):
+    for group in ("runtime", "source"):
         entries = value[group]
         if not isinstance(entries, list) or len(entries) != len(set(entries)):
             raise ValueError("invalid reviewed package file list")
@@ -41,7 +41,7 @@ def reviewed_contents(root):
             if not isinstance(name, str) or path.is_absolute() or ".." in path.parts or str(path) != name:
                 raise ValueError("invalid reviewed package path")
         value[group] = set(entries)
-    if not value["runtime"] <= value["source"] or not value["human"] <= value["source"]:
+    if not value["runtime"] <= value["source"]:
         raise ValueError("reviewed distribution inputs missing from source list")
     return value
 
@@ -158,15 +158,6 @@ def main():
         artifacts = build(one, args.epoch, contents, version)
         repeated = build(two, args.epoch, contents, version)
         if artifacts != repeated: raise ValueError("independent builds differ")
-        entries = []; manifest = {}
-        for name in sorted(contents["human"]):
-            relative = Path(name)
-            source = ROOT / relative
-            if source.is_symlink() or not source.is_file(): raise ValueError("unexpected human-kit member")
-            payload = source.read_bytes(); manifest[str(relative)] = hashlib.sha256(payload).hexdigest()
-            entries.append((f"cptc-human-kit-{version}/{relative}", payload, os.access(source, os.X_OK)))
-        entries.append((f"cptc-human-kit-{version}/INTEGRITY.json", json.dumps(manifest, sort_keys=True, indent=2).encode() + b"\n", False))
-        artifacts[f"cptc-human-kit-{version}.tar.gz"] = tar_bytes(entries, args.epoch)
         for name, data in artifacts.items():
             destination = args.output / name
             if destination.exists() and destination.read_bytes() != data:
@@ -175,7 +166,7 @@ def main():
         receipt = {"version": version, "classification": "public-development-metadata", "source_date_epoch": args.epoch,
             "reviewed_contents_sha256": hashlib.sha256((ROOT / MANIFEST).read_bytes()).hexdigest(),
             "independent_builds_equal": True, "source_archive_normalization": "sorted regular members; fixed uid/gid/modes/mtime; deterministic gzip",
-            "runtime_wheel_excludes_test_data": True, "human_kit_integrity_files": len(manifest),
+            "runtime_wheel_excludes_test_data": True, "ai_harness_only": True,
             "artifacts": [{"file": name, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()} for name, data in sorted(artifacts.items())],
             "uploaded": False, "competition_accepted": False}
         (args.output / "BUILD-RECEIPT-a4.json").write_text(json.dumps(receipt, indent=2) + "\n")

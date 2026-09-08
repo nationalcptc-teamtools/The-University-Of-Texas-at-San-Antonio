@@ -47,7 +47,7 @@
     "wheel": "0.48.0"
   },
   "lock_scope": "Installed environment closure, exact versions, not distribution-hash verification; 197 deterministic tests also pass on Python 3.11.15, whose lack of memfd support blocks full isolated runtime. Python 3.12-3.13 unvalidated.",
-  "version": "0.1.0a4",
+  "version": "0.1.0a5",
   "native_tools": [
     {
       "tool_id": "nmap",

@@ -1,3 +1,0 @@
-#!/bin/sh
-# Thin operator launcher. It never interprets or forwards a shell command.
-exec python3 -m cptc_harness.human "$@"

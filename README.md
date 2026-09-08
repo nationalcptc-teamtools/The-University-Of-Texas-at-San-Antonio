@@ -1,26 +1,30 @@
-# UTSA CPTC Team Knowledge Base (2025)
-Tools and scripts, know-hows for the 2025-2026 season UTSA Cyber CPTC team. 
+# UTSA private guarded CPTC AI harness
 
-## Guarded harness (private alpha)
+This private repository contains the deterministic policy broker, restricted AI
+interfaces, bounded collectors, evidence pipeline, audit system, and synthetic
+test suite for CPTC assessment work.
 
-The [operator guide](docs/harness/README.md) covers strict data boundaries,
-manual-only high-risk tests, encrypted evidence, verbose UTC auditing, compact
-AI transports, typed all-track imports and deterministic reports. See the
-[acceptance status](docs/harness/ACCEPTANCE.md) for disabled capabilities and
-outstanding live-validation gates. This preparation build is not approved
-competition staging.
+The standalone human toolkit and the legacy team scripts were removed from this
+repository at the operator's request. The `cptc` command remains because it is
+the trusted operator control plane used to initialize workspaces, approve and
+stop AI workflows, inspect coverage, verify audits, and create reviewed local
+exports. It must never be exposed to the model as a shell capability.
 
-The operator-facing NetExec configuration helper is available directly as
-[`nxc-fix.sh`](nxc-fix.sh). It switches the active NetExec environment between
-BloodHound CE and legacy configuration, creates a local backup, and does not
-run collection. Third-party source admission and redistribution rules are in
-the [license policy](docs/harness/THIRD-PARTY-LICENSES.md).
+Start with [the harness guide](docs/harness/README.md), [local installation](docs/harness/LOCAL-INSTALL.md), and [current readiness](docs/harness/READINESS.md).
 
-## Web coverage workflow
+```sh
+python3 scripts/bootstrap-harness.py --install-age
+python3 -m cptc_harness doctor
+python3 -m cptc_harness modules
+python3 scripts/test-harness.py
+```
 
-Start with [web/README.md](web/README.md) for the Python CLI, per-application
-checklists, bounded HTTP scans, default-login verification, and Obsidian
-evidence exports. Python 3.11+ is sufficient; the old installer is optional.
+All client-derived data remains confidential. Raw evidence is encrypted before
+persistence and is unavailable to the AI transport. Unknown-impact and
+manual-only procedures have no execution path through the broker. This is a
+private development alpha; supported profiles still require the live acceptance
+recorded in the readiness documents.
 
-The [buildout design](web/BUILDOUT-PROPOSAL.md) records the review of the
-CPTC11 material and the longer-term integration plan.
+External source may enter this repository only through the reviewed license
+gate in [THIRD-PARTY-LICENSES.md](docs/harness/THIRD-PARTY-LICENSES.md). Do not
+push this repository to the public team-tools project.

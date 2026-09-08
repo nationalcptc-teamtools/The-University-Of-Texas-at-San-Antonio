@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import socket
+import sqlite3
 import pytest
 from cptc_harness.audit import AuditWriter
 from cptc_harness.contracts import *
@@ -136,20 +137,38 @@ def test_signed_provider_capability_challenge_expiry_and_upstream_tools():
 
 
 def test_legacy_migration_preserves_entire_history_and_repeatability(tmp_path):
-    import cptc_web as old
-    from dataclasses import asdict
     tmp_path.chmod(0o700)
     root = tmp_path / "legacy"
-    scope = old.Scope({"allowed_cidrs": ["192.0.2.0/24"], "allowed_hosts": [], "excluded_cidrs": []})
-    with old.engagement(root, initialize=scope) as (folder, db, _):
-        old.add_app(db, scope, "https://192.0.2.10", "fixture")
+    root.mkdir(mode=0o700)
+    database = root / "state.sqlite3"
+    schema = """
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    CREATE TABLE apps (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, owner TEXT NOT NULL, created TEXT NOT NULL);
+    CREATE TABLE checks (app INTEGER, id TEXT, state TEXT NOT NULL, result TEXT NOT NULL, note TEXT NOT NULL, evidence TEXT NOT NULL, PRIMARY KEY(app,id));
+    CREATE TABLE evidence (id TEXT PRIMARY KEY, app INTEGER, check_id TEXT, created TEXT NOT NULL, data TEXT NOT NULL);
+    CREATE TABLE events (id INTEGER PRIMARY KEY, app INTEGER, check_id TEXT, created TEXT, operator TEXT, state TEXT, result TEXT, note TEXT, evidence TEXT);
+    CREATE TABLE auth_budget (origin TEXT PRIMARY KEY, attempts INTEGER NOT NULL);
+    """
+    with sqlite3.connect(database) as db:
+        db.executescript(schema)
+        db.executemany("INSERT INTO settings VALUES (?,?)", (
+            ("schema", "1"),
+            ("scope", json.dumps({"allowed_cidrs": ["192.0.2.0/24"], "allowed_hosts": [], "excluded_cidrs": []})),
+        ))
+        db.execute("INSERT INTO apps VALUES (1,?,?,?)", ("https://192.0.2.10:443/", "fixture", "2026-09-08T00:00:00Z"))
+        db.execute("INSERT INTO checks VALUES (1,?,?,?,?,?)", ("headers", "complete", "observed", "synthetic legacy row", '["ev-1"]'))
+        db.execute("INSERT INTO evidence VALUES (?,?,?,?,?)", ("ev-1", 1, "headers", "2026-09-08T00:00:01Z", '{"synthetic":true}'))
+        db.execute("INSERT INTO events VALUES (1,1,?,?,?,?,?,?,?)", ("headers", "2026-09-08T00:00:02Z", "fixture", "complete", "observed", "synthetic legacy event", '["ev-1"]'))
+        db.execute("INSERT INTO auth_budget VALUES (?,?)", ("https://192.0.2.10:443", 1))
         before = {name: db.execute(f"SELECT * FROM {name}").fetchall() for name in ("apps", "checks", "evidence", "events", "auth_budget")}
-        old.export(folder, db)
+    export = root / "export"
+    export.mkdir(mode=0o700)
+    (export / "ai-brief.json").write_text(json.dumps({"schema": 1, "apps": [{"id": 1}]}) + "\n")
     with pytest.raises(PolicyError, match="encrypted storage"):
         migrate_legacy(root)
     result = migrate_legacy(root, encrypted_storage_verified=True)
     assert result["harness_schema"] == 2 and not result["already_migrated"]
-    with old.engagement(root) as (_, db, _):
+    with sqlite3.connect(database) as db:
         for name, rows in before.items():
             assert [tuple(x) for x in db.execute(f"SELECT * FROM {name}")] == [tuple(x) for x in rows]
     assert migrate_legacy(root, encrypted_storage_verified=True)["already_migrated"]

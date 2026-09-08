@@ -78,7 +78,7 @@ def test_source_snapshot_never_opens_protected_engagement_files(tmp_path, monkey
         (tmp_path / name).write_text("synthetic")
     for name in RUNNER.SOURCE_ROOTS:
         (tmp_path / name).mkdir()
-    protected = tmp_path / "web" / "engagements"
+    protected = tmp_path / "docs" / "engagements"
     protected.mkdir()
     secret = protected / "client-output.json"
     secret.write_text("must-not-be-read")

@@ -30,8 +30,8 @@ Use the web header and session modules only with the bounded transport.  They
 make one metadata request under the registered request budget.  They do not
 follow redirects, submit credentials, or expose response bodies or header
 values to the model.
-`web.response_capture` and `cptc-tools replay-capture` require an explicit human
-operator. Do not request them as model actions or request their evidence or keys.
+`web.response_capture` and offline capture selection require an explicit operator.
+Do not request them as model actions or request their evidence or keys.
 Ordinary metadata output is not a complete passive-scanner response capture.
 
 Native Nmap observes exactly one registered TCP port through a pinned parent-only
@@ -57,8 +57,7 @@ Never request raw evidence, credentials, local paths, arbitrary URLs, uploads,
 exports, clipboard access, policy edits or a different provider. Client-derived
 facts remain confidential even after names and addresses are removed.
 
-For human operation, see [the competition runbook](../../human/runbooks/competition-assessment.md).
-Humans use `checks`, `findings`, `gaps`, `coverage` and `report` without model
-calls. CLI access is not an extra capability granted to the production AI.
-Frozen observation waves are operator-only. The model cannot freeze, run,
-restart, repair or edit a wave; interrupted actions require human review.
+The trusted `cptc` control plane belongs only to the operator. It does not grant
+CLI, filesystem, shell, approval, evidence-selection, or export access to the AI.
+Frozen observation waves are operator-only. The model cannot freeze, run, restart,
+repair, or edit a wave; interrupted actions require operator review.

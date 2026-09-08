@@ -1,0 +1,283 @@
+{
+  "version": "0.1.0a4",
+  "classification": "public-development-metadata",
+  "status": "private_alpha_not_competition_accepted",
+  "checked_at_utc": "2026-09-08T16:02:11.937713Z",
+  "full_approved_plan_complete": false,
+  "active_profiles_live_accepted": 0,
+  "remote_push_authorized": false,
+  "validation": {
+    "pytest": {
+      "command": ".tools/operator-venv/bin/python -m pytest -q tests web --junitxml=.tools/acceptance-a4.xml",
+      "passed": 532,
+      "subtests_passed": 17,
+      "seconds": 103.98,
+      "skipped": 0,
+      "data": "synthetic only",
+      "environment": "Linux x86_64 / Python 3.14.7; local containment tests run outside the outer Codex sandbox"
+    },
+    "legacy_unittest": {
+      "passed": 34,
+      "seconds": 15.137,
+      "preserved_in_full_suite": true
+    },
+    "python311_deterministic": {
+      "passed": 197,
+      "seconds": 0.68,
+      "version": "3.11.15",
+      "full_isolated_runtime_accepted": false,
+      "limitation": "This interpreter lacks os.memfd_create; no fallback admitted."
+    },
+    "independent_review": {
+      "requested_model": "gpt-5.6-luna",
+      "actual_model": null,
+      "scope": "Implemented stop/disclosure/detection/advisory contracts and wave/accounting crash consistency; see BUILD-AGENTS.json",
+      "final_wave_focused_passed": 51,
+      "reported_blockers_in_reviewed_surface": 0,
+      "full_live_release_approval": false
+    },
+    "rpm_parity": {
+      "synthetic_version_pairs": 196,
+      "mismatches": 0,
+      "reference": "installed librpm"
+    },
+    "real_loopback_wave": {
+      "requests": 2,
+      "minimum_spacing_seconds": 1,
+      "encrypted_audit_verified": true,
+      "restart_duplicate_requests": 0,
+      "model_calls": 0
+    },
+    "source_and_package_secret_scan": {
+      "receipt": "dist/VALIDATION-RECEIPT-a4.json",
+      "scope": "Source and extracted local artifacts; never engagement stores"
+    },
+    "worker_and_executable_pins": {
+      "receipt": "dist/VALIDATION-RECEIPT-a4.json",
+      "expected_groups": 22
+    },
+    "fresh_install": {
+      "receipt": "dist/VALIDATION-RECEIPT-a4.json"
+    },
+    "live_this_continuation": {
+      "dell_read_only_management_preflight": "passed",
+      "trusted_operator_guest_identity": "unavailable; requested console fingerprint",
+      "target_requests": 0,
+      "infrastructure_changes": 0,
+      "full_live_acceptance": false
+    },
+    "packaging_boundaries": {
+      "passed": 11,
+      "seconds": 0.62,
+      "scope": "Explicit source/runtime/human file allowlists; synthetic evidence, nested answer/test, symlink and deterministic tar cases"
+    }
+  },
+  "efficiency": {
+    "classification": "synthetic",
+    "tokenizer": "tiktoken 0.12.0 / o200k_base",
+    "baseline_version": "24-observations-6-turns-v1",
+    "input_tokens_baseline": 40752,
+    "input_tokens_compact": 4644,
+    "input_token_reduction_percent": 88.6,
+    "comparison": "Same compact preamble on all six turns; accumulated raw transcript versus typed state changes.",
+    "actual_model_calls": 0,
+    "network_target_requests": 0,
+    "synthetic_stdout_bytes_retained": 43398,
+    "fixture_sha256": "a26dfd153cf1184faee469da9cb0ca44dcc5b8126638ea4dd62af2679096202a",
+    "audit_verified": true,
+    "limitations": "Input-token fixture comparison only; no claim about actual provider tokenizer, billing, output tokens, or reasoning usage.",
+    "tested_release": "0.1.0a4"
+  },
+  "detection": {
+    "implemented_predicates": 11,
+    "unsupported_capabilities_visible": 14,
+    "manual_only_families_visible": 5,
+    "reviewed_independent_benchmark_entries": null,
+    "automated_eligible_live_detections": null,
+    "manual_benchmark_coverage": null,
+    "live_false_positives": null,
+    "live_missed_issues": null
+  },
+  "profiles": [
+    {
+      "id": "network.nmap_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false,
+      "historical_live_evidence": "alpha2/alpha3 only; see history/RELEASE-STATUS-0.1.0a3.json",
+      "live_evidence_this_release": false
+    },
+    {
+      "id": "network.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "network.nmap_inventory",
+      "mode": "bounded",
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "restriction": "Exactly one approved IPv4 TCP port, no application payload",
+      "full_live_acceptance": false,
+      "historical_live_evidence": "alpha2/alpha3 only; see history/RELEASE-STATUS-0.1.0a3.json",
+      "live_evidence_this_release": false
+    },
+    {
+      "id": "web.capture_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.nuclei_observation",
+      "mode": "offline",
+      "admission": "native_offline_fixture_tested_human_only",
+      "restriction": "One reviewed local HTTP response, no network or model calls",
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false,
+      "historical_live_evidence": "alpha2/alpha3 only; see history/RELEASE-STATUS-0.1.0a3.json",
+      "live_evidence_this_release": false
+    },
+    {
+      "id": "web.zap_observation",
+      "mode": "offline",
+      "admission": "native_offline_fixture_tested_human_only",
+      "restriction": "One reviewed local HTTP response, no network or model calls",
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false,
+      "historical_live_evidence": "alpha2/alpha3 only; see history/RELEASE-STATUS-0.1.0a3.json",
+      "live_evidence_this_release": false
+    },
+    {
+      "id": "web.response_capture",
+      "mode": "bounded",
+      "admission": "operator_only_fixture_tested_and_lab_smoke",
+      "full_live_acceptance": false,
+      "restriction": "One GET at exact approved target base, 32768-byte raw cap, encrypted evidence; zero model access; no redirects or retries",
+      "historical_live_evidence": "alpha2/alpha3 only; see history/RELEASE-STATUS-0.1.0a3.json",
+      "live_evidence_this_release": false
+    },
+    {
+      "id": "web.headers",
+      "mode": "bounded",
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "full_live_acceptance": false,
+      "historical_live_evidence": "alpha2/alpha3 only; see history/RELEASE-STATUS-0.1.0a3.json",
+      "live_evidence_this_release": false
+    },
+    {
+      "id": "web.session",
+      "mode": "bounded",
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "full_live_acceptance": false,
+      "historical_live_evidence": "alpha2/alpha3 only; see history/RELEASE-STATUS-0.1.0a3.json",
+      "live_evidence_this_release": false
+    },
+    {
+      "id": "web.nuclei",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.zap",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "linux.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "linux.inventory",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "windows_ad.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "windows_ad.inventory",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "exploitation.result_intake",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "exploitation.zerologon",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "exploitation.dos",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "exploitation.spraying",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "exploitation.domain_change",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "reporting.records",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence_this_release": false,
+      "full_live_acceptance": false
+    }
+  ],
+  "blocking_gates": [
+    "Trusted operator guest identity/access, independent asset/deployment provenance and reviewed CPTC11 expected-weakness catalog.",
+    "One-use credential grants, authenticated transport and full actual request/byte/deadline accounting remain unimplemented; authentication is disabled.",
+    "Broader Linux inventory, native Windows/AD execution and patch/GPO/AD CS/delegation checks, reviewed web/API controlled-account profiles, TLS and database metadata collection.",
+    "Advisory feed normalization and runtime inventory correlation; current library is finite offline fixture-tested matching only.",
+    "Full manual/retest benchmark coverage, withheld variants and per-profile vulnerable/hardened live evidence.",
+    "Full Python 3.11 isolated-runtime acceptance and other host platforms.",
+    "Actual supplied AI authorization, retention and upstream tool controls; client browser login/display/egress and recipient-bound client-data MCP remain unadmitted.",
+    "Versioned handover preserving new ceilings/waves/attempt records; v2 export fails closed when new state is present.",
+    "Remaining malicious-worker, quarantine/export interruption and full-disk corpus.",
+    "No automated proof profile is admitted; disruptive and unknown-impact operations remain manual-only."
+  ],
+  "data_handling_incident": {
+    "status": "followup_required",
+    "description": "A worker started generic history import and was terminated without completion. Metadata checks do not prove absence of partial publication. No rerun or automatic cleanup.",
+    "reference": "IMPLEMENTATION-PROGRESS.md"
+  },
+  "package_note": "Local evaluation wheel, normalized source archive and standalone human kit. Reproducibility hashes: dist/BUILD-RECEIPT-a4.json. Installed-artifact and secret-scan evidence: dist/VALIDATION-RECEIPT-a4.json. Packaging is not competition acceptance.",
+  "historical_alpha3": "history/RELEASE-STATUS-0.1.0a3.json"
+}

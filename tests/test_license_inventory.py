@@ -62,15 +62,6 @@ def test_every_declared_python_dependency_has_an_inventory_record_at_the_pinned_
         assert components[expected_names[package_name]]["version"] == version
 
 
-def test_nxc_helper_is_project_authored_and_external_source_lists_remain_empty():
-    assert (ROOT / "nxc-fix.sh").read_bytes() == (
-        ROOT / "scripts" / "fix-nxc-bloodhound-config.sh"
-    ).read_bytes()
-    components = {component["name"]: component for component in _inventory()["components"]}
-    assert components["NetExec"]["copied_files"] == []
-    assert components["BloodHound.py"]["copied_files"] == []
-
-
 def test_policy_fails_closed_for_unknown_or_unrecorded_licenses():
     policy = POLICY.read_text()
     assert "Unknown or missing licensing blocks an import" in policy

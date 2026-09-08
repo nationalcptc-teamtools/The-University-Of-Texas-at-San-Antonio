@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import pytest
 
-spec=importlib.util.spec_from_file_location("external_benchmark", Path(__file__).parents[1]/"human/benchmark.py")
+spec=importlib.util.spec_from_file_location("external_benchmark", Path(__file__).parents[1]/"testing/benchmark.py")
 benchmark=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(benchmark)
 

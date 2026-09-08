@@ -13,7 +13,7 @@ are incomplete. READINESS.md is the current release gate summary.
   scenario/later advisory populations, negative controls, exact manual-result
   identity, scope/deployment provenance and captured evidence links. Empty or
   incomplete catalogs cannot pass. No reviewed CPTC11 answer catalog exists yet.
-- Durable stop sentinel/queue shared by CLI, human CLI and MCP. Stop survives a
+- Durable stop sentinel/queue shared by operator CLI, TUI and MCP. Stop survives a
   busy/unavailable writer and reconciles centrally after recovery. Allowlisted
   reason codes are persisted. Audit failures latch a stop.
 - Recursive final-provider schema checks and explicit denial of untyped client
@@ -44,7 +44,7 @@ are incomplete. READINESS.md is the current release gate summary.
 
 ## Verification so far
 
-- Original 34 web unittest regressions: passed, 15.137 seconds.
+- Historical pre-split 34-test web operator suite: passed before removal; it is preserved in Git history and the separate local human-tool archive, not in alpha 0.1.0a5.
 - Final full suite: 532 passed, 17 subtests passed in 103.98 seconds, including
   missing active and queued reservation recovery regressions. Independent final
   wave/accounting review passed 51 focused tests and reported no remaining

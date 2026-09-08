@@ -1,18 +1,11 @@
 include README.md AGENTS.md pyproject.toml MANIFEST.in .gitleaks.toml
-include nxc-fix.sh
 recursive-include docs/harness *.md *.txt *.json *.lock
-recursive-include scripts *.py *.ps1
-include scripts/fix-nxc-bloodhound-config.sh
+recursive-include scripts *.py
 recursive-include testing *.py
 recursive-include cptc_harness/native *.c *.sh
-recursive-include human *.md *.json *.xml *.csv *.py *.ps1
-include human/cptc-tools
 recursive-include skills/cptc-harness *.md
 recursive-include tests *.py *.json *.xml
-include web/README.md web/AGENTS.md web/BUILDOUT-PROPOSAL.md
-include web/cptc_web.py web/test_cptc_web.py web/scope.example.json web/web-tooling.sh
 global-exclude __pycache__ *.py[cod] *.sqlite3 *.sqlite3-* .DS_Store
 prune .tools
 prune .superpowers
 prune .worktrees
-prune web/engagements

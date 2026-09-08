@@ -1,4 +1,4 @@
-"""Human terminal entry point. AI clients receive only the restricted MCP/envelope interface."""
+"""Operator control plane for the guarded AI harness."""
 from __future__ import annotations
 import argparse
 from dataclasses import asdict

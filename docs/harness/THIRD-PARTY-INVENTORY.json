@@ -6,28 +6,6 @@
   "copied_external_source_files": [],
   "components": [
     {
-      "name": "NetExec",
-      "version": "operator-installed",
-      "use": "configuration compatibility only",
-      "source": "https://github.com/Pennyw0rth/NetExec",
-      "license": "BSD-2-Clause",
-      "license_source": "https://github.com/Pennyw0rth/NetExec/blob/main/LICENSE",
-      "copied_files": [],
-      "distributed": false,
-      "obligations": ["Do not remove upstream license notices from any future copied source"]
-    },
-    {
-      "name": "BloodHound.py",
-      "version": "operator-installed CE or legacy package",
-      "use": "distribution-name detection by the NXC configuration helper",
-      "source": "https://github.com/dirkjanm/BloodHound.py",
-      "license": "MIT",
-      "license_source": "https://github.com/dirkjanm/BloodHound.py/blob/master/LICENSE",
-      "copied_files": [],
-      "distributed": false,
-      "obligations": ["Retain copyright and permission notice if source is ever copied"]
-    },
-    {
       "name": "age",
       "version": "1.3.2",
       "use": "locally downloaded encryption executable",
@@ -36,7 +14,9 @@
       "license_source": "https://github.com/FiloSottile/age/blob/v1.3.2/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Binary redistribution must reproduce the license and copyright notices"]
+      "obligations": [
+        "Binary redistribution must reproduce the license and copyright notices"
+      ]
     },
     {
       "name": "Nmap",
@@ -47,7 +27,9 @@
       "license_source": "https://nmap.org/npsl/",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Do not embed or redistribute Nmap without a release-specific NPSL or OEM review"]
+      "obligations": [
+        "Do not embed or redistribute Nmap without a release-specific NPSL or OEM review"
+      ]
     },
     {
       "name": "Nuclei",
@@ -58,7 +40,9 @@
       "license_source": "https://github.com/projectdiscovery/nuclei/blob/v3.11.1/LICENSE.md",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Retain copyright and permission notice if source is ever copied"]
+      "obligations": [
+        "Retain copyright and permission notice if source is ever copied"
+      ]
     },
     {
       "name": "OWASP ZAP",
@@ -69,7 +53,9 @@
       "license_source": "https://github.com/zaproxy/zaproxy/blob/v2.17.0/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Preserve LICENSE, NOTICE, attribution, and modification notices if redistributed"]
+      "obligations": [
+        "Preserve LICENSE, NOTICE, attribution, and modification notices if redistributed"
+      ]
     },
     {
       "name": "cryptography",
@@ -80,7 +66,9 @@
       "license_source": "https://github.com/pyca/cryptography/blob/50.0.1/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Dependency is resolved separately and is not embedded in project archives"]
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
+      ]
     },
     {
       "name": "Playwright Python",
@@ -91,7 +79,9 @@
       "license_source": "https://github.com/microsoft/playwright-python/blob/v1.62.0/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Dependency is resolved separately and is not embedded in project archives"]
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
+      ]
     },
     {
       "name": "Model Context Protocol Python SDK",
@@ -102,7 +92,9 @@
       "license_source": "https://github.com/modelcontextprotocol/python-sdk/blob/v1.29.0/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Dependency is resolved separately and is not embedded in project archives"]
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
+      ]
     },
     {
       "name": "pytest",
@@ -113,7 +105,9 @@
       "license_source": "https://github.com/pytest-dev/pytest/blob/9.1.0/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Dependency is resolved separately and is not embedded in project archives"]
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
+      ]
     },
     {
       "name": "tiktoken",
@@ -124,7 +118,9 @@
       "license_source": "https://github.com/openai/tiktoken/blob/0.12.0/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Dependency is resolved separately and is not embedded in project archives"]
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
+      ]
     },
     {
       "name": "setuptools",
@@ -135,7 +131,9 @@
       "license_source": "https://github.com/pypa/setuptools/blob/v81.0.0/LICENSE",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Build dependency is not embedded in project archives"]
+      "obligations": [
+        "Build dependency is not embedded in project archives"
+      ]
     },
     {
       "name": "wheel",
@@ -146,7 +144,9 @@
       "license_source": "https://github.com/pypa/wheel/blob/0.48.0/LICENSE.txt",
       "copied_files": [],
       "distributed": false,
-      "obligations": ["Build dependency is not embedded in project archives"]
+      "obligations": [
+        "Build dependency is not embedded in project archives"
+      ]
     }
   ]
 }

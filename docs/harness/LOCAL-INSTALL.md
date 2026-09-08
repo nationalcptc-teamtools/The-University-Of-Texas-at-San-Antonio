@@ -1,47 +1,43 @@
-# Local operator installation
+# Local AI-harness installation
 
-The private wheel provides `cptc-tools` for human operation and `cptc` for the
-complete local harness CLI. The human kit also includes collectors and cards
-usable without installing Python dependencies; start at `human/README.md`.
-
-On the tested host, install the wheel in a dedicated environment. The command
-below uses the already reviewed local dependency installation and performs no
-package download. On another host, prepare the exact dependencies from the lock
-file before assessment and repeat the applicable tests and pin review.
+Use Python 3.11 or newer on the reviewed Linux operator host. Install into a
+private virtual environment. Do not run preparation downloads from an
+engagement workflow or provide client data to package services.
 
 ```sh
-python3 -m venv --system-site-packages .tools/operator-venv
-.tools/operator-venv/bin/python -m pip install --no-index --no-deps \
-  dist/cptc_guarded_harness-0.1.0a4-py3-none-any.whl
-.tools/operator-venv/bin/cptc-tools --help
-.tools/operator-venv/bin/cptc-tools modules
-.tools/operator-venv/bin/cptc-tools preflight --age "$PWD/.tools/age"
+python3 -m venv .tools/operator-venv
+.tools/operator-venv/bin/python -m pip install --no-index \
+  --find-links /approved/local/wheelhouse -e '.[test,mcp,browser,benchmark]'
+python3 scripts/bootstrap-harness.py --install-age
+.tools/operator-venv/bin/python -m cptc_harness doctor
+.tools/operator-venv/bin/python -m cptc_harness modules
 ```
 
-Use the environment's absolute entry-point paths from another directory. An
-operator may add links in `~/.local/bin` when those names are unused. Do not
-replace unrelated launchers. Pass an explicit reviewed `--age` path to `init`;
-the package does not bundle age, Nmap, Nuclei, Java or ZAP binaries.
+`bootstrap-harness.py` downloads only the pinned official age archive into the
+ignored `.tools/` directory and verifies its SHA256. It does not change PATH or
+global packages. `bootstrap-native-tools.py` is a separate preparation-only ZAP
+installer for the reviewed offline passive profile.
 
-Native paths and hashes in the release catalog describe this tested host.
-Moving the source checkout, upgrading a tool or rebuilding the Nmap shim can
-invalidate those pins. A package installation does not admit new binaries.
-`scripts/review-release-pins.py` checks the source deployment offline. The CLI's
-catalog distinguishes file availability from verified profile dependencies.
+The installed `cptc` program is the operator control plane for the AI harness.
+It is not a general assessment shell and must not be offered to the model. Use
+it to create the restricted workspace, freeze workflow state, apply approvals,
+stop work, inspect coverage, verify logs, and create a reviewed encrypted local
+export.
 
-Use the synthetic examples for the first encrypted import/report/audit check.
-Create all engagement workspaces outside Git on approved protected storage.
-Do not reuse synthetic policies or test keys for client work. No AI provider is
-needed for human imports, native observations, coverage or reports.
+Run the complete fail-closed suite with:
 
-The archives and `dist/BUILD-RECEIPT-a4.json` and `dist/VALIDATION-RECEIPT-a4.json` record evaluation evidence. Review
-`ACCEPTANCE.md` and `RELEASE-STATUS.json` for unsupported profiles and outstanding
-live gates. No artifact is uploaded by installation or export.
+```sh
+.tools/operator-venv/bin/python scripts/test-harness.py
+```
 
-Build locally with `scripts/package-harness.py --epoch <fixed-source-epoch>`
-using the pinned build environment. `PACKAGE-CONTENTS.json` lists every reviewed
-source, runtime and human-kit input. Review new files before updating that list;
-unlisted distribution inputs stop the build. The runtime wheel excludes tests
-and benchmark inputs. The source archive includes synthetic tests for offline
-verification, and the human kit includes its linked documentation and reviewed
-scanner resources. Two local wheel/source builds must agree byte for byte.
+The runner uses synthetic inputs, writes complete UTC audit and stream files,
+rejects skips and xfails, and returns failure for incomplete or interrupted
+runs. Build artifacts with a fixed epoch only after the suite passes:
+
+```sh
+.tools/operator-venv/bin/python scripts/package-harness.py \
+  --epoch 1788839662 --output .tools/package-review
+```
+
+Packaging produces an allowlisted wheel and normalized source archive. It does
+not produce or include a human toolkit.

@@ -1,5 +1,8 @@
 # Approved guarded CPTC harness plan
 
+> **Scope update (0.1.0a5):** Human-tooling deliverables in this historical plan were removed from this repository. The guarded AI harness and trusted operator control plane remain.
+
+
 Approved by the user on 2026-09-07 in task 01a07dba-16f9-75f0-8281-94410627390b.
 This source-only specification records the accepted implementation request.
 

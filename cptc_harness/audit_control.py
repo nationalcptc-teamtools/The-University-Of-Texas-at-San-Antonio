@@ -111,7 +111,7 @@ def _request_stop(root: Path, engagement_id: str, device_id: str, actor: str, *,
             "reason": reason, "correlation_id": correlation_id}
 
 def operator_stop(root: Path, policy, *, interface: str, source: str = "operator", reason: str = "operator_request", ledger=None) -> dict:
-    """Shared CLI/human/TUI/MCP stop entry; never opens Runtime or AuditService."""
+    """Shared operator CLI/TUI/MCP stop entry; never opens Runtime or AuditService."""
     if source == "system": raise PolicyError("system stops require an internal failure path")
     receipt = _request_stop(root, policy.engagement_id, policy.device_id, policy.operator_id, interface=interface, source=source, reason=reason)
     try:
