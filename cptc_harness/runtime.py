@@ -15,7 +15,8 @@ from .network import NetworkBroker
 from .orchestrator import Workflows
 from .policy import load_policy, save_policy
 from .registry import build_registry
-from .storage import atomic_write, private_directory, read_private, write_json
+from .storage import private_directory, read_private, write_json
+from .publication import Publications
 
 
 def device_root():
@@ -60,6 +61,8 @@ class Runtime:
         self.clock = self.audit.clock
         try:
             self.ledger.enroll_workspace(self.policy.workspace_id, self.audit.origin_id, hashlib.sha256(str(self.root).encode()).hexdigest())
+            self.publications = Publications(self.root, self.audit, self.ledger)
+            self.publications.recover()
         except Exception:
             self.audit.close()
             raise
@@ -125,18 +128,36 @@ class Runtime:
         self.audit.emit(AuditEvent("result_record_written", request.request_id,
             {"record_sha256": hashlib.sha256(canonical_json(record)).hexdigest(), "source": request.source, "status": result.status}))
 
+    def _publish_derived(self, payloads, completion):
+        self.publications.publish(payloads, completion)
+
     def coverage(self):
-        results = self._records()
-        items = []
-        for spec in self.registry.specs():
-            matching = [r for r in results if r["request"]["module_id"] == spec.module_id]
-            items.append({"module_id": spec.module_id, "track": spec.track, "mode": spec.mode,
-                          "attempts": len(matching), "latest_status": matching[-1]["result"]["status"] if matching else "not_tested",
-                          "live_validation": "unverified"})
-        data = {"classification": "client_confidential", "modules": items, "finding_confirmation": "Requires evidence-backed human review"}
-        write_json(self.root / "coverage.json", data)
-        self.audit.emit(AuditEvent("coverage_generated", data={"profiles": len(items), "records": len(results)}))
-        return data
+        from .reporting import summarize_result
+        try:
+            if not self.audit.verify().valid or not self.audit.ready():
+                raise PolicyError("verified audit required before coverage")
+            results = self._records()
+            items = []
+            for spec in self.registry.specs():
+                matching = [r for r in results if r["request"]["module_id"] == spec.module_id]
+                latest = summarize_result(matching[-1]["result"]) if matching else {
+                    "collection_state": "not_tested", "issues": [], "observation_count": 0}
+                items.append({"module_id": spec.module_id, "track": spec.track, "mode": spec.mode,
+                              "attempts": len(matching), "latest_status": matching[-1]["result"]["status"] if matching else "not_tested",
+                              **latest,
+                              "issue_attempts": sum(bool(r["result"].get("facts", {}).get("issues")) for r in matching),
+                              "unsuccessful_attempts": sum(r["result"]["status"] != "complete" for r in matching),
+                              "live_validation": "unverified"})
+            data = {"classification": "client_confidential", "modules": items, "finding_confirmation": "Requires evidence-backed human review"}
+            self.audit.emit(AuditEvent("coverage_intent", data={"profiles": len(items), "records": len(results)}))
+            self._publish_derived([(self.root / "coverage.json", canonical_json(data) + b"\n")],
+                AuditEvent("coverage_generated", data={"profiles": len(items), "records": len(results)}))
+            return data
+        except Exception as exc:
+            self.ledger.stop("coverage audit or storage failed")
+            if isinstance(exc, PolicyError):
+                raise
+            raise PolicyError("coverage incomplete; workspace stopped for review") from None
 
     def _records(self):
         try:
@@ -160,18 +181,21 @@ class Runtime:
 
     def report(self):
         from .reporting import report_records, markdown_report
-        if not self.audit.verify().valid or not self.audit.ready():
-            raise PolicyError("verified audit required before reporting")
-        records = self._records()
-        data = report_records(records)
-        self.audit.emit(AuditEvent("report_intent", data={"records": len(records), "observations": len(data["observations"])}))
         try:
-            write_json(self.root / "reports/observations.json", data)
-            atomic_write(self.root / "reports/observations.md", markdown_report(data).encode())
-            self.audit.emit(AuditEvent("report_complete", data={"observations": len(data["observations"]),
+            if not self.audit.verify().valid or not self.audit.ready():
+                raise PolicyError("verified audit required before reporting")
+            records = self._records()
+            data = report_records(records)
+            self.audit.emit(AuditEvent("report_intent", data={"records": len(records), "observations": len(data["observations"])}))
+            self._publish_derived([
+                (self.root / "reports/observations.json", canonical_json(data) + b"\n"),
+                (self.root / "reports/observations.md", markdown_report(data).encode()),
+            ], AuditEvent("report_complete", data={"observations": len(data["observations"]),
                 "sha256": hashlib.sha256(canonical_json(data)).hexdigest(), "model_calls": 0}))
-        except Exception:
+            return {"classification": "client_confidential", "observations": len(data["observations"]),
+                    "json": str(self.root / "reports/observations.json"), "markdown": str(self.root / "reports/observations.md"), "model_calls": 0}
+        except Exception as exc:
             self.ledger.stop("report storage or audit failed")
-            raise PolicyError("report incomplete; engagement stopped for storage review") from None
-        return {"classification": "client_confidential", "observations": len(data["observations"]),
-                "json": str(self.root / "reports/observations.json"), "markdown": str(self.root / "reports/observations.md"), "model_calls": 0}
+            if isinstance(exc, PolicyError):
+                raise
+            raise PolicyError("report incomplete; workspace stopped for review") from None

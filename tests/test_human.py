@@ -18,6 +18,21 @@ from cptc_harness.policy import save_policy
 ROOT = Path(__file__).parents[1]
 
 
+@pytest.mark.parametrize("status", ["blocked", "failed", "stopped", "uncertain"])
+def test_operator_failure_is_nonzero_and_preserves_result(monkeypatch, capsys, tmp_path, status):
+    import cptc_harness.human as human
+    monkeypatch.setattr(human, "_execute", lambda _: {"result": {"status": status, "reason": "synthetic limitation"}})
+    assert main(["run", "web.headers", "--workspace", str(tmp_path)]) == 2
+    assert json.loads(capsys.readouterr().out)["result"]["status"] == status
+
+
+@pytest.mark.parametrize("valid", [False, None])
+def test_unverified_audit_is_nonzero(monkeypatch, tmp_path, valid):
+    import cptc_harness.human as human
+    monkeypatch.setattr(human, "_execute", lambda _: {"valid": valid})
+    assert main(["audit-verify", "--workspace", str(tmp_path)]) == 2
+
+
 def _age_identity(tmp_path: Path) -> tuple[Path, str]:
     key_path = tmp_path / "synthetic-age-key"
     result = subprocess.run([str(ROOT / ".tools" / "age-keygen"), "-o", str(key_path)],

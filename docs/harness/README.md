@@ -1,4 +1,4 @@
-# Guarded CPTC harness — private alpha 0.1.0a2
+# Guarded CPTC harness — private alpha 0.1.0a3
 
 This terminal-first harness implements a local policy broker, persistent budgets,
 encrypted evidence capture, UTC audit files, typed imports, bounded HTTP metadata
@@ -101,6 +101,7 @@ classification, approval or policy fields.
 | Linux and Windows/AD imports | Typed identity, permissions, service/task, privilege and protocol observations |
 | Human result / finding / coverage / retest imports | Typed, source-hashed, human-reviewed records |
 | `web.headers`, `web.session` | One eligible-target HTTP metadata request; synthetic integration tested; live acceptance pending |
+| `web.response_capture` | Operator-only one-response GET, encrypted capture and human-selected offline replay; bounded lab smoke passed |
 | `network.nmap_inventory` | Pinned native Nmap, exactly one TCP connect through the parent broker; native synthetic fixtures tested |
 | `web.nuclei_observation`, `web.zap_observation` | Offline native analysis of one human-selected response; networkless workers, reviewed rules and encrypted streams |
 | Active `web.nuclei`, `web.zap` | Unsupported; no active scanner profile admitted |

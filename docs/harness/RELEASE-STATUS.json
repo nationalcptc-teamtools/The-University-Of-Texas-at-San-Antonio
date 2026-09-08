@@ -1,31 +1,30 @@
 {
-  "version": "0.1.0a2",
+  "version": "0.1.0a3",
   "classification": "public-development-metadata",
   "status": "private_alpha_not_competition_accepted",
-  "checked_at_utc": "2026-09-08T01:17:25.590327Z",
+  "checked_at_utc": "2026-09-08T03:54:01.269073Z",
   "full_approved_plan_complete": false,
   "active_profiles_live_accepted": 0,
   "remote_push_authorized": false,
   "validation": {
     "pytest": {
       "command": "python3 -m pytest -q tests web",
-      "passed": 172,
+      "passed": 293,
       "subtests_passed": 17,
-      "seconds": 75.19,
+      "seconds": 98.55,
       "skipped": 0
     },
     "legacy_unittest": {
       "command": "python3 -m unittest discover -s web -p 'test_*.py'",
       "passed": 34,
-      "seconds": 15.133
+      "seconds": 15.143
     },
     "independent_review": {
       "requested_model": "gpt-5.6-luna",
-      "scope": "Native Nmap, passive Nuclei/ZAP, human CLI, containment, parsers, encrypted capture, cleanup and final dependency-label follow-up",
-      "final_focused_passed": 5,
+      "scope": "Operator capture, encrypted offline replay, collector limitations, bounded HTTP cleanup, publication crash recovery and accepted-only exports",
+      "final_focused_passed": 38,
       "reported_blockers_in_reviewed_surface": 0,
-      "full_live_release_approval": false,
-      "final_catalog_followup": "1 passed; no remaining blocker; full human tests 6 passed"
+      "full_live_release_approval": false
     },
     "source_secret_scan": {
       "tool": "gitleaks",
@@ -36,9 +35,8 @@
     "compileall": "passed",
     "diff_check": "passed",
     "human_cli_final_regression": {
-      "passed": 6,
-      "seconds": 3.08,
-      "scope": "Includes final missing-dependency and duplicate catalog refusal after full suite"
+      "passed": 12,
+      "scope": "Human capture/replay, unsuccessful exit status, catalog and operator boundaries"
     },
     "juice_shop_operator_preflight": {
       "guest_inventory": "verified",
@@ -48,6 +46,31 @@
       "raw_evidence": "restricted local encrypted audit outside Git",
       "service_changes": 0,
       "active_profile_acceptance": false
+    },
+    "publication_recovery": {
+      "focused_passed": 70,
+      "seconds": 11.11,
+      "scope": "Recovery/export/report/integrity tests including receipt sequence ordering, crash points, missing files, permissions and symlinks"
+    },
+    "lab_observation_smoke": {
+      "new_response_capture": "complete",
+      "new_target_requests": 1,
+      "offline_nuclei_replay": "complete",
+      "offline_zap_replay": "complete",
+      "offline_replay_target_requests": 0,
+      "model_calls": 0,
+      "raw_evidence": "Restricted local encrypted audit outside Git",
+      "audit_verified": true,
+      "post_service_health": "verified; unchanged image and restart count",
+      "infrastructure_changes": 0,
+      "prior_release_live_exercised": [
+        "network.nmap_inventory",
+        "web.headers",
+        "web.session"
+      ],
+      "cptc11_human_one_port_nmap_and_import": "complete",
+      "guest_authenticated_collection": "Blocked pending trusted guest host identity; no guest authentication attempted",
+      "full_live_acceptance": false
     }
   },
   "efficiency": {
@@ -63,14 +86,17 @@
     "synthetic_stdout_bytes_retained": 43398,
     "fixture_sha256": "a26dfd153cf1184faee469da9cb0ca44dcc5b8126638ea4dd62af2679096202a",
     "audit_verified": true,
-    "limitations": "Input-token fixture comparison only; no claim about actual provider tokenizer, billing, output tokens, or reasoning usage."
+    "limitations": "Input-token fixture comparison only; no claim about actual provider tokenizer, billing, output tokens, or reasoning usage.",
+    "tested_release": "0.1.0a3"
   },
   "profiles": [
     {
       "id": "network.nmap_import",
       "mode": "offline",
       "admission": "offline_fixture_tested",
-      "live_evidence": false
+      "live_evidence": true,
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false
     },
     {
       "id": "network.output_import",
@@ -81,9 +107,10 @@
     {
       "id": "network.nmap_inventory",
       "mode": "bounded",
-      "admission": "native_synthetic_integration_only_live_pending",
-      "live_evidence": false,
-      "restriction": "Exactly one approved IPv4 TCP port, no application payload"
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "live_evidence": true,
+      "restriction": "Exactly one approved IPv4 TCP port, no application payload",
+      "full_live_acceptance": false
     },
     {
       "id": "web.capture_import",
@@ -95,27 +122,41 @@
       "id": "web.nuclei_observation",
       "mode": "offline",
       "admission": "native_offline_fixture_tested_human_only",
-      "live_evidence": false,
-      "restriction": "One reviewed local HTTP response, no network or model calls"
+      "live_evidence": true,
+      "restriction": "One reviewed local HTTP response, no network or model calls",
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false
     },
     {
       "id": "web.zap_observation",
       "mode": "offline",
       "admission": "native_offline_fixture_tested_human_only",
-      "live_evidence": false,
-      "restriction": "One reviewed local HTTP response, no network or model calls"
+      "live_evidence": true,
+      "restriction": "One reviewed local HTTP response, no network or model calls",
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.response_capture",
+      "mode": "bounded",
+      "admission": "operator_only_fixture_tested_and_lab_smoke",
+      "live_evidence": true,
+      "full_live_acceptance": false,
+      "restriction": "One GET at exact approved target base, 32768-byte raw cap, encrypted evidence; zero model access; no redirects or retries"
     },
     {
       "id": "web.headers",
       "mode": "bounded",
-      "admission": "synthetic_integration_only_live_pending",
-      "live_evidence": false
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "live_evidence": true,
+      "full_live_acceptance": false
     },
     {
       "id": "web.session",
       "mode": "bounded",
-      "admission": "synthetic_integration_only_live_pending",
-      "live_evidence": false
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "live_evidence": true,
+      "full_live_acceptance": false
     },
     {
       "id": "web.nuclei",
@@ -191,14 +232,15 @@
     }
   ],
   "blocking_gates": [
-    "Active Nuclei/ZAP, remote host execution and additional protocol profiles are not implemented/admitted; native one-port IPv4 Nmap and offline passive analysis are fixture-tested.",
+    "Active Nuclei/ZAP, remote host execution and additional protocol profiles are not implemented/admitted; native one-port IPv4 Nmap and offline passive analysis have bounded lab smoke evidence.",
     "Authenticated session and active controlled-account testing are not admitted.",
     "No automated proof profile is admitted.",
     "Client browser login and recipient-bound client MCP transport are not admitted.",
     "Actual supplied AI authorization, retention and upstream tool controls are not verified.",
-    "Dell and Juice Shop active-profile live acceptance remains pending. Juice Shop identity, health and local reachability are now verified by operator preflight.",
+    "Full live profile acceptance remains pending. Bounded Juice Shop capture, offline replay and earlier observations passed; authenticated guest collection requires trusted guest host identity.",
     "PowerShell execution and Python 3.11-3.13 validation remain pending.",
     "The full future-profile and failure-mode adversarial corpus is incomplete."
   ],
-  "package_note": "Private wheel, sdist and human kit are local evaluation artifacts. Final hashes and installed-wheel smoke evidence are recorded in dist/BUILD-RECEIPT.json; packaging does not satisfy live gates."
+  "package_note": "Private wheel, sdist and human kit are local evaluation artifacts. Final hashes and installed-wheel smoke evidence are recorded in dist/BUILD-RECEIPT.json; packaging does not satisfy live gates.",
+  "active_profiles_live_exercised": 4
 }

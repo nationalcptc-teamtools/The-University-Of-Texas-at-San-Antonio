@@ -52,6 +52,13 @@ def _parser() -> argparse.ArgumentParser:
     import_command.add_argument("module")
     import_command.add_argument("--input", type=Path, required=True)
 
+    replay = commands.add_parser("replay-capture", help="analyze one explicitly selected encrypted capture offline")
+    _workspace_argument(replay)
+    replay.add_argument("module", choices=("web.nuclei_observation", "web.zap_observation"))
+    replay.add_argument("--action-id", required=True)
+    replay.add_argument("--evidence-id", required=True)
+    replay.add_argument("--identity", type=Path, required=True, help="owner-only age identity; used only by an isolated local decryptor")
+
     for name in ("coverage", "report", "audit-verify", "stop"):
         command = commands.add_parser(name)
         _workspace_argument(command)
@@ -234,6 +241,14 @@ def _execute(args: argparse.Namespace) -> Any:
     workspace = _workspace(args)
     if args.command == "stop":
         return _stop(workspace, args.reason)
+    if args.command == "replay-capture":
+        from .operator_replay import replay_capture
+        runtime = _runtime(workspace)
+        try:
+            return replay_capture(runtime, module_id=args.module, action_id=args.action_id,
+                                  evidence_id=args.evidence_id, identity=args.identity)
+        finally:
+            runtime.audit.close()
     if args.command == "run":
         runtime = _runtime(workspace)
         try:
@@ -273,6 +288,12 @@ def main(argv: list[str] | None = None) -> int:
             return int(exc.code)
         result = _execute(args)
         print(json.dumps(to_json(result), indent=2, ensure_ascii=True, allow_nan=False))
+        if isinstance(result, dict):
+            outcome = result.get("result", result)
+            if isinstance(outcome, dict) and outcome.get("status") in {"blocked", "failed", "stopped", "uncertain"}:
+                return 2
+            if args.command == "audit-verify" and result.get("valid") is not True:
+                return 2
         return 0
     except (PolicyError, OSError, ValueError, KeyError, TypeError) as exc:
         message = str(exc) if isinstance(exc, PolicyError) else "invalid local input or unavailable operation"

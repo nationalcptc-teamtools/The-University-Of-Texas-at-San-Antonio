@@ -15,6 +15,13 @@ CAP_RE = re.compile(r"^cap_[a-z0-9_]+(?:\+(?:eip|ep|ei|p))?$")
 MODE_RE = re.compile(r"^[0-7]{4}$")
 SID_RE = re.compile(r"^(?:S-\d-\d+(?:-\d+){1,15}|[A-Za-z0-9_.-]{1,128})$")
 REF_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,128}$")
+COLLECTOR_ISSUES = frozenset({
+    "unsupported_capability_inventory", "unsupported_identity", "unsupported_service_metadata",
+    "unsupported_service_acl", "unsupported_task_acl", "manual_controlled_account_review_required",
+    "unsupported_smb_ldap_policy_metadata", "collector_group_limit", "collector_directory_limit",
+    "collector_suid_limit", "collector_capability_limit", "collector_record_limit",
+    "collector_directory_unreadable", "collector_metadata_unavailable", "collector_walk_limit",
+})
 _ALLOWED_RECORD_KEYS = {"kind", "type", "facts", "target", "uid", "euid", "gid", "groups", "path", "mode", "owner",
                         "world_writable", "name", "state", "writable", "expected_binary", "capabilities", "reviewed",
                         "sudo_access_observed", "evidence_ref", "sid", "domain_sid", "domain_name", "owner_sid",
@@ -202,6 +209,15 @@ def _versioned(raw: bytes | str, source: SourceRef | str, scope: ScopeSpec, *, w
         return ParseBatch(issues=tuple(issues + [issue("unsupported_schema")]))
     if not _controls(root.get("controls")):
         return ParseBatch(issues=tuple(issues + [issue("unsafe_controls")]))
+    limitations = root.get("issues", [])
+    if not isinstance(limitations, list) or len(limitations) > 32:
+        issues.append(issue("invalid_collector_issues"))
+    else:
+        # These are collector-declared limitations, never permissions or raw
+        # target prose. Unknown values reduce completeness without reflection.
+        codes = {value if isinstance(value, str) and value in COLLECTOR_ISSUES else
+                 "invalid_collector_issues" for value in limitations}
+        issues.extend(issue(code) for code in sorted(codes))
     target, records = _str(root.get("target"), 256), root.get("records")
     if not target or not in_scope(target, scope) or not isinstance(records, list) or len(records) > 256:
         return ParseBatch(issues=tuple(issues + [issue("invalid_envelope")]))

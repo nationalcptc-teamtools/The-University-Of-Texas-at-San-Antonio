@@ -21,6 +21,7 @@ from .collectors.imports import (exploit_import, linux_import, network_import,
                                  windows_import)
 from .passive import PassiveCollector
 from .nmap_bridge import NmapCollector
+from .response_capture import ResponseCaptureCollector
 
 
 class _FrozenDict(dict):
@@ -149,6 +150,8 @@ _SPECS = (
           effects=("http_request", "human_only_capture"), output_schema=_batch_schema(_WEB_HEADER_FACTS, source=False)),
     _spec("web.session", "web", "bounded", "Record session-cookie metadata for human review.",
           effects=("http_request", "human_only_capture"), output_schema=_batch_schema(_WEB_SESSION_FACTS, source=False)),
+    _spec("web.response_capture", "web", "bounded", "Operator-only complete encrypted response for offline passive analysis; one exact approved GET.",
+          effects=("operator_only", "http_request", "human_only_capture"), output_schema=_batch_schema(_WEB_HEADER_FACTS, source=False)),
     _spec("web.nuclei", "web", "bounded", "Pinned Nuclei profile; unsupported without reviewed containment.",
           tool_id="nuclei-cptc-reviewed-v1", effects=("network_observation",)),
     _spec("web.zap", "web", "bounded", "Pinned ZAP workflow; unsupported without reviewed containment.",
@@ -177,6 +180,7 @@ _HANDLERS: dict[str, Collector] = {
     "web.zap_observation": PassiveCollector("zap"),
     "web.headers": WebCollector("web_headers"),
     "web.session": WebCollector("web_session"),
+    "web.response_capture": ResponseCaptureCollector(),
     "web.nuclei": UnsupportedScannerCollector("Nuclei"),
     "web.zap": UnsupportedScannerCollector("ZAP"),
     "linux.output_import": linux_import(),
@@ -283,6 +287,8 @@ class TrustedToolRegistry:
             return OperationResult(status="blocked", reason=str(exc))
         if spec.mode == "manual_only":
             return OperationResult(status="blocked", reason="module is manual-only")
+        if "operator_only" in spec.effects and context.request.source != "operator":
+            return OperationResult(status="blocked", reason="module requires an explicit operator request")
         if spec.mode == "offline" and context.request.target is not None:
             return OperationResult(status="blocked", reason="offline module cannot receive a target")
         target = context.request.target

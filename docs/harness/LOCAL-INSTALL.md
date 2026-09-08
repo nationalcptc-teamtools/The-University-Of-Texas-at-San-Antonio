@@ -12,7 +12,7 @@ file before assessment and repeat the applicable tests and pin review.
 ```sh
 python3 -m venv --system-site-packages .tools/operator-venv
 .tools/operator-venv/bin/python -m pip install --no-index --no-deps \
-  dist/cptc_guarded_harness-0.1.0a2-py3-none-any.whl
+  dist/cptc_guarded_harness-0.1.0a3-py3-none-any.whl
 .tools/operator-venv/bin/cptc-tools --help
 .tools/operator-venv/bin/cptc-tools modules
 .tools/operator-venv/bin/cptc-tools preflight --age "$PWD/.tools/age"

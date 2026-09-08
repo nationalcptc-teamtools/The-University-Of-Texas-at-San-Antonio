@@ -138,11 +138,70 @@
       "owned_files": [],
       "outcome": "Reviewed, concrete blockers corrected and focused regressions passed; final catalog-label follow-up recorded in release status",
       "validation": "See RELEASE-STATUS.json for final integrated evidence; intermediate worker claims do not admit capabilities."
+    },
+    {
+      "release": "0.1.0a3",
+      "role": "planner",
+      "task": "live_tooling_planner",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "xhigh",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed; no substitution requested",
+      "owned_files": [],
+      "outcome": "Completed ordered capture and collector-visibility packages before delegation; integrator omitted optional permission-semantics and alias-dedup changes to keep this release focused.",
+      "data_boundary": "Source code and synthetic fixtures only"
+    },
+    {
+      "release": "0.1.0a3",
+      "role": "implementer",
+      "task": "collector_limits_implementer",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed; no substitution requested",
+      "owned_files": [
+        "human/collectors/collect-linux.py",
+        "human/collectors/collect-windows.ps1",
+        "scripts/collect-linux.py",
+        "scripts/collect-windows.ps1",
+        "tests/test_collector_limits.py"
+      ],
+      "outcome": "Collector limitation flags and synthetic tests; 41 focused tests passed; script mirrors identical; PowerShell execution not verified.",
+      "data_boundary": "Source code and synthetic fixtures only"
+    },
+    {
+      "release": "0.1.0a3",
+      "role": "enforcement_builder",
+      "task": "native_probe_builder",
+      "requested_model": "gpt-5.6-terra",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed; no substitution requested",
+      "owned_files": [
+        "cptc_harness/network.py",
+        "cptc_harness/response_capture.py",
+        "tests/test_response_capture.py"
+      ],
+      "outcome": "Implemented raw response capture package; main corrected cap-prefix retention, resource cleanup and whole-operation deadlines and added adversarial tests.",
+      "data_boundary": "Source code and synthetic fixtures only"
+    },
+    {
+      "release": "0.1.0a3",
+      "role": "reviewer",
+      "task": "review_cptc_controls",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed; no substitution requested",
+      "owned_files": [],
+      "outcome": "Independent replay, transport, operator gate and collector/reporting review; final integrated status recorded in RELEASE-STATUS.json.",
+      "data_boundary": "Source code and synthetic fixtures only"
     }
   ],
   "integration": {
     "owner": "main",
     "responsibility": "Contracts, migration, runtime, provider/secret/signing/audit process composition, reports, CLI/MCP/workflows, evidence exports, corrective enforcement edits and final validation.",
-    "native_continuation": "Main owns passive Nuclei/ZAP implementation, registry/runtime wiring, native pins, resource closure, packaging, installed CLI validation and acceptance metadata."
+    "native_continuation": "Main owns passive Nuclei/ZAP implementation, registry/runtime wiring, native pins, resource closure, packaging, installed CLI validation and acceptance metadata.",
+    "live_continuation": "Main owns replay, broker/registry gates, reporting/coverage, parser flag validation, corrective capture enforcement, live operator validation and release packaging. Main also owns publication journal/recovery, audit receipt RPC and accepted-only export corrections, with independent Luna review and synthetic crash tests."
   }
 }

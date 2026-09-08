@@ -28,7 +28,11 @@ try {
 
 # Service names and state are local metadata. ACL descriptors remain unsupported.
 try {
-    Get-Service | Sort-Object -Property Name | Select-Object -First 96 | ForEach-Object {
+    $services = @(Get-Service | Sort-Object -Property Name)
+    if ($services.Count -ge 96) {
+        $issues.Add('collector_directory_limit')
+    }
+    $services | Select-Object -First 96 | ForEach-Object {
         $state = switch ([string]$_.Status) { 'Running' { 'running' } 'Stopped' { 'stopped' } default { 'unknown' } }
         $records.Add([ordered]@{ kind = 'service'; name = ([string]$_.Name).Substring(0, [Math]::Min(128, ([string]$_.Name).Length)); state = $state })
     }
@@ -40,4 +44,7 @@ $issues.Add('unsupported_service_acl')
 $issues.Add('unsupported_task_acl')
 $issues.Add('manual_controlled_account_review_required')
 $issues.Add('unsupported_smb_ldap_policy_metadata')
+if ($records.Count -gt 256) {
+    $issues.Add('collector_record_limit')
+}
 [ordered]@{ schema = 'cptc.windows_ad.inventory.v1'; target = $Target.Substring(0, [Math]::Min(256, $Target.Length)); controls = $controls; records = @($records | Select-Object -First 256); issues = @($issues | Sort-Object -Unique) } | ConvertTo-Json -Compress -Depth 5

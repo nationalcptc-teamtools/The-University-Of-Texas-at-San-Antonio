@@ -13,8 +13,9 @@ from .contracts import PolicyError, canonical_json, digest
 from .storage import private_directory, read_private, write_json
 
 MAX_BUNDLE_BYTES = 128 * 1024 * 1024
-ALLOWED_TOP = {"audit", "results", "reports", "policies", "artifacts"}
-ALLOWED_FILES = {"policy.json", "coverage.json", "coverage.md", "integrity-manifest.json", "audit.jsonl", "transcript.log", "ai-brief.json"}
+ALLOWED_TOP = {"audit", "results", "policies", "artifacts"}
+DERIVED_FILES = {"coverage.json", "reports/observations.json", "reports/observations.md"}
+ALLOWED_FILES = {"policy.json", "integrity-manifest.json", "audit.jsonl", "transcript.log", "ai-brief.json"} | DERIVED_FILES
 
 
 @dataclass(frozen=True)
@@ -48,14 +49,32 @@ def _allowed(root: Path, relative: str) -> Path:
     return current
 
 
-def prepare_export(root: Path, relative_paths: tuple[str, ...], *, operator: str) -> ExportReview:
+def _accepted(root, getter):
+    from .publication import accepted_files
+    if getter is None:
+        from .audit import verified_events, publication_receipts_from_events
+        receipts = publication_receipts_from_events(verified_events(root / "audit"))
+    else:
+        receipts = getter()
+    return accepted_files(root, receipts)
+
+
+def _check_derived(root, relative, raw, accepted):
+    if relative in DERIVED_FILES and accepted.get(relative) != {
+            "path": relative, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}:
+        raise PolicyError("derived export requires an accepted completion-audited artifact")
+
+
+def prepare_export(root: Path, relative_paths: tuple[str, ...], *, operator: str, publication_receipts=None) -> ExportReview:
     root = private_directory(root)
     if not operator or not relative_paths or len(set(relative_paths)) != len(relative_paths):
         raise PolicyError("export requires an operator and unique explicit artifact selection")
+    accepted = _accepted(root, publication_receipts) if set(relative_paths) & DERIVED_FILES else {}
     files, size = [], 0
     for relative in sorted(relative_paths):
         path = _allowed(root, relative)
         raw = read_private(path, MAX_BUNDLE_BYTES)
+        _check_derived(root, relative, raw, accepted)
         size += len(raw)
         if size > MAX_BUNDLE_BYTES:
             raise PolicyError("export collection allowance exceeded")
@@ -63,12 +82,14 @@ def prepare_export(root: Path, relative_paths: tuple[str, ...], *, operator: str
     return ExportReview(str(root), tuple(files), operator)
 
 
-def _archive(review: ExportReview) -> bytes:
+def _archive(review: ExportReview, publication_receipts=None) -> bytes:
     # Memory only: no decrypted/raw temporary export files on the host filesystem.
     output = io.BytesIO()
+    accepted = _accepted(Path(review.root), publication_receipts) if {item["path"] for item in review.files} & DERIVED_FILES else {}
     with tarfile.open(fileobj=output, mode="w") as archive:
         for item in review.files:
             raw = read_private(_allowed(Path(review.root), item["path"]), MAX_BUNDLE_BYTES)
+            _check_derived(Path(review.root), item["path"], raw, accepted)
             if len(raw) != item["bytes"] or hashlib.sha256(raw).hexdigest() != item["sha256"]:
                 raise PolicyError("reviewed export artifact changed")
             info = tarfile.TarInfo(item["path"])
@@ -104,7 +125,7 @@ def verify_archive(raw: bytes, review: ExportReview) -> dict:
 
 
 def encrypted_export(review: ExportReview, destination: Path, *, approved_hash: str,
-                     recipient: str, age: Path, verify_identity: Path | None = None) -> dict:
+                     recipient: str, age: Path, verify_identity: Path | None = None, publication_receipts=None) -> dict:
     if approved_hash != review.review_hash:
         raise PolicyError("export requires the exact reviewed selection hash")
     if not recipient.startswith("age1") or any(c.isspace() for c in recipient) or len(recipient) > 128:
@@ -113,7 +134,7 @@ def encrypted_export(review: ExportReview, destination: Path, *, approved_hash: 
     private_directory(destination.parent)
     if destination.exists() or destination.is_symlink():
         raise PolicyError("export destination already exists")
-    original = _archive(review)
+    original = _archive(review, publication_receipts)
     result = verify_archive(original, review)
     temporary = destination.with_name("." + destination.name + "." + uuid.uuid4().hex + ".partial")
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)

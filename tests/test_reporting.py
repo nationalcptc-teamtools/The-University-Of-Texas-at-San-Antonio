@@ -6,7 +6,7 @@ import pytest
 
 from cptc_harness.contracts import AuditEvent, PolicyError, PolicySnapshot, ScopeSpec
 from cptc_harness.policy import save_policy
-from cptc_harness.reporting import markdown_report, report_records
+from cptc_harness.reporting import markdown_report, report_records, summarize_result
 from cptc_harness.runtime import Runtime, initialize
 from cptc_harness.storage import write_json
 from test_integration import age_identity, private
@@ -38,6 +38,28 @@ def test_exact_dedup_preserves_conflicting_states_and_ownership():
     matching = next(item for item in report["observations"] if item["state"] == "candidate")
     assert matching["source_actions"] == ["a", "b"]
     assert matching["contributors"] == ["second-operator", "synthetic-operator"]
+
+
+def test_complete_import_with_limitations_remains_incomplete_collection():
+    value = record()
+    value["result"]["status"] = "complete"
+    value["result"]["facts"]["issues"] = ["unsupported_service_acl", "collector_record_limit", "unsupported_service_acl"]
+    summary = summarize_result(value["result"])
+    assert summary == {"collection_state": "incomplete", "observation_count": 1,
+                       "issues": ["collector_record_limit", "unsupported_service_acl"]}
+    report = report_records([value])
+    assert report["operations"][0]["collection_state"] == "incomplete"
+    assert "unsupported_service_acl" in markdown_report(report)
+
+
+@pytest.mark.parametrize("status", ["blocked", "failed", "uncertain", "stopped"])
+def test_operations_without_observations_are_not_dropped(status):
+    value = record()
+    value["result"] = {"status": status, "facts": {}, "evidence": [], "reason": "synthetic unsupported profile"}
+    report = report_records([value])
+    assert report["observations"] == []
+    assert report["operations"][0]["collection_state"] == status
+    assert "synthetic unsupported profile" in markdown_report(report)
 
 
 def test_readable_report_escapes_active_markup_and_terminal_controls():
@@ -81,7 +103,9 @@ def test_real_auditor_records_and_reports_without_model_calls(reporting_runtime)
     assert runtime.audit.verify().valid
     assert runtime.run("exploitation.zerologon")["result"]["status"] == "blocked"
     assert len(runtime._records()) == 2
-    assert next(m for m in runtime.coverage()["modules"] if m["module_id"] == "exploitation.zerologon")["latest_status"] == "blocked"
+    row = next(m for m in runtime.coverage()["modules"] if m["module_id"] == "exploitation.zerologon")
+    assert row["latest_status"] == row["collection_state"] == "blocked"
+    assert row["unsuccessful_attempts"] == 1 and row["observation_count"] == 0
 
 
 @pytest.mark.parametrize("damage", ["changed", "missing", "malformed", "permission", "symlink", "extra"])

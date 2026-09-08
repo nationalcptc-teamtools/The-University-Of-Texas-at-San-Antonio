@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from contextlib import ExitStack
 import base64
+from contextlib import ExitStack
 import http.client
 import ipaddress
 import json
@@ -18,6 +20,7 @@ from urllib.parse import unquote, urlsplit
 
 from .contracts import AuditEvent, NetworkGrant, PolicyError, ScopeSpec, TargetPolicy, TargetRef, TargetRequest, TargetResponse
 from .integrity import verified_executable
+from .response_capture import RAW_RESPONSE_WORKER
 
 
 class _PinnedHTTPConnection(http.client.HTTPConnection):
@@ -71,7 +74,7 @@ class _Transport:
             # One attempt only. A connection failure after a possible request is
             # uncertain and cannot trigger an automatic second target attempt.
             output = self._broker._isolated_http(self._addresses[0], self._target, request.method, request.path, headers, maximum, self._timeout)
-        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        except (OSError, ValueError, subprocess.SubprocessError, PolicyError) as exc:
             self._broker._stop("network transport failure")
             raise PolicyError("target transport failed") from exc
         self._broker._event("network_response", {"target": self._target.target_id, "address": output.address, "status": output.status,
@@ -80,6 +83,23 @@ class _Transport:
             self._broker._stop("target throttle, lockout, or server error")
         if output.truncated: self._broker._stop("response capture cap exceeded")
         return output
+
+    def capture_response(self) -> bytes:
+        """Make one fixed base-path GET and return its complete raw HTTP response."""
+        if self._remaining <= 0:
+            raise PolicyError("module request allowance exhausted")
+        path = self._target.base_path
+        if (not isinstance(path, str) or len(path) > 2048 or not path.startswith("/") or path.startswith("//") or
+                any(c in path for c in "?#%\\") or any(ord(c) < 33 or ord(c) > 126 for c in path) or
+                any(part in {".", ".."} for part in path.split("/"))):
+            raise PolicyError("response capture base path is invalid")
+        self._broker._rate(self._target.target_id)
+        self._remaining -= 1
+        try:
+            return self._broker._isolated_response(self._addresses[0], self._target, self._timeout)
+        except (OSError, ValueError, subprocess.SubprocessError, PolicyError) as exc:
+            self._broker._stop("response capture transport failure")
+            raise PolicyError("response capture transport failed") from exc
 
 
 class NetworkBroker:
@@ -98,53 +118,52 @@ class NetworkBroker:
         bwrap creates a new network namespace; inherited fd 0 continues to refer to
         exactly this TCP connection, but the worker cannot create another socket.
         """
-        launcher = str(verified_executable("/usr/bin/bwrap"))
-        interpreter = str(verified_executable("/usr/bin/python3"))
-        self._event("connection_intent", {"address": address, "port": target.port, "target": target.target_id})
-        sock = socket.create_connection((address, target.port), timeout=min(timeout, 5))
-        sock.setblocking(True)
+        started, deadline = time.monotonic(), time.monotonic() + timeout
+        launcher = str(verified_executable("/usr/bin/bwrap")); interpreter = str(verified_executable("/usr/bin/python3"))
         request = json.dumps({"scheme": target.scheme, "host": target.host, "method": method, "path": path,
                               "headers": headers, "maximum": maximum, "timeout": timeout}, separators=(",", ":")).encode()
-        script = _HTTP_WORKER.encode()
-        reqfd = os.memfd_create("cptc-http-request", flags=os.MFD_CLOEXEC); os.write(reqfd, request); os.lseek(reqfd, 0, 0)
-        codefd = os.memfd_create("cptc-http-worker", flags=os.MFD_CLOEXEC); os.write(codefd, script); os.lseek(codefd, 0, 0)
-        command = [launcher, "--unshare-all", "--cap-drop", "ALL", "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib",
-                   "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev",
-                   "--die-with-parent", "--new-session", "--clearenv", "--dir", "/tmp", "--dir", "/etc", "--dir", "/etc/ca-certificates",
-                   "--dir", "/etc/ca-certificates/extracted", "--ro-bind", "/etc/ca-certificates/extracted/tls-ca-bundle.pem",
-                   "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "--ro-bind-data", str(reqfd), "/request.json", "--ro-bind-data", str(codefd),
-                   "/worker.py", "--", interpreter, "-I", "/worker.py"]
-        self._event("process_intent", {"worker": "bounded-http-v1", "source_sha256": hashlib.sha256(script).hexdigest(),
-            "command": command, "cwd": "/",
-            "environment": {}, "address": address, "port": target.port, "method": method, "path": path,
-            "timeout_s": timeout, "output_bytes": maximum})
-        process = None
-        stdout, _stderr = b"", b""
-        try:
-            process = subprocess.Popen(command, stdin=sock, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True, pass_fds=(reqfd, codefd), start_new_session=True, env={})
-            self._event("process_started", {"pid": process.pid, "worker": "bounded-http-v1"})
-            deadline = time.monotonic() + timeout + 2
-            while True:
-                if self.ledger is not None and self.ledger.stopped():
-                    os.killpg(process.pid, 9); raise OSError("operator stop")
-                if time.monotonic() >= deadline:
-                    os.killpg(process.pid, 9); raise OSError("network deadline exceeded")
-                try:
-                    stdout, _stderr = process.communicate(timeout=0.1)
-                    break
-                except subprocess.TimeoutExpired:
-                    continue
-        finally:
-            if process is not None and process.poll() is None:
-                os.killpg(process.pid, 9)
-                stdout, _stderr = process.communicate()
-            sock.close(); os.close(reqfd); os.close(codefd)
-            if process is not None:
-                if self.audit and self.action_id:
-                    self.audit.capture(self.action_id, "stdout", stdout, "restricted_raw")
-                    if _stderr:
-                        self.audit.capture(self.action_id, "stderr", _stderr, "restricted_raw")
-                self._event("process_completed", {"exit_code": process.returncode, "stdout_bytes": len(stdout), "stderr_bytes": len(_stderr)})
+        script = _HTTP_WORKER.encode(); process = None; stdout = _stderr = b""; completed = False
+        with ExitStack() as cleanup:
+            self._event("connection_intent", {"address": address, "port": target.port, "target": target.target_id})
+            remaining = deadline - time.monotonic()
+            if remaining <= 0: raise OSError("network deadline exceeded")
+            sock = socket.create_connection((address, target.port), timeout=min(remaining, 5)); cleanup.callback(sock.close); sock.setblocking(True)
+            reqfd = os.memfd_create("cptc-http-request", flags=os.MFD_CLOEXEC); cleanup.callback(os.close, reqfd); os.write(reqfd, request); os.lseek(reqfd, 0, 0)
+            codefd = os.memfd_create("cptc-http-worker", flags=os.MFD_CLOEXEC); cleanup.callback(os.close, codefd); os.write(codefd, script); os.lseek(codefd, 0, 0)
+            command = [launcher, "--unshare-all", "--cap-drop", "ALL", "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev", "--die-with-parent", "--new-session", "--clearenv", "--dir", "/tmp", "--dir", "/etc", "--dir", "/etc/ca-certificates", "--dir", "/etc/ca-certificates/extracted", "--ro-bind", "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "--ro-bind-data", str(reqfd), "/request.json", "--ro-bind-data", str(codefd), "/worker.py", "--", interpreter, "-I", "/worker.py"]
+            self._event("process_intent", {"worker": "bounded-http-v1", "source_sha256": hashlib.sha256(script).hexdigest(), "command": command, "cwd": "/", "environment": {}, "address": address, "port": target.port, "method": method, "path": path, "timeout_s": timeout, "output_bytes": maximum})
+            try:
+                process = subprocess.Popen(command, stdin=sock, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True, pass_fds=(reqfd, codefd), start_new_session=True, env={})
+                cleanup.callback(process.stdout.close)
+                cleanup.callback(process.stderr.close)
+                self._event("process_started", {"pid": process.pid, "worker": "bounded-http-v1"})
+                while True:
+                    if self.ledger is not None and self.ledger.stopped(): raise OSError("operator stop")
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0: raise OSError("network deadline exceeded")
+                    try:
+                        stdout, _stderr = process.communicate(timeout=min(0.1, remaining)); completed = True; break
+                    except subprocess.TimeoutExpired: continue
+            finally:
+                if process is not None and not completed:
+                    try:
+                        if process.poll() is None:
+                            try:
+                                os.killpg(process.pid, 9)
+                            except ProcessLookupError:
+                                pass
+                            except OSError:
+                                process.kill()
+                        stdout, _stderr = process.communicate(timeout=1)
+                    except (OSError, subprocess.TimeoutExpired) as exc:
+                        raise OSError("worker containment cleanup failed") from exc
+                if process is not None:
+                    if self.audit and self.action_id:
+                        self.audit.capture(self.action_id, "stdout", stdout, "restricted_raw")
+                        if _stderr: self.audit.capture(self.action_id, "stderr", _stderr, "restricted_raw")
+                    self._event("process_completed", {"exit_code": process.returncode, "stdout_bytes": len(stdout), "stderr_bytes": len(_stderr), "duration_ms": int((time.monotonic()-started)*1000)})
+        if time.monotonic() > deadline:
+            raise OSError("network deadline exceeded")
         if process.returncode != 0 or len(stdout) > (maximum * 2 + 65536):
             raise OSError("isolated HTTP worker failed")
         decoded = json.loads(stdout)
@@ -152,6 +171,102 @@ class NetworkBroker:
         body = base64.b64decode(decoded["body"], validate=True)
         return TargetResponse(int(decoded["status"]), {str(k).lower(): str(v) for k, v in decoded["headers"].items()}, body,
                               float(decoded["elapsed"]), address, bool(decoded["truncated"]))
+
+    def _isolated_response(self, address: str, target: TargetRef, timeout: float) -> bytes:
+        """Give a one-shot, raw-response worker only one already-connected socket."""
+        launcher = str(verified_executable("/usr/bin/bwrap"))
+        interpreter = str(verified_executable("/usr/bin/python3"))
+        authority = ("[" + target.host + "]") if ":" in target.host else target.host
+        request = json.dumps({"scheme": target.scheme, "host": target.host, "authority": authority + ":" + str(target.port),
+                              "path": target.base_path or "/", "timeout": min(timeout, 30.0)}, separators=(",", ":")).encode()
+        script = RAW_RESPONSE_WORKER.encode()
+        started = time.monotonic()
+        process = None
+        stdout = stderr = captured_out = captured_err = b""
+        communicated = False
+        def record(stream, current, previous):
+            if not current.startswith(previous):
+                raise OSError("response worker stream changed unexpectedly")
+            limit = 32768 if stream == "stdout" else 256
+            retained = current[:limit]
+            delta = retained[len(previous):]
+            if delta and self.audit is not None and self.action_id is not None:
+                self.audit.capture(self.action_id, stream, delta, "client_confidential_human_only")
+            if len(current) > limit:
+                self._event("response_capture_incomplete", {"stream": stream, "retained_bytes": len(retained)})
+                raise OSError("response worker stream allowance exceeded")
+            return current
+
+        # Register cleanup immediately after each acquisition, including failures
+        # in allocation, intent logging, connect, launch, capture and reaping.
+        with ExitStack() as resources:
+            def memfd(name, payload):
+                descriptor = os.memfd_create(name, flags=os.MFD_CLOEXEC)
+                resources.callback(os.close, descriptor)
+                with os.fdopen(os.dup(descriptor), "wb") as writer:
+                    writer.write(payload)
+                    writer.flush()
+                os.lseek(descriptor, 0, 0)
+                return descriptor
+            reqfd = memfd("cptc-response-request", request)
+            codefd = memfd("cptc-response-worker", script)
+            command = [launcher, "--unshare-all", "--cap-drop", "ALL", "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib",
+                       "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev",
+                       "--die-with-parent", "--new-session", "--clearenv", "--dir", "/tmp", "--dir", "/etc", "--dir", "/etc/ca-certificates",
+                       "--dir", "/etc/ca-certificates/extracted", "--ro-bind", "/etc/ca-certificates/extracted/tls-ca-bundle.pem",
+                       "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "--ro-bind-data", str(reqfd), "/request.json", "--ro-bind-data", str(codefd),
+                       "/worker.py", "--", interpreter, "-I", "/worker.py"]
+            self._event("response_capture_process_intent", {"target": target.target_id, "address": address, "port": target.port,
+                        "path": target.base_path or "/", "timeout_s": timeout, "raw_limit": 32768,
+                        "source_sha256": hashlib.sha256(script).hexdigest(), "command": command, "cwd": "/", "environment": {}})
+            self._event("response_capture_connection_intent", {"target": target.target_id, "address": address, "port": target.port})
+            sock = resources.enter_context(socket.create_connection((address, target.port), timeout=min(timeout, 5)))
+            try:
+                process = subprocess.Popen(command, stdin=sock, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True,
+                                           pass_fds=(reqfd, codefd), start_new_session=True, env={})
+                resources.callback(process.stdout.close)
+                resources.callback(process.stderr.close)
+                self._event("response_capture_process_started", {"pid": process.pid})
+                deadline = started + timeout
+                while True:
+                    if self.ledger is not None and self.ledger.stopped():
+                        raise OSError("operator stop")
+                    if time.monotonic() >= deadline:
+                        raise OSError("response capture deadline exceeded")
+                    try:
+                        stdout, stderr = process.communicate(timeout=min(0.1, max(0.001, deadline-time.monotonic())))
+                        communicated = True
+                        captured_out = record("stdout", stdout, captured_out)
+                        captured_err = record("stderr", stderr, captured_err)
+                        break
+                    except subprocess.TimeoutExpired as exc:
+                        captured_out = record("stdout", exc.output or b"", captured_out)
+                        captured_err = record("stderr", exc.stderr or b"", captured_err)
+            finally:
+                if process is not None:
+                    try:
+                        if process.poll() is None:
+                            try:
+                                os.killpg(process.pid, 9)
+                            except ProcessLookupError:
+                                pass
+                        if not communicated:
+                            stdout, stderr = process.communicate(timeout=2)
+                            captured_out = record("stdout", stdout, captured_out)
+                            captured_err = record("stderr", stderr, captured_err)
+                    finally:
+                        self._event("response_capture_completed", {"exit_code": process.poll(),
+                                    "stdout_bytes": len(stdout), "stderr_bytes": len(stderr),
+                                    "duration_ms": int((time.monotonic()-started)*1000),
+                                    "capture_incomplete": stderr != b'{"complete":true}'})
+        if process is None or process.returncode != 0 or len(stdout) > 32768:
+            raise OSError("response capture worker failed")
+        try:
+            result = json.loads(stderr)
+            if result != {"complete": True}: raise ValueError()
+        except (ValueError, TypeError, KeyError):
+            raise OSError("response capture worker output invalid") from None
+        return stdout
 
     def target_transport(self, target: TargetRef, scope: ScopeSpec | None = None, *, timeout_s: float = 30.0, request_limit: int = 1) -> _Transport:
         policy_target = next((t for t in self.policy.targets if t.target.target_id == target.target_id), None)

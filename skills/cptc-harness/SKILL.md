@@ -16,11 +16,17 @@ Windows/AD, exploitation result, and reporting records.  Imports use trusted
 operator-selected bytes.  They return typed observations, source hashes,
 parse issues, and duplicate counts.  Raw client data stays human-only
 restricted evidence.
+An operation marked complete can still have incomplete collection. Preserve
+collector limitation codes and failed attempts; do not treat missing observations
+as a clean finding or complete coverage.
 
 Use the web header and session modules only with the bounded transport.  They
 make one metadata request under the registered request budget.  They do not
 follow redirects, submit credentials, or expose response bodies or header
 values to the model.
+`web.response_capture` and `cptc-tools replay-capture` require an explicit human
+operator. Do not request them as model actions or request their evidence or keys.
+Ordinary metadata output is not a complete passive-scanner response capture.
 
 Native Nmap observes exactly one registered TCP port through a pinned parent-only
 connect broker. Offline Nuclei/ZAP observation modules require a human-selected

@@ -32,6 +32,8 @@ class Broker:
             if request.source == "model":
                 self.ledger.charge(request.request_id, "actions", 1, workflow_id=request.workflow_id,
                                    limits={"actions": int(getattr(self.policy, "model_actions", 0))})
+            if "operator_only" in spec.effects and request.source != "operator":
+                raise PolicyError("module requires an explicit operator request")
             if spec.mode == "manual_only": raise PolicyError("manual-only module cannot be executed")
             validate_schema(request.args, spec.input_schema)
             target_policy = self._target(request, spec)

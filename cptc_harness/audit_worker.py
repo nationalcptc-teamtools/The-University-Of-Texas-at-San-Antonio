@@ -20,7 +20,7 @@ channel = socket.socket(fileno=0)
 config = json.load(open("/config.json"))
 clock_state = ClockState(False, None, "awaiting-host-probe")
 writer = AuditWriter("/audit", parse_policy(config["policy"]), age_binary="/age", age_recipient=config["age_recipient"], clock=lambda: clock_state)
-methods = {"emit", "capture", "reserve_output", "release_output", "verify", "ready", "encryption_ready", "seal", "result_receipts"}
+methods = {"emit", "capture", "reserve_output", "release_output", "verify", "ready", "encryption_ready", "seal", "result_receipts", "publication_receipts"}
 try:
     while True:
         size = struct.unpack("!I", receive(channel, 4))[0]

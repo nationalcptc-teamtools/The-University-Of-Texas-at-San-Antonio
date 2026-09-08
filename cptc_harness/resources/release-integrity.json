@@ -9,7 +9,7 @@
   },
   "version": 1,
   "workers": {
-    "audit_worker.py": "28094ae798f59bef0671c6d62c1e439c5a78dc193cb4610f41f29cb63066e45c",
+    "audit_worker.py": "c651dfab38b7bdd8b7a86f80142cd2b6f72cc4786a200c0a0bfd9fcfee585561",
     "browser_worker.py": "578cb2aef094d2963e7bceac1635911c13d11c64afccc1254f818bbd18149d48",
     "passive_worker.py": "358fccf3d32e503cedbed1fd89d1ce98f4a05886c92bf43a7043851a3178c984",
     "provider_worker.py": "88be6b83232a99797a04096f69edbce6ae9492cadc3611dc82436911488c5070",

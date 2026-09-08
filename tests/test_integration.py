@@ -134,9 +134,10 @@ def test_real_isolated_provider_roundtrip_and_unapproved_dns():
 def test_encrypted_export_exact_review_wrong_key_and_source_preservation(private, age_identity):
     age, identity, recipient = age_identity
     root = private_directory(private / "engagement", create=True)
-    write_json(root / "coverage.json", {"fixture": "synthetic", "status": "observed"})
-    before = (root / "coverage.json").read_bytes()
-    review = prepare_export(root, ("coverage.json",), operator="synthetic-operator")
+    private_directory(root / "artifacts", create=True)
+    write_json(root / "artifacts/fixture.json", {"fixture": "synthetic", "status": "observed"})
+    before = (root / "artifacts/fixture.json").read_bytes()
+    review = prepare_export(root, ("artifacts/fixture.json",), operator="synthetic-operator")
     with pytest.raises(PolicyError):
         encrypted_export(review, private / "wrong.age", approved_hash="bad", recipient=recipient, age=age, verify_identity=identity)
     wrong_identity = private / "wrong-key"
@@ -146,9 +147,9 @@ def test_encrypted_export_exact_review_wrong_key_and_source_preservation(private
     assert not (private / "wrong.age").exists()
     result = encrypted_export(review, private / "closed.age", approved_hash=review.review_hash, recipient=recipient, age=age, verify_identity=identity)
     assert result["decryption_verified"] and result["verified"]
-    assert (root / "coverage.json").read_bytes() == before
+    assert (root / "artifacts/fixture.json").read_bytes() == before
     assert b"synthetic" not in (private / "closed.age").read_bytes()
-    write_json(root / "coverage.json", {"changed": True})
+    write_json(root / "artifacts/fixture.json", {"changed": True})
     with pytest.raises(PolicyError):
         encrypted_export(review, private / "changed.age", approved_hash=review.review_hash, recipient=recipient, age=age, verify_identity=identity)
     assert not (private / "changed.age").exists()

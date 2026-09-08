@@ -9,6 +9,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import stat
 import shutil
 import subprocess
@@ -23,6 +24,41 @@ from .storage import private_directory, read_private, write_json, exclusive
 
 _SECRET_KEYS = {"secret", "password", "credential", "credentials", "token", "cookie", "authorization", "api_key", "private_key", "set-cookie", "access_token", "refresh_token"}
 _RAW_CLASSES = {"restricted_raw", "client_confidential", "client_confidential_human_only"}
+
+
+def publication_receipts_from_events(events):
+    """Return only integrity-verified publication metadata, never raw evidence."""
+    intents, completed = {}, {}
+    paths = {"coverage_generated": {"coverage.json"},
+             "report_complete": {"reports/observations.json", "reports/observations.md"}}
+    for event in events:
+        kind, data = event["kind"], event["data"]
+        if kind not in {"publication_intent", *paths} or "generation" not in data:
+            continue  # Historical reports must be regenerated before export.
+        generation = data["generation"]
+        checksum = data.get("manifest_sha256")
+        if (not isinstance(generation, str) or not re.fullmatch(r"[0-9a-f]{32}", generation)
+                or not isinstance(checksum, str) or not re.fullmatch(r"[0-9a-f]{64}", checksum)):
+            raise PolicyError("invalid publication audit metadata")
+        if kind == "publication_intent":
+            if generation in intents or data.get("kind") not in paths or len(intents) >= 2048:
+                raise PolicyError("invalid or excessive publication intents")
+            intents[generation] = {"manifest_sha256": checksum, "kind": data["kind"]}
+        else:
+            if intents.get(generation) != {"manifest_sha256": checksum, "kind": kind} or generation in completed:
+                raise PolicyError("publication completion lacks a unique matching intent")
+            files = data.get("files")
+            if (not isinstance(files, list) or len(files) != len(paths[kind])
+                    or any(not isinstance(item, dict) or set(item) != {"path", "sha256", "bytes"}
+                           or not isinstance(item["path"], str)
+                           or not isinstance(item["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                           or type(item["bytes"]) is not int or not 0 <= item["bytes"] <= 128 * 1024 * 1024 for item in files)
+                    or {item["path"] for item in files} != paths[kind]):
+                raise PolicyError("invalid publication file receipts")
+            if type(event.get("seq")) is not int or event["seq"] < 1:
+                raise PolicyError("publication completion requires an audit sequence")
+            completed[generation] = {"manifest_sha256": checksum, "kind": kind, "files": files, "sequence": event["seq"]}
+    return {"intents": intents, "completed": completed}
 
 
 def _safe(value: Any) -> Any:
@@ -361,6 +397,13 @@ class AuditWriter:
         if intents != set(receipts) or expected_actions - set(receipts):
             raise PolicyError("unfinished result intent requires operator review")
         return receipts
+
+    def publication_receipts(self):
+        if not self.verify().valid or not self.ready():
+            raise PolicyError("invalid audit cannot supply publication receipts")
+        paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
+        return publication_receipts_from_events(json.loads(line) for path in paths
+            for line in read_private(path, 128 * 1024 * 1024).splitlines())
 
     def rotate(self) -> AuditSeal:
         with self._lock:

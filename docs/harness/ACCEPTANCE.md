@@ -1,4 +1,4 @@
-# Acceptance status — private alpha 0.1.0a2
+# Acceptance status — private alpha 0.1.0a3
 
 The approved plan is implemented in part. The enforcement foundation and the
 listed fixture-tested interfaces are available for private evaluation. The full
@@ -60,6 +60,28 @@ stop handling and a cleanup-stop edge. These were fixed with explicit regression
 Final review found no remaining blocker in the exercised changes; live acceptance
 and broader profiles are not implied. Exact counts are in RELEASE-STATUS.json.
 
+## A3 capture, recovery and operator verification
+
+A new operator-only HTTP capture retains one complete bounded response in
+restricted encrypted storage. A human can select its action/evidence identifiers
+for Nuclei and ZAP replay in networkless workers. Keys are available only to the
+isolated decryptor; raw response content is absent from model and readable audit
+channels. Existing metadata profiles continue withholding header values.
+
+Collector limitation codes survive imports and reports, so partial inventories
+remain visibly incomplete. Failed attempts remain in the operation history.
+Human commands return nonzero for blocked, failed, stopped or uncertain actions.
+
+Derived outputs now use owner-only durable publication journals, preserved
+previous generations and audit-linked completion receipts. Restart recovery
+quarantines incomplete candidates or verifies a committed generation, and stops
+on missing/changed/unsafe accepted files. Explicit sequence values preserve
+receipt order across canonical JSON IPC. Exports accept only current completed
+report hashes and reject internal publication/history/quarantine paths. Synthetic
+crash, disk/error, tamper and export tests exercise these boundaries; this is not
+hardware power-cut validation. Independent review found no remaining blocker in
+this changed surface. Exact final suite counts are in RELEASE-STATUS.json.
+
 ## Explicitly outstanding work
 
 1. Complete live acceptance for the one-port Nmap and HTTP observation profiles.
@@ -81,16 +103,15 @@ and broader profiles are not implied. Exact counts are in RELEASE-STATUS.json.
    transports, every future native scanner default, export interruption and
    crash/power-loss behaviors. Existing tests do not prove these unimplemented
    profiles or every hypothetical channel safe.
-8. Complete Dell CPTC11 and Juice Shop live acceptance for every claimed active
-   profile. Current work reached read-only access/recovery preflight for Dell;
-   target identity, exclusive current use, isolation, approved target profiles and
-   action evidence remain outstanding. A subsequent operator preflight located
-   the correct Juice Shop guest, verified its Docker identity and health, and
-   received HTTP 200 for two bounded checks from this workstation. Its private
-   route is available; the prior address belonged to a different deployment.
-   This is access/health evidence, not active-profile acceptance. Raw records
-   remain in restricted encrypted local storage. Existing services and lifecycle
-   journals were preserved.
+8. Complete full Dell CPTC11 and Juice Shop profile acceptance. Bounded lab
+   observations have now succeeded: prior a2 one-port Nmap and HTTP metadata,
+   human CPTC11 one-port Nmap/import, and a3 one-request encrypted response
+   capture replayed through both native offline passive scanners. The a3 replay
+   added no target traffic and used no model. Service health, image and restart
+   count were unchanged afterward. These are narrow smoke tests, not full
+   recovery/current-use/platform acceptance. Trusted guest SSH identity remains
+   unavailable, so authenticated Linux/Windows guest collection was not attempted.
+   Existing services, relays and lifecycle journals were preserved.
 
 Before each live check, record the authorized target tuple, verified guest
 identity, usage/exclusive assignment, current recovery safeguards, protected

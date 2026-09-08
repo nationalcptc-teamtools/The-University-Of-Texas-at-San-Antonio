@@ -165,7 +165,8 @@ def main(argv=None):
                     return tui(runtime)
                 elif args.command == "export-review":
                     runtime.audit.emit(AuditEvent("export_review_started", data={"file_count": len(args.files)}))
-                    review = prepare_export(args.workspace, tuple(args.files), operator=runtime.policy.operator_id)
+                    review = prepare_export(args.workspace, tuple(args.files), operator=runtime.policy.operator_id,
+                        publication_receipts=runtime.audit.publication_receipts)
                     write_json(args.output, {"review": to_json(review), "review_hash": review.review_hash}, replace=False)
                     result = {"review_file": str(args.output), "review_hash": review.review_hash, "files": review.files}
                 elif args.command == "export":
@@ -174,7 +175,8 @@ def main(argv=None):
                     if Path(review.root) != runtime.root:
                         raise PolicyError("export review belongs to another workspace")
                     result = encrypted_export(review, args.output, approved_hash=args.approved_hash,
-                        recipient=args.recipient, age=args.age, verify_identity=args.identity)
+                        recipient=args.recipient, age=args.age, verify_identity=args.identity,
+                        publication_receipts=runtime.audit.publication_receipts)
                     runtime.audit.emit(AuditEvent("export_verified", data={k: v for k, v in result.items() if k != "destination"}))
                 elif args.command == "handover-export":
                     from .signing import public_key, SigningReference
