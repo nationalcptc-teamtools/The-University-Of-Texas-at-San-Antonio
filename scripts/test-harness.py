@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT))
 from testing.acceptance import evaluate
 
 SOURCE_ROOTS = {"cptc_harness", "docs", "human", "scripts", "skills", "testing", "tests", "web"}
-SOURCE_FILES = {".gitleaks.toml", "AGENTS.md", "MANIFEST.in", "README.md", "pyproject.toml"}
+SOURCE_FILES = {".gitleaks.toml", "AGENTS.md", "MANIFEST.in", "README.md", "nxc-fix.sh", "pyproject.toml"}
 ROOT_STARTUP_FILES = {"sitecustomize.py", "usercustomize.py", "conftest.py"}
 IGNORED_SOURCE_PARTS = {"__pycache__", ".pytest_cache", ".mypy_cache"}
 PROTECTED_SOURCE_SUBTREES = {("web", "engagements")}

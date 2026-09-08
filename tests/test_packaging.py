@@ -57,7 +57,10 @@ def test_reviewed_checkout_inputs_and_human_dependencies_are_complete():
     package.verify_source_inputs(ROOT, contents, package.physical_distribution_inputs(ROOT))
     assert "human/runbooks/without-harness.md" in contents["human"]
     assert "docs/harness/LIVE-TOOLING-CONTINUATION.md" in contents["human"]
+    assert "docs/harness/THIRD-PARTY-INVENTORY.json" in contents["human"]
+    assert "docs/harness/THIRD-PARTY-LICENSES.md" in contents["human"]
     assert "cptc_harness/resources/zap-passive.yaml" in contents["human"]
+    assert "nxc-fix.sh" in contents["human"]
     assert not contents["runtime"] & {name for name in contents["source"] if name.startswith(("tests/", "human/"))}
 
 

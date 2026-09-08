@@ -1,4 +1,5 @@
 include README.md AGENTS.md pyproject.toml MANIFEST.in .gitleaks.toml
+include nxc-fix.sh
 recursive-include docs/harness *.md *.txt *.json *.lock
 recursive-include scripts *.py *.ps1
 include scripts/fix-nxc-bloodhound-config.sh

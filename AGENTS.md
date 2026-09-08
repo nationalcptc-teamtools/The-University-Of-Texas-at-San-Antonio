@@ -20,3 +20,9 @@
   Main owns shared interfaces, migrations, integration and release acceptance.
 - Build agents use source and synthetic fixtures only, never credentials or
   raw engagement data. No automatic provider fallback or model substitution.
+- Do not copy code, templates, rules, documentation, or assets from an online
+  repository until its exact source revision, license, retained notices, and
+  redistribution obligations are recorded in
+  `docs/harness/THIRD-PARTY-INVENTORY.json`. Unknown, missing, or incompatible
+  licensing blocks the import. Merely invoking an operator-installed tool must
+  still be recorded when project code depends on its behavior.

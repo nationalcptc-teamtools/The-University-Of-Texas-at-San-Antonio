@@ -1,12 +1,28 @@
 """Non-live tests for the human NetExec/BloodHound configuration helper."""
 from pathlib import Path
 import configparser
+import hashlib
 import os
 import subprocess
 
 
 ROOT = Path(__file__).parents[1]
 HELPER = ROOT / "scripts" / "fix-nxc-bloodhound-config.sh"
+ROOT_HELPER = ROOT / "nxc-fix.sh"
+
+
+def test_root_helper_is_the_executable_canonical_copy():
+    canonical = HELPER.read_bytes()
+    root_copy = ROOT_HELPER.read_bytes()
+    assert root_copy == canonical
+    assert hashlib.sha256(root_copy).hexdigest() == hashlib.sha256(canonical).hexdigest()
+    assert ROOT_HELPER.stat().st_mode & 0o111
+    completed = subprocess.run(
+        [str(ROOT_HELPER), "--help"], text=True, capture_output=True, timeout=10
+    )
+    assert completed.returncode == 0, completed.stderr
+    usage = completed.stdout + completed.stderr
+    assert "--ce" in usage and "--legacy" in usage
 
 
 def _environment(tmp_path):

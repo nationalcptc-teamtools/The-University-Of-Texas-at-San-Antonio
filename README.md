@@ -10,6 +10,12 @@ AI transports, typed all-track imports and deterministic reports. See the
 outstanding live-validation gates. This preparation build is not approved
 competition staging.
 
+The operator-facing NetExec configuration helper is available directly as
+[`nxc-fix.sh`](nxc-fix.sh). It switches the active NetExec environment between
+BloodHound CE and legacy configuration, creates a local backup, and does not
+run collection. Third-party source admission and redistribution rules are in
+the [license policy](docs/harness/THIRD-PARTY-LICENSES.md).
+
 ## Web coverage workflow
 
 Start with [web/README.md](web/README.md) for the Python CLI, per-application
