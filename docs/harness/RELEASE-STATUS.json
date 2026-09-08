@@ -2,7 +2,7 @@
   "version": "0.1.0a2",
   "classification": "public-development-metadata",
   "status": "private_alpha_not_competition_accepted",
-  "checked_at_utc": "2026-09-08T01:08:19.420295Z",
+  "checked_at_utc": "2026-09-08T01:17:25.590327Z",
   "full_approved_plan_complete": false,
   "active_profiles_live_accepted": 0,
   "remote_push_authorized": false,
@@ -39,6 +39,15 @@
       "passed": 6,
       "seconds": 3.08,
       "scope": "Includes final missing-dependency and duplicate catalog refusal after full suite"
+    },
+    "juice_shop_operator_preflight": {
+      "guest_inventory": "verified",
+      "container_identity_and_health": "verified",
+      "local_private_route": "verified",
+      "http_health_checks_passed": 2,
+      "raw_evidence": "restricted local encrypted audit outside Git",
+      "service_changes": 0,
+      "active_profile_acceptance": false
     }
   },
   "efficiency": {
@@ -187,7 +196,7 @@
     "No automated proof profile is admitted.",
     "Client browser login and recipient-bound client MCP transport are not admitted.",
     "Actual supplied AI authorization, retention and upstream tool controls are not verified.",
-    "Dell profile live acceptance remains pending; Juice Shop access remains unavailable.",
+    "Dell and Juice Shop active-profile live acceptance remains pending. Juice Shop identity, health and local reachability are now verified by operator preflight.",
     "PowerShell execution and Python 3.11-3.13 validation remain pending.",
     "The full future-profile and failure-mode adversarial corpus is incomplete."
   ],

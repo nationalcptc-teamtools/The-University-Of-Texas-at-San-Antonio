@@ -84,8 +84,13 @@ and broader profiles are not implied. Exact counts are in RELEASE-STATUS.json.
 8. Complete Dell CPTC11 and Juice Shop live acceptance for every claimed active
    profile. Current work reached read-only access/recovery preflight for Dell;
    target identity, exclusive current use, isolation, approved target profiles and
-   action evidence remain outstanding. Juice Shop access was unavailable at the
-   last check. Existing services and lifecycle journals were preserved.
+   action evidence remain outstanding. A subsequent operator preflight located
+   the correct Juice Shop guest, verified its Docker identity and health, and
+   received HTTP 200 for two bounded checks from this workstation. Its private
+   route is available; the prior address belonged to a different deployment.
+   This is access/health evidence, not active-profile acceptance. Raw records
+   remain in restricted encrypted local storage. Existing services and lifecycle
+   journals were preserved.
 
 Before each live check, record the authorized target tuple, verified guest
 identity, usage/exclusive assignment, current recovery safeguards, protected
