@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cptc-guarded-harness"
-version = "0.1.0a3"
+version = "0.1.0a4"
 description = "Local deterministic CPTC workflows with bounded AI capabilities and UTC audit trails"
 readme = "docs/harness/README.md"
 requires-python = ">=3.11"
@@ -24,7 +24,14 @@ cptc-tools = "cptc_harness.human:main"
 include = ["cptc_harness*"]
 
 [tool.setuptools.package-data]
-cptc_harness = ["resources/*", "resources/nuclei/*", "native/*"]
+cptc_harness = [
+  "resources/CPTC-RULES-2025-10.txt", "resources/MANUAL-ONLY-CARDS.md",
+  "resources/release-integrity.json", "resources/tool-catalog.json",
+  "resources/zap-passive.yaml", "resources/nuclei/csp.yaml",
+  "resources/nuclei/frame-options.yaml", "resources/nuclei/nosniff.yaml",
+  "resources/nuclei/processed.yaml", "native/build-nmap-shim.sh",
+  "native/nmap_connect_shim.c",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "web"]

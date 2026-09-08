@@ -64,6 +64,7 @@ def test_help_modules_and_preflight_do_not_import_optional_ai_modules(monkeypatc
     monkeypatch.setattr(builtins, "__import__", guarded_import)
     assert main(["--help"]) == 0
     assert main(["modules"]) == 0
+    assert main(["checks"]) == 0
     assert main(["preflight"]) == 0
     output = capsys.readouterr().out
     assert "network.output_import" in output and "availability is separate" in output
@@ -157,7 +158,9 @@ def test_human_command_lifecycle_uses_synthetic_offline_import(tmp_path, monkeyp
     assert main(["import", "network.output_import", "--input", str(source), "--workspace", str(workspace)]) == 0
     assert main(["coverage", "--workspace", str(workspace)]) == 0
     assert main(["report", "--workspace", str(workspace)]) == 0
+    assert main(["findings", "--workspace", str(workspace)]) == 0
+    assert main(["gaps", "--workspace", str(workspace)]) == 0
     assert main(["audit-verify", "--workspace", str(workspace)]) == 0
     assert (workspace / "reports" / "observations.json").is_file()
-    assert main(["stop", "--workspace", str(workspace), "--reason", "synthetic review complete"]) == 0
-    assert "synthetic review complete" in capsys.readouterr().out
+    assert main(["stop", "--workspace", str(workspace), "--reason", "suspected_lockout"]) == 0
+    assert "suspected_lockout" in capsys.readouterr().out

@@ -32,6 +32,7 @@ def parser():
     init.add_argument("--age", type=Path, default=Path(__file__).resolve().parents[1] / ".tools" / "age")
     sub.add_parser("doctor")
     sub.add_parser("modules")
+    sub.add_parser("checks")
     sub.add_parser("preamble")
     run = sub.add_parser("run")
     run.add_argument("module")
@@ -40,9 +41,11 @@ def parser():
     run.add_argument("--args", default="{}")
     run.add_argument("--approval")
     stop = sub.add_parser("stop")
-    stop.add_argument("--reason", default="operator stop")
+    stop.add_argument("--reason", choices=("operator_request", "suspected_lockout", "health_degradation", "audit_failure"), default="operator_request", help="durable stop reason code")
     sub.add_parser("coverage")
     sub.add_parser("report")
+    sub.add_parser("findings")
+    sub.add_parser("gaps")
     sub.add_parser("audit-verify")
     sub.add_parser("audit-seal")
     migrate = sub.add_parser("migrate-legacy")
@@ -86,6 +89,8 @@ def parser():
     accept.add_argument("--source-key-ref", type=Path, required=True)
     accept.add_argument("--recipient-key-ref", type=Path, required=True)
     accept.add_argument("--approved-digest", required=True)
+    from .campaign import add_cli_commands
+    add_cli_commands(sub)
     return p
 
 
@@ -116,6 +121,9 @@ def main(argv=None):
             result = doctor()
         elif args.command == "modules":
             result = [to_json(s) for s in build_registry().specs()]
+        elif args.command == "checks":
+            from .check_catalog import capability_status
+            result = {"checks": capability_status(), "model_calls": 0, "benchmark_complete": False}
         elif args.command == "migrate-legacy":
             result = migrate_legacy(args.path, encrypted_storage_verified=args.encrypted_volume_verified)
         elif args.command == "merge-timeline":
@@ -124,16 +132,17 @@ def main(argv=None):
             if args.workspace is None:
                 raise PolicyError("this command requires --workspace")
             if args.command == "stop":
-                # Stop must not wait for the active writer's lock. The running broker
-                # sees the persisted latch and records cancellation itself.
-                from .ledger import Ledger
+                # This does not construct Runtime/AuditService.  The durable
+                # sentinel is written before the best-effort SQLite update.
+                from .audit_control import operator_stop
                 policy = load_policy(args.workspace / "policy.json")
-                ledger = Ledger(device_root() / policy.engagement_id, policy.engagement_id, policy.device_id)
-                ledger.stop(args.reason)
-                result = {"stopped": True, "new_work": "blocked", "reason": args.reason}
+                result = operator_stop(device_root() / policy.engagement_id, policy, interface="cli", reason=args.reason)
             else:
                 runtime = Runtime(args.workspace)
-                if args.command == "run":
+                if args.command.startswith("assessment-"):
+                    from .campaign import execute_cli
+                    result = execute_cli(runtime, args)
+                elif args.command == "run":
                     result = runtime.run(args.module, target_id=args.target, input_path=args.input, args=json.loads(args.args), approval_id=args.approval)
                 elif args.command == "preamble":
                     result = to_json(build_preamble(runtime.policy, rules_reference(), runtime.registry.specs()))
@@ -141,6 +150,16 @@ def main(argv=None):
                     result = runtime.coverage()
                 elif args.command == "report":
                     result = runtime.report()
+                elif args.command == "findings":
+                    data = runtime.report(include_data=True)
+                    result = {"classification": "client_confidential", "model_calls": 0,
+                              "detections": data["detections"], "evidence_index": data["evidence_index"],
+                              "confirmation_policy": data["confirmation_policy"]}
+                elif args.command == "gaps":
+                    data = runtime.coverage()
+                    result = {"classification": "client_confidential", "model_calls": 0,
+                              "checks": [row for row in data["checks"] if not row.get("collection_complete") or row.get("limitations")],
+                              "capabilities": [row for row in data["capabilities"] if row["live_validation"] != "accepted"]}
                 elif args.command == "audit-verify":
                     result = to_json(runtime.audit.verify())
                 elif args.command == "audit-seal":
@@ -200,6 +219,11 @@ def main(argv=None):
                 else:
                     raise PolicyError("unknown command")
         print(json.dumps(to_json(result), indent=2, ensure_ascii=True, allow_nan=False))
+        if isinstance(result, dict):
+            outcome = result.get("result", result)
+            if isinstance(outcome, dict) and outcome.get("status") in {"blocked", "failed", "stopped", "uncertain"} and not (args.command == "stop" and outcome.get("status") == "stopped"):
+                return 2
+            if args.command == "audit-verify" and result.get("valid") is not True: return 2
         return 0
     except (PolicyError, OSError, ValueError, KeyError, TypeError) as exc:
         # Do not reflect raw file/target/provider errors into AI-facing stderr.
@@ -208,7 +232,7 @@ def main(argv=None):
         return 2
     finally:
         if runtime is not None:
-            runtime.audit.close()
+            runtime.close()
 
 
 def tui(runtime):
@@ -226,9 +250,8 @@ def tui(runtime):
         elif choice == "a":
             result = to_json(runtime.audit.verify())
         elif choice == "s":
-            runtime.ledger.stop("operator TUI stop")
-            runtime.audit.emit(AuditEvent("operator_stop", data={"interface": "TUI"}))
-            result = {"stopped": True}
+            from .audit_control import operator_stop
+            result = operator_stop(runtime.ledger_root, runtime.policy, interface="tui", ledger=runtime.ledger)
         else:
             result = {"help": "Use m, c, a, s, q. Target execution uses explicit CLI profiles."}
         print(json.dumps(to_json(result), indent=2, ensure_ascii=True))

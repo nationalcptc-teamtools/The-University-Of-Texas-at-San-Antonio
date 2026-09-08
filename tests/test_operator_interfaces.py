@@ -37,7 +37,7 @@ def test_real_signing_worker_reads_only_operator_key_reference(private):
         SigningReference(key_path)(payload)
 
 
-def test_stdio_mcp_exposes_only_two_bounded_tools(private, age_identity):
+def test_stdio_mcp_exposes_bounded_tools_and_durable_stop(private, age_identity):
     mcp = pytest.importorskip("mcp")
     from mcp.client.stdio import stdio_client, StdioServerParameters
     age, identity, recipient = age_identity
@@ -59,13 +59,15 @@ def test_stdio_mcp_exposes_only_two_bounded_tools(private, age_identity):
             async with mcp.ClientSession(reader, writer) as session:
                 await session.initialize()
                 result = await session.list_tools()
-                assert {t.name for t in result.tools} == {"cptc_capabilities", "cptc_action"}
+                assert {t.name for t in result.tools} == {"cptc_capabilities", "cptc_action", "cptc_stop"}
                 result = await session.list_resources()
                 assert result.resources == []
                 result = await session.call_tool("cptc_action", {"module_id": "shell", "arguments": {"command": "upload"}})
                 assert "blocked" in str(result)
                 result = await session.call_tool("cptc_capabilities", {})
                 assert "network.output_import" in str(result)
+                result = await session.call_tool("cptc_stop", {})
+                assert "stopped" in str(result)
     asyncio.run(check())
 
 

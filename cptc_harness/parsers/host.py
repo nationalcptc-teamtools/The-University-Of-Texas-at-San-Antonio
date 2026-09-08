@@ -10,6 +10,8 @@ from .common import bounded_int, bounded_string, finish, in_scope, issue, json_r
 SCHEMA_LINUX = "cptc.linux.inventory.v1"
 SCHEMA_WINDOWS = "cptc.windows_ad.inventory.v1"
 SAFE_STATES = {"running", "stopped", "enabled", "disabled", "unknown"}
+PROVENANCE_VALUES = {"os_inventory", "operator_reviewed", "unknown"}
+WRITABLE_BASIS_VALUES = {"administrator", "current_principal", "low_privilege", "unknown"}
 RISKY_CAPS = {"cap_setuid", "cap_setgid", "cap_dac_override", "cap_sys_admin", "cap_sys_ptrace", "cap_chown"}
 CAP_RE = re.compile(r"^cap_[a-z0-9_]+(?:\+(?:eip|ep|ei|p))?$")
 MODE_RE = re.compile(r"^[0-7]{4}$")
@@ -24,6 +26,7 @@ COLLECTOR_ISSUES = frozenset({
 })
 _ALLOWED_RECORD_KEYS = {"kind", "type", "facts", "target", "uid", "euid", "gid", "groups", "path", "mode", "owner",
                         "world_writable", "name", "state", "writable", "expected_binary", "capabilities", "reviewed",
+                        "provenance", "writable_basis", "privileged",
                         "sudo_access_observed", "evidence_ref", "sid", "domain_sid", "domain_name", "owner_sid",
                         "non_admin_write", "inherited", "ace_count", "signing_required", "channel_binding_required",
                         "accessible", "verified"}
@@ -42,6 +45,10 @@ def _path(value: object) -> str | None:
 
 def _bool(value: object) -> bool | None:
     return value if type(value) is bool else None
+
+
+def _enum(value: object, allowed: set[str]) -> str | None:
+    return value if isinstance(value, str) and value in allowed else None
 
 
 def _sid(value: object) -> str | None:
@@ -122,6 +129,10 @@ def _record(record: dict[str, Any], target: str, source: SourceRef, windows: boo
     value = record.get("facts") if nested else record
     if not kind or not isinstance(value, dict):
         return None, "invalid_record"
+    if windows and any(key in value for key in ("provenance", "writable_basis", "privileged")):
+        return None, "unknown_record_field"
+    if nested and set(record) - {"kind", "type", "facts", "target"}:
+        return None, "unknown_record_field"
     if nested and set(value) - (_ALLOWED_RECORD_KEYS - {"kind", "type", "facts", "target"}):
         return None, "unknown_record_field"
     track = "windows_ad" if windows else "linux"
@@ -134,8 +145,16 @@ def _record(record: dict[str, Any], target: str, source: SourceRef, windows: boo
         writable = _bool(value.get("world_writable"))
         if not path or not mode or not MODE_RE.fullmatch(mode) or not owner or writable is None:
             return None, "invalid_permission"
+        if "writable_basis" in value or "privileged" in value:
+            return None, "unknown_record_field"
+        facts = {"path": path, "mode": mode, "owner": owner, "world_writable": writable}
+        if "provenance" in value:
+            provenance = _enum(value.get("provenance"), PROVENANCE_VALUES)
+            if provenance is None:
+                return None, "invalid_permission"
+            facts["provenance"] = provenance
         return Observation("linux", target, "linux_permission", "candidate" if writable else "observed",
-                           {"path": path, "mode": mode, "owner": owner, "world_writable": writable}, source), None
+                           facts, source), None
     if kind in {"service", "task", "service_acl", "task_acl"}:
         name, state = _str(value.get("name")), _str(value.get("state"), 16) or "unknown"
         if not name or state not in SAFE_STATES:
@@ -155,8 +174,27 @@ def _record(record: dict[str, Any], target: str, source: SourceRef, windows: boo
         owner, writable = _str(value.get("owner")), _bool(value.get("writable"))
         if not owner or writable is None:
             return None, "invalid_service_or_task"
+        if "provenance" in value:
+            return None, "unknown_record_field"
+        if "writable_basis" in value:
+            writable_basis = _enum(value.get("writable_basis"), WRITABLE_BASIS_VALUES)
+            if writable_basis is None:
+                return None, "invalid_service_or_task"
+        else:
+            writable_basis = None
+        if "privileged" in value:
+            privileged = _bool(value.get("privileged"))
+            if privileged is None:
+                return None, "invalid_service_or_task"
+        else:
+            privileged = None
         check = "linux_service" if kind == "service" else "linux_task"
-        return Observation("linux", target, check, "observed", {"name": name, "state": state, "owner": owner, "writable": writable}, source), None
+        facts = {"name": name, "state": state, "owner": owner, "writable": writable}
+        if writable_basis is not None:
+            facts["writable_basis"] = writable_basis
+        if privileged is not None:
+            facts["privileged"] = privileged
+        return Observation("linux", target, check, "observed", facts, source), None
     if not windows and kind == "suid":
         path, owner = _path(value.get("path")), _str(value.get("owner"))
         if not path or not owner:

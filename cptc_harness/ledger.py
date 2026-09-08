@@ -15,13 +15,14 @@ import threading
 import uuid
 from typing import Any
 
-from .contracts import Bounds, MergeBundle, MergeReport, PolicyError, Reservation
+from .contracts import Bounds, BudgetLimit, MergeBundle, MergeReport, PolicyError, Reservation
 from .contracts import canonical_json, digest
 from .storage import private_directory
 
 
 _COUNTERS = ("request_limit", "output_bytes", "process_limit", "model_calls", "actions", "auth_posts")
 _ID_RE = re.compile(r"^[^\x00-\x1f\x7f]+$")
+_WAVE_TERMINAL = frozenset({"complete", "failed", "blocked", "stopped", "uncertain"})
 
 
 def _safe_id(value: Any, max_length: int) -> str:
@@ -72,6 +73,9 @@ class Ledger:
             engagement TEXT NOT NULL, target TEXT NOT NULL, realm TEXT NOT NULL,
             workspace TEXT NOT NULL, PRIMARY KEY(engagement,target,realm));
           CREATE TABLE IF NOT EXISTS stops(engagement TEXT PRIMARY KEY, reason TEXT NOT NULL);
+          CREATE TABLE IF NOT EXISTS control_reconciliations(
+            correlation_id TEXT PRIMARY KEY, received_at TEXT NOT NULL, received_monotonic_ns INTEGER NOT NULL,
+            reconciled_at TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS rates(engagement TEXT NOT NULL, target TEXT NOT NULL, seen REAL NOT NULL,
             PRIMARY KEY(engagement,target));
           CREATE TABLE IF NOT EXISTS merges(bundle_hash TEXT PRIMARY KEY, source_device TEXT NOT NULL);
@@ -83,17 +87,48 @@ class Ledger:
           CREATE TABLE IF NOT EXISTS workspace_enrollment(
             workspace_id TEXT PRIMARY KEY, audit_origin_id TEXT NOT NULL, path_hash TEXT NOT NULL);
         """)
+        # Additive scope/wave tables are maintained by the shared migration;
+        # run it only after the legacy tables exist so historical reservations
+        # are indexed without changing their original records.
+        from .migrations import ensure_ledger_schema
+        ensure_ledger_schema(self._db)
 
     def stop(self, reason: str = "operator stop") -> None:
         with self._tx():
             self._db.execute("INSERT OR IGNORE INTO stops VALUES (?,?)", (self.engagement_id, reason))
 
     def stopped(self) -> bool:
+        # The operator stop sentinel is deliberately outside SQLite.  An active
+        # reservation can be holding a transaction or a writer can be dead; in
+        # either case cancellation must still be immediately observable.
+        sentinel = self.root / "operator-stop.json"
+        if sentinel.exists():
+            return True
         return self._db.execute("SELECT 1 FROM stops WHERE engagement=?", (self.engagement_id,)).fetchone() is not None
 
     def stop_reason(self) -> str | None:
+        sentinel = self.root / "operator-stop.json"
+        if sentinel.exists():
+            return "operator stop requested"
         row = self._db.execute("SELECT reason FROM stops WHERE engagement=?", (self.engagement_id,)).fetchone()
         return row[0] if row else None
+
+    def record_control_reconciled(self, correlation_id: str, received_at: str, received_monotonic_ns: int) -> bool:
+        """Record a central-writer acknowledgement for a durable stop receipt."""
+        _safe_id(correlation_id, 64)
+        if not isinstance(received_at, str) or len(received_at) > 48 or type(received_monotonic_ns) is not int or received_monotonic_ns < 0:
+            raise PolicyError("invalid operator control acknowledgement")
+        with self._tx():
+            before = self._db.execute("SELECT 1 FROM control_reconciliations WHERE correlation_id=?", (correlation_id,)).fetchone()
+            if before:
+                return False
+            self._db.execute("INSERT INTO control_reconciliations VALUES (?,?,?,?)",
+                             (correlation_id, received_at, received_monotonic_ns, _utc_now()))
+            return True
+
+    def control_reconciled(self, correlation_id: str) -> bool:
+        _safe_id(correlation_id, 64)
+        return self._db.execute("SELECT 1 FROM control_reconciliations WHERE correlation_id=?", (correlation_id,)).fetchone() is not None
 
     def assign(self, workspace_id: str, target_id: str, auth_realm: str = "") -> None:
         self._assert_mutable()
@@ -101,7 +136,219 @@ class Ledger:
             return
         with self._tx():
             self._assert_mutable()
+            # Imports merged into this already-open ledger connection must be
+            # indexed before any new cumulative admission check.
+            from .migrations import backfill_reservation_scopes
+            backfill_reservation_scopes(self._db)
             self._assign_locked(workspace_id, target_id, auth_realm)
+
+    def reserve_wave(self, plan, items) -> tuple:
+        """Atomically freeze a verified wave and spend every item's reservation.
+
+        ``items`` is an internal broker-produced mapping keyed by frozen
+        ``AssessmentItem.item_id``.  It deliberately holds no arbitrary plan
+        JSON: each entry is the exact accounting tuple that was independently
+        approved before this method is called.
+        """
+        from .assessment_contracts import AssessmentPlan, WaveClaim, assessment_request_id
+        if not isinstance(plan, AssessmentPlan) or plan.engagement_id != self.engagement_id:
+            raise PolicyError("wave does not match ledger")
+        if not isinstance(items, dict) or set(items) != {item.item_id for item in plan.items}:
+            raise PolicyError("wave item reservation mismatch")
+        normalized = {item.item_id: self._wave_item_input(plan, item, items[item.item_id]) for item in plan.items}
+        budget_sha256 = digest({item_id: [canonical_json(limit).decode("ascii") for limit in values["budget_limits"]]
+                                for item_id, values in normalized.items()})
+        with self._tx():
+            self._assert_mutable()
+            from .migrations import backfill_reservation_scopes
+            backfill_reservation_scopes(self._db)
+            if self.stopped():
+                raise PolicyError("engagement is stopped")
+            existing = self._db.execute(
+                "SELECT plan_sha256 FROM assessment_waves WHERE engagement=? AND wave_id=?",
+                (self.engagement_id, plan.wave_id)).fetchone()
+            if existing:
+                if existing[0] != plan.sha256:
+                    raise PolicyError("wave id is immutable")
+                raise PolicyError("wave already reserved")
+            # Reserve before storing any wave record.  A limit/assignment
+            # failure therefore rolls back both the frozen wave and every
+            # scope charge, rather than leaving an executable-looking plan.
+            for item in plan.items:
+                values = normalized[item.item_id]
+                self._reserve_locked(values["request_id"], values["bounds"],
+                                     workspace_id=plan.workspace_id, target_id=values["target_id"],
+                                     auth_realm=values["auth_realm"], workflow_id=values["workflow_id"],
+                                     limits=values["limits"], budget_limits=values["budget_limits"],
+                                     state="planned", enforce_inflight=False)
+            now = _utc_now()
+            self._db.execute("INSERT INTO assessment_waves VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+                self.engagement_id, self.device_id, plan.wave_id, plan.workspace_id, plan.operator_id,
+                plan.policy_revision, plan.policy_sha256, plan.release_sha256, plan.sha256,
+                budget_sha256, canonical_json(plan).decode("utf-8"), "frozen", now, now, None, None, None))
+            claims = []
+            for item in plan.items:
+                request_id = assessment_request_id(plan.wave_id, item.item_id)
+                self._db.execute("INSERT INTO assessment_items VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (
+                    self.engagement_id, self.device_id, plan.wave_id, item.item_id, request_id, request_id,
+                    item.target_id, item.check_id, item.role_id, item.module_id, "planned", None))
+                claims.append(WaveClaim(plan.wave_id, item.item_id, request_id, plan.sha256, "planned"))
+            return tuple(claims)
+
+    def claim_wave_item(self, wave_id: str, item_id: str):
+        """Claim exactly the next frozen item; this never dispatches it."""
+        from .assessment_contracts import WaveClaim, assessment_request_id
+        _safe_id(wave_id, 256); _safe_id(item_id, 256)
+        with self._tx():
+            self._assert_mutable()
+            wave = self._wave_row_locked(wave_id)
+            item = self._wave_item_row_locked(wave_id, item_id)
+            if item[1] in _WAVE_TERMINAL:
+                return WaveClaim(wave_id, item_id, item[0], wave[0], item[1], item[2])
+            if self.stopped():
+                raise PolicyError("engagement is stopped")
+            if wave[1] != "frozen" or item[1] != "planned":
+                raise PolicyError("wave item is not claimable")
+            ordered_ids = self._wave_item_order_locked(wave[2])
+            index = ordered_ids.index(item_id)
+            if any(self._wave_item_row_locked(wave_id, earlier)[1] != "complete" for earlier in ordered_ids[:index]):
+                raise PolicyError("prior wave item is not terminal")
+            if item[0] != assessment_request_id(wave_id, item_id):
+                raise PolicyError("stored wave action binding is invalid")
+            reservation = self._db.execute(
+                "SELECT workspace,target,state FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+                (self.engagement_id, self.device_id, item[0])).fetchone()
+            if reservation is None or reservation[2] != "planned":
+                raise PolicyError("stored wave reservation is invalid")
+            if self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND request_id<>? "
+                                "AND state IN ('dispatching','running') AND (workspace=? OR (? IS NOT NULL AND target=?))",
+                                (self.engagement_id, item[0], reservation[0], reservation[1], reservation[1])).fetchone():
+                raise PolicyError("workspace or target already has an operation in flight")
+            if self._db.execute("UPDATE assessment_items SET state='dispatching' WHERE engagement=? AND device=? "
+                                "AND wave_id=? AND item_id=? AND state='planned'",
+                                (self.engagement_id, self.device_id, wave_id, item_id)).rowcount != 1:
+                raise PolicyError("wave item claim conflict")
+            if self._db.execute("UPDATE reservations SET state='dispatching' WHERE engagement=? AND device=? "
+                                "AND request_id=? AND state='planned'", (self.engagement_id, self.device_id, item[0])).rowcount != 1:
+                raise PolicyError("wave reservation claim conflict")
+            self._db.execute("UPDATE assessment_waves SET state='dispatching',started_at=COALESCE(started_at,?) "
+                             "WHERE engagement=? AND device=? AND wave_id=?", (_utc_now(), self.engagement_id, self.device_id, wave_id))
+            return WaveClaim(wave_id, item_id, item[0], wave[0], "dispatching")
+
+    def activate_wave_item(self, wave_id: str, item_id: str, request_id: str, plan_sha256: str):
+        """Broker-only dispatch gate: recheck the frozen action before I/O."""
+        from .assessment_contracts import WaveClaim
+        _safe_id(wave_id, 256); _safe_id(item_id, 256); _safe_id(request_id, 128)
+        with self._tx():
+            self._assert_mutable()
+            if self.stopped():
+                raise PolicyError("engagement is stopped")
+            wave = self._wave_row_locked(wave_id)
+            item = self._wave_item_row_locked(wave_id, item_id)
+            if (wave[0], item[0]) != (plan_sha256, request_id):
+                raise PolicyError("wave activation binding mismatch")
+            if item[1] != "dispatching":
+                raise PolicyError("wave item is not dispatching")
+            if self._db.execute("UPDATE assessment_items SET state='running' WHERE engagement=? AND device=? "
+                                "AND wave_id=? AND item_id=? AND state='dispatching'",
+                                (self.engagement_id, self.device_id, wave_id, item_id)).rowcount != 1:
+                raise PolicyError("wave item activation conflict")
+            if self._db.execute("UPDATE reservations SET state='running' WHERE engagement=? AND device=? "
+                                "AND request_id=? AND state='dispatching'", (self.engagement_id, self.device_id, request_id)).rowcount != 1:
+                raise PolicyError("wave reservation activation conflict")
+            return WaveClaim(wave_id, item_id, request_id, plan_sha256, "running")
+
+    def finish_wave_item(self, wave_id: str, item_id: str, state: str, result_json=None):
+        """Persist one terminal receipt and stop this wave after any non-success."""
+        from .assessment_contracts import WaveClaim
+        if state not in _WAVE_TERMINAL:
+            raise PolicyError("invalid terminal wave state")
+        receipt = self._canonical_wave_receipt(result_json)
+        parsed_receipt = json.loads(receipt)
+        if set(parsed_receipt) - {"status", "facts", "evidence", "reason", "usage"} or parsed_receipt.get("status") != state:
+            raise PolicyError("wave receipt does not match terminal state")
+        if ("facts" in parsed_receipt and type(parsed_receipt["facts"]) is not dict
+                or "evidence" in parsed_receipt and type(parsed_receipt["evidence"]) is not list
+                or "reason" in parsed_receipt and not isinstance(parsed_receipt["reason"], (str, type(None)))
+                or "usage" in parsed_receipt and type(parsed_receipt["usage"]) is not dict):
+            raise PolicyError("invalid wave terminal receipt")
+        _safe_id(wave_id, 256); _safe_id(item_id, 256)
+        with self._tx():
+            wave = self._wave_row_locked(wave_id)
+            item = self._wave_item_row_locked(wave_id, item_id)
+            if item[1] in _WAVE_TERMINAL:
+                if item[1] != state or item[2] != receipt:
+                    raise PolicyError("wave terminal receipt is immutable")
+                return WaveClaim(wave_id, item_id, item[0], wave[0], item[1], item[2])
+            if item[1] not in {"dispatching", "running"}:
+                raise PolicyError("wave item is not active")
+            if self._db.execute("UPDATE assessment_items SET state=?,result_json=? WHERE engagement=? AND device=? "
+                                "AND wave_id=? AND item_id=? AND state IN ('dispatching','running')",
+                                (state, receipt, self.engagement_id, self.device_id, wave_id, item_id)).rowcount != 1:
+                raise PolicyError("wave item finish conflict")
+            reservation = self._db.execute("SELECT state FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+                                           (self.engagement_id, self.device_id, item[0])).fetchone()
+            if reservation is None or reservation[0] not in {"dispatching", "running", state}:
+                raise PolicyError("wave reservation finish binding is invalid")
+            if reservation[0] in {"dispatching", "running"}:
+                self._db.execute("UPDATE reservations SET state=?,usage=? WHERE engagement=? AND device=? AND request_id=? "
+                                 "AND state IN ('dispatching','running')",
+                                 (state, "{}", self.engagement_id, self.device_id, item[0]))
+            if state != "complete":
+                self._stop_wave_locked(wave_id, "wave terminal outcome")
+            elif not self._db.execute("SELECT 1 FROM assessment_items WHERE engagement=? AND device=? AND wave_id=? "
+                                      "AND state<>'complete'", (self.engagement_id, self.device_id, wave_id)).fetchone():
+                self._db.execute("UPDATE assessment_waves SET state='complete',finished_at=? WHERE engagement=? AND device=? AND wave_id=?",
+                                 (_utc_now(), self.engagement_id, self.device_id, wave_id))
+            else:
+                self._db.execute("UPDATE assessment_waves SET state='frozen' WHERE engagement=? AND device=? AND wave_id=?",
+                                 (self.engagement_id, self.device_id, wave_id))
+            return WaveClaim(wave_id, item_id, item[0], wave[0], state, receipt)
+
+    def recover_waves(self, workspace_id: str | None = None) -> tuple:
+        try:
+            return self._recover_waves(workspace_id)
+        except BaseException:
+            from .audit_control import _latch_audit_failure
+            _latch_audit_failure(self)
+            raise
+
+    def _recover_waves(self, workspace_id: str | None = None) -> tuple:
+        """Turn interrupted claims into durable uncertainty; never retry them."""
+        from .assessment_contracts import WaveClaim
+        if workspace_id is not None:
+            _safe_id(workspace_id, 256)
+        recovered = []
+        with self._tx():
+            self._assert_mutable()
+            query = "SELECT wave_id,plan_sha256,state FROM assessment_waves WHERE engagement=? AND device=?"
+            params: tuple[Any, ...] = (self.engagement_id, self.device_id)
+            if workspace_id is not None:
+                query += " AND workspace=?"; params += (workspace_id,)
+            waves = self._db.execute(query, params).fetchall()
+            for wave_id, plan_sha256, wave_state in waves:
+                active = self._db.execute("SELECT item_id,request_id,state FROM assessment_items WHERE engagement=? AND device=? "
+                                          "AND wave_id=? AND state IN ('dispatching','running')",
+                                          (self.engagement_id, self.device_id, wave_id)).fetchall()
+                if not active:
+                    continue  # A wholly frozen wave is deliberately resumable.
+                receipt = self._canonical_wave_receipt({"reason": "recovery", "state": "uncertain"})
+                for item_id, request_id, ignored in active:
+                    reservation = self._db.execute("SELECT state FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+                        (self.engagement_id, self.device_id, request_id)).fetchone()
+                    # Broker may have completed its own durable receipt before
+                    # the campaign completion checkpoint. This still becomes
+                    # uncertain; it must never be automatically dispatched again.
+                    if reservation is None or reservation[0] not in {"dispatching", "running", *_WAVE_TERMINAL}:
+                        raise PolicyError("wave recovery reservation linkage is corrupt")
+                    self._db.execute("UPDATE assessment_items SET state='uncertain',result_json=? WHERE engagement=? AND device=? "
+                                     "AND wave_id=? AND item_id=?", (receipt, self.engagement_id, self.device_id, wave_id, item_id))
+                    if self._db.execute("UPDATE reservations SET state='uncertain' WHERE engagement=? AND device=? AND request_id=?",
+                                     (self.engagement_id, self.device_id, request_id)).rowcount != 1:
+                        raise PolicyError("wave recovery lost its reservation")
+                    recovered.append(WaveClaim(wave_id, item_id, request_id, plan_sha256, "uncertain", receipt))
+                self._stop_wave_locked(wave_id, "wave recovery")
+        return tuple(recovered)
 
     def _assign_locked(self, workspace_id: str, target_id: str, auth_realm: str = "") -> None:
         realm = auth_realm or "-"
@@ -117,71 +364,221 @@ class Ledger:
         self._db.execute("INSERT OR REPLACE INTO assignments VALUES (?,?,?,?)",
                          (self.engagement_id, target_id, realm, workspace_id))
 
+    def _wave_item_input(self, plan, item, raw) -> dict[str, Any]:
+        """Validate the narrow broker-to-ledger accounting tuple for one item."""
+        from .assessment_contracts import assessment_request_id
+        required = {"request_id", "action_id", "bounds", "target_id", "target_policy_id",
+                    "auth_realm", "workflow_id", "limits", "budget_limits"}
+        if not isinstance(raw, dict) or set(raw) != required:
+            raise PolicyError("invalid wave item reservation")
+        request_id = assessment_request_id(plan.wave_id, item.item_id)
+        if raw["request_id"] != request_id or raw["action_id"] != request_id:
+            raise PolicyError("wave action identity mismatch")
+        if raw["target_policy_id"] != item.target_id:
+            raise PolicyError("wave target policy binding mismatch")
+        _safe_id(raw["target_id"], 512)
+        if not isinstance(raw["auth_realm"], str) or len(raw["auth_realm"]) > 256:
+            raise PolicyError("invalid wave authentication realm")
+        if raw["workflow_id"] != plan.wave_id:
+            raise PolicyError("wave workflow binding mismatch")
+        if not isinstance(raw["bounds"], Bounds):
+            raise PolicyError("invalid wave reservation bounds")
+        if raw["limits"] is not None and not isinstance(raw["limits"], dict):
+            raise PolicyError("invalid wave durable limits")
+        budget_limits = raw["budget_limits"]
+        if not isinstance(budget_limits, (tuple, list)):
+            raise PolicyError("invalid wave scoped limits")
+        return {"request_id": request_id, "bounds": raw["bounds"], "target_id": raw["target_id"],
+                "auth_realm": raw["auth_realm"], "workflow_id": raw["workflow_id"],
+                "limits": raw["limits"], "budget_limits": tuple(budget_limits)}
+
+    @staticmethod
+    def _canonical_wave_receipt(value) -> str:
+        if isinstance(value, str):
+            if len(value.encode("utf-8")) > 65536:
+                raise PolicyError("wave result exceeds allowance")
+            try:
+                parsed = json.loads(value)
+            except (TypeError, ValueError, RecursionError):
+                raise PolicyError("wave result is not canonical") from None
+            if type(parsed) is not dict or canonical_json(parsed).decode("utf-8") != value:
+                raise PolicyError("wave result is not canonical")
+            return value
+        if type(value) is dict:
+            encoded = canonical_json(value)
+            if len(encoded) > 65536:
+                raise PolicyError("wave result exceeds allowance")
+            return encoded.decode("utf-8")
+        raise PolicyError("wave result receipt is required")
+
+    def _wave_row_locked(self, wave_id: str):
+        row = self._db.execute("SELECT plan_sha256,state,plan_json FROM assessment_waves WHERE engagement=? AND device=? AND wave_id=?",
+                               (self.engagement_id, self.device_id, wave_id)).fetchone()
+        if row is None:
+            raise PolicyError("unknown wave")
+        return row
+
+    def _wave_item_row_locked(self, wave_id: str, item_id: str):
+        row = self._db.execute("SELECT request_id,state,result_json FROM assessment_items WHERE engagement=? AND device=? AND wave_id=? AND item_id=?",
+                               (self.engagement_id, self.device_id, wave_id, item_id)).fetchone()
+        if row is None:
+            raise PolicyError("unknown wave item")
+        return row
+
+    @staticmethod
+    def _wave_item_order_locked(plan_json: str) -> list[str]:
+        try:
+            parsed = json.loads(plan_json)
+            values = [item["item_id"] for item in parsed["items"]]
+            if not values or len(values) != len(set(values)) or any(type(value) is not str for value in values):
+                raise ValueError()
+        except (KeyError, TypeError, ValueError, RecursionError):
+            raise PolicyError("stored wave plan is invalid") from None
+        return values
+
+    def _stop_wave_locked(self, wave_id: str, reason: str) -> None:
+        """Stop unclaimed work without nesting a transaction through stop()."""
+        receipt = self._canonical_wave_receipt({"reason": reason, "state": "stopped"})
+        planned = self._db.execute("SELECT request_id FROM assessment_items WHERE engagement=? AND device=? AND wave_id=? AND state='planned'",
+                                   (self.engagement_id, self.device_id, wave_id)).fetchall()
+        self._db.execute("UPDATE assessment_items SET state='stopped',result_json=? WHERE engagement=? AND device=? AND wave_id=? AND state='planned'",
+                         (receipt, self.engagement_id, self.device_id, wave_id))
+        for (request_id,) in planned:
+            if self._db.execute("UPDATE reservations SET state='stopped',usage=? WHERE engagement=? AND device=? AND request_id=? AND state='planned'",
+                             ("{}", self.engagement_id, self.device_id, request_id)).rowcount != 1:
+                raise PolicyError("planned wave reservation linkage is corrupt")
+        self._db.execute("UPDATE assessment_waves SET state='stopped',finished_at=?,reason=? WHERE engagement=? AND device=? AND wave_id=?",
+                         (_utc_now(), reason, self.engagement_id, self.device_id, wave_id))
+        self._db.execute("INSERT OR IGNORE INTO stops VALUES (?,?)", (self.engagement_id, reason))
+
     def reserve(self, request_id: str, bounds: Bounds, *, workspace_id: str = "",
                 target_id: str | None = None, auth_realm: str = "", workflow_id: str = "default",
-                limits: dict[str, int] | None = None) -> Reservation:
+                limits: dict[str, int] | None = None, budget_limits=()) -> Reservation:
         """Atomically reserve all declared budgets before any dispatch."""
         self._assert_mutable()
-        values = asdict(bounds)
-        if any(type(values[k]) is not int or not 0 <= values[k] <= 2147483647 for k in _COUNTERS):
-            raise PolicyError("invalid reservation bounds")
         with self._tx():
-            self._assert_mutable()
-            if self.stopped():
-                raise PolicyError("engagement is stopped")
-            old = self._db.execute("SELECT bounds FROM reservations WHERE engagement=? AND device=? AND request_id=?",
-                                   (self.engagement_id, self.device_id, request_id)).fetchone()
-            if old:
-                raise PolicyError("request id was already reserved")
-            if target_id:
-                self._assign_locked(workspace_id, target_id, auth_realm)
-            active = self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND workspace=? AND state='running'",
-                                      (self.engagement_id, workspace_id)).fetchone()
-            if active:
-                raise PolicyError("workspace already has an operation in flight")
-            # A target cannot be in flight twice even when realm is blank.
-            if target_id and self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND target=? AND state='running'",
-                                               (self.engagement_id, target_id)).fetchone():
-                raise PolicyError("target already has an operation in flight")
-            ceiling = {**self.limits, **(limits or {})}
-            current = self.usage(workflow_id)
-            target_current = self.usage(target_id=target_id) if target_id else current
-            for key in _COUNTERS:
-                amount = int(values.get(key, 0))
-                if amount < 0:
-                    raise PolicyError("invalid negative budget")
-                limit = ceiling.get(key)
-                charged = target_current if key == "request_limit" and target_id else current
-                if limit is not None and charged.get(key, 0) + amount > limit:
-                    raise PolicyError("durable budget exhausted")
-            self._db.execute("INSERT INTO reservations VALUES (?,?,?,?,?,?,?,?,?,?)",
-                             (self.engagement_id, self.device_id, request_id, workspace_id, target_id,
-                              auth_realm, workflow_id, json.dumps(values, sort_keys=True), "running", "{}"))
+            ceiling = self._reserve_locked(request_id, bounds, workspace_id=workspace_id, target_id=target_id,
+                                           auth_realm=auth_realm, workflow_id=workflow_id, limits=limits,
+                                           budget_limits=budget_limits, state="running", enforce_inflight=True)
         remaining = {k: max(0, int(limit - (self.usage(target_id=target_id) if k == "request_limit" and target_id
                                            else self.usage(workflow_id)).get(k, 0)))
                      for k, limit in ceiling.items() if k in _COUNTERS}
         return Reservation(request_id, bounds, remaining)
 
+    def _reserve_locked(self, request_id: str, bounds: Bounds, *, workspace_id: str,
+                        target_id: str | None, auth_realm: str, workflow_id: str,
+                        limits: dict[str, int] | None, budget_limits, state: str,
+                        enforce_inflight: bool) -> dict[str, int]:
+        """Reservation primitive called only while ``BEGIN IMMEDIATE`` is held."""
+        _safe_id(request_id, 128)
+        if state not in {"planned", "running"}:
+            raise PolicyError("invalid reservation state")
+        if not isinstance(bounds, Bounds):
+            raise PolicyError("invalid reservation bounds")
+        if not isinstance(budget_limits, (tuple, list)) or len(budget_limits) > 256 or any(not isinstance(b, BudgetLimit) for b in budget_limits):
+            raise PolicyError("invalid scoped budget limits")
+        if len({(b.scope, b.key, b.counter) for b in budget_limits}) != len(budget_limits):
+            raise PolicyError("duplicate scoped budget limit")
+        for item in budget_limits:
+            if item.scope in {"engagement", "device"} and item.key != getattr(self, item.scope + "_id"):
+                raise PolicyError("scoped budget identity mismatch")
+        values = asdict(bounds)
+        if any(type(values.get(key)) is not int or not 0 <= values[key] <= 2147483647 for key in _COUNTERS):
+            raise PolicyError("invalid reservation bounds")
+        if not isinstance(workspace_id, str) or not isinstance(workflow_id, str) or not isinstance(auth_realm, str):
+            raise PolicyError("invalid reservation scope")
+        if target_id is not None and not isinstance(target_id, str):
+            raise PolicyError("invalid reservation target")
+        from .migrations import backfill_reservation_scopes
+        self._assert_mutable()
+        backfill_reservation_scopes(self._db)
+        if self.stopped():
+            raise PolicyError("engagement is stopped")
+        old = self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+                               (self.engagement_id, self.device_id, request_id)).fetchone()
+        if old:
+            raise PolicyError("request id was already reserved")
+        if target_id:
+            self._assign_locked(workspace_id, target_id, auth_realm)
+        if enforce_inflight:
+            if self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND workspace=? AND state IN ('dispatching','running')",
+                                (self.engagement_id, workspace_id)).fetchone():
+                raise PolicyError("workspace already has an operation in flight")
+            if target_id and self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND target=? AND state IN ('dispatching','running')",
+                                               (self.engagement_id, target_id)).fetchone():
+                raise PolicyError("target already has an operation in flight")
+        ceiling = dict(self.limits)
+        for key, value in (limits or {}).items():
+            if key not in _COUNTERS or type(value) is not int or not 0 <= value <= 2147483647:
+                raise PolicyError("invalid durable budget limit")
+            ceiling[key] = min(ceiling.get(key, value), value)
+        scope_keys = {"engagement": self.engagement_id, "device": self.device_id, "workspace": workspace_id or "-",
+                      "workflow": workflow_id or "default", "target": target_id or "-", "realm": auth_realm or "-"}
+        legacy_scope = {"request_limit": "target" if target_id else "workflow", "auth_posts": "realm",
+                        "model_calls": "workflow", "actions": "workflow", "output_bytes": "workflow",
+                        "process_limit": "workflow"}
+        effective_limits: dict[tuple[str, str], int] = {}
+        for scope, scope_key in scope_keys.items():
+            for counter in _COUNTERS:
+                spent, prior_ceiling = self._db.execute(
+                    "SELECT COALESCE(SUM(reserved),0),MIN(ceiling) FROM reservation_scopes WHERE engagement=? AND scope_kind=? AND scope_key=? AND counter=?",
+                    (self.engagement_id, scope, scope_key, counter)).fetchone()
+                candidates = [b.ceiling for b in budget_limits if (b.scope, b.key, b.counter) == (scope, scope_key, counter)]
+                if legacy_scope[counter] == scope and counter in ceiling:
+                    candidates.append(ceiling[counter])
+                if prior_ceiling is not None:
+                    candidates.append(prior_ceiling)
+                if candidates:
+                    effective = min(candidates)
+                    effective_limits[scope, counter] = effective
+                    if spent + values[counter] > effective:
+                        raise PolicyError("durable scoped budget exhausted")
+        if values["auth_posts"]:
+            if not auth_realm:
+                raise PolicyError("authentication reservation requires an exact realm")
+            unknown = self._db.execute("SELECT COALESCE(SUM(reserved),0) FROM reservation_scopes WHERE engagement=? AND scope_kind='realm' AND scope_key='-' AND counter='auth_posts'",
+                                       (self.engagement_id,)).fetchone()[0]
+            if unknown:
+                raise PolicyError("unattributed historical authentication requires human review")
+        self._db.execute("INSERT INTO reservations VALUES (?,?,?,?,?,?,?,?,?,?)",
+                         (self.engagement_id, self.device_id, request_id, workspace_id, target_id, auth_realm,
+                          workflow_id, json.dumps(values, sort_keys=True), state, "{}"))
+        for scope, scope_key in scope_keys.items():
+            for counter in _COUNTERS:
+                self._db.execute("INSERT INTO reservation_scopes VALUES (?,?,?,?,?,?,?,?)",
+                                 (self.engagement_id, self.device_id, request_id, scope, scope_key, counter,
+                                  int(values[counter]), effective_limits.get((scope, counter))))
+        return ceiling
+
     def finish(self, request_id: str, usage: dict[str, int] | None = None, *, state: str = "finished") -> None:
         self._assert_mutable()
-        usage = {k: max(0, int(v)) for k, v in (usage or {}).items() if k in _COUNTERS}
+        if state not in _WAVE_TERMINAL | {"finished"}:
+            raise PolicyError("invalid terminal reservation state")
+        usage = {} if usage is None else usage
+        if not isinstance(usage, dict) or any(k not in _COUNTERS or type(v) is not int or v < 0 for k, v in usage.items()):
+            raise PolicyError("invalid actual usage receipt")
         with self._tx():
             self._assert_mutable()
-            row = self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+            row = self._db.execute("SELECT state,usage FROM reservations WHERE engagement=? AND device=? AND request_id=?",
                                    (self.engagement_id, self.device_id, request_id)).fetchone()
             if not row:
                 raise PolicyError("no reservation for request")
+            if row[0] in _WAVE_TERMINAL | {"finished"}:
+                if row[0] == state and json.loads(row[1]) == usage: return
+                raise PolicyError("terminal reservation receipt is immutable")
+            if row[0] not in {"running", "dispatching"}:
+                raise PolicyError("reservation is not active")
             self._db.execute("UPDATE reservations SET state=?, usage=? WHERE engagement=? AND device=? AND request_id=?",
                              (state, json.dumps(usage, sort_keys=True), self.engagement_id, self.device_id, request_id))
 
-    def charge(self, request_id: str, counter: str, amount: int, *, workflow_id: str = "default", limits: dict[str, int] | None = None) -> None:
+    def charge(self, request_id: str, counter: str, amount: int, *, workflow_id: str = "default", workspace_id: str = "", limits: dict[str, int] | None = None, budget_limits=()) -> None:
         self._assert_mutable()
         if counter not in _COUNTERS or amount < 0: raise PolicyError("invalid durable charge")
         values = {counter: amount}
         bounds = Bounds(output_bytes=0, process_limit=0, **values) if counter not in {"output_bytes", "process_limit"} else Bounds(**values)
         key = "charge:" + request_id
         try:
-            self.reserve(key, bounds, workspace_id="", workflow_id=workflow_id, limits=limits)
+            self.reserve(key, bounds, workspace_id=workspace_id, workflow_id=workflow_id, limits=limits, budget_limits=budget_limits)
             self.finish(key, {counter: amount})
         except PolicyError:
             raise
@@ -246,6 +643,10 @@ class Ledger:
             raise PolicyError("handover recipient must be another device")
         _fingerprint(recipient_key_fingerprint)
         with self._tx():
+            if (self._db.execute("SELECT 1 FROM reservation_scopes WHERE ceiling IS NOT NULL LIMIT 1").fetchone()
+                    or self._db.execute("SELECT 1 FROM assessment_waves LIMIT 1").fetchone()
+                    or self._db.execute("SELECT 1 FROM reservation_attempts LIMIT 1").fetchone()):
+                raise PolicyError("v2 handover cannot preserve scoped ceilings, waves, or attempts")
             if not self._db.execute("SELECT 1 FROM stops WHERE engagement=?", (self.engagement_id,)).fetchone():
                 raise PolicyError("handover requires a stopped ledger")
             if self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND state='running'", (self.engagement_id,)).fetchone():
@@ -369,6 +770,8 @@ class Ledger:
                         item["workflow"], json.dumps(item["bounds"], sort_keys=True), item["state"], json.dumps(item["usage"], sort_keys=True)))
                 for item in assignments:
                     self._db.execute("INSERT OR IGNORE INTO assignments VALUES (?,?,?,?)", (self.engagement_id, item["target"], item["realm"], item["workspace"]))
+                from .migrations import backfill_reservation_scopes
+                backfill_reservation_scopes(self._db)
                 self._db.execute("INSERT INTO handover_imports VALUES (?,?,?,?)", (bundle_hash, bundle.device_id, payload["seal_id"], _utc_now()))
         except (sqlite3.Error, PolicyError) as exc:
             return MergeReport(False, str(exc), 0)
@@ -463,7 +866,14 @@ class Ledger:
     def _tx(self):
         class Tx:
             def __init__(s, outer): s.outer=outer
-            def __enter__(s): s.outer._lock.acquire(); s.outer._db.execute("BEGIN IMMEDIATE"); return s
+            def __enter__(s):
+                s.outer._lock.acquire()
+                try: s.outer._db.execute("BEGIN IMMEDIATE")
+                except BaseException:
+                    s.outer._lock.release()
+                    raise
+                return s
             def __exit__(s, typ, val, tb):
-                s.outer._db.execute("ROLLBACK" if typ else "COMMIT"); s.outer._lock.release()
+                try: s.outer._db.execute("ROLLBACK" if typ else "COMMIT")
+                finally: s.outer._lock.release()
         return Tx(self)

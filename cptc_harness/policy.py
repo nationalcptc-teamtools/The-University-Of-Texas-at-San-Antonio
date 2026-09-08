@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
-from .contracts import (Approval, PolicyError, PolicySnapshot, ScopeSpec,
+from .contracts import (Approval, BudgetLimit, PolicyError, PolicySnapshot, ScopeSpec,
                         TargetPolicy, TargetRef, digest)
 from .storage import read_private, write_json
 
@@ -81,11 +81,28 @@ def parse_policy(value) -> PolicySnapshot:
         raise PolicyError("duplicate target origin")
     value["targets"] = tuple(targets)
     value["approvals"] = tuple(strict_object(Approval, a) for a in value.get("approvals", []))
+    limits = value.get("budget_limits", ())
+    if not isinstance(limits, (list, tuple)) or len(limits) > 256:
+        raise PolicyError("invalid policy budget limits")
+    limits = tuple(strict_object(BudgetLimit, limit) for limit in limits)
+    if len({(limit.scope, limit.key, limit.counter) for limit in limits}) != len(limits):
+        raise PolicyError("duplicate policy budget limit")
+    value["budget_limits"] = limits
     if "exclusions" in value:
         value["exclusions"] = tuple(value["exclusions"])
     policy = strict_object(PolicySnapshot, value)
     for name in ("engagement_id", "revision", "workspace_id", "device_id", "operator_id"):
         identifier(getattr(policy, name))
+    allowed_budget_keys = {
+        "engagement": {policy.engagement_id}, "device": {policy.device_id}, "workspace": {policy.workspace_id},
+        "target": {f"{t.target.scheme}://{t.target.host}:{t.target.port}" for t in policy.targets},
+        "realm": {t.auth_realm for t in policy.targets if t.auth_realm},
+    }
+    for limit in policy.budget_limits:
+        if limit.scope == "workflow":
+            identifier(limit.key)
+        elif limit.key not in allowed_budget_keys[limit.scope]:
+            raise PolicyError("budget scope key does not match policy")
     if policy.contract_version != 1:
         raise PolicyError("unsupported policy contract version")
     for name, ceiling in (("model_calls", 6), ("model_actions", 12), ("format_repairs", 1), ("excerpt_bytes", 2048), ("decision_bytes", 8192)):
@@ -121,8 +138,16 @@ def load_policy(path: Path) -> PolicySnapshot:
 def save_policy(path: Path, policy: PolicySnapshot):
     # Revalidate even operator-created dataclasses; no permissive deserialization.
     parse_policy(asdict(policy))
-    write_json(path, asdict(policy))
+    write_json(path, policy_document(policy))
 
 
 def policy_hash(policy: PolicySnapshot) -> str:
-    return digest(asdict(policy))
+    return digest(policy_document(policy))
+
+
+def policy_document(policy: PolicySnapshot) -> dict:
+    """Preserve the v1 policy document/hash when additive limits are absent."""
+    value = asdict(policy)
+    if not policy.budget_limits:
+        value.pop("budget_limits")
+    return value

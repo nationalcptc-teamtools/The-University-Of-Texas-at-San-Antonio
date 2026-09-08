@@ -1,4 +1,4 @@
-# Guarded CPTC harness — private alpha 0.1.0a3
+# Guarded CPTC harness — private alpha 0.1.0a4
 
 This terminal-first harness implements a local policy broker, persistent budgets,
 encrypted evidence capture, UTC audit files, typed imports, bounded HTTP metadata
@@ -13,7 +13,7 @@ evidence cards for teams using their own workflow.
 
 **This is a private development alpha, not an accepted competition release.**
 No active profile has completed the required live acceptance. Read
-[ACCEPTANCE.md](ACCEPTANCE.md) before claiming support. Unknown or unmediated
+[READINESS.md](READINESS.md) and [ACCEPTANCE.md](ACCEPTANCE.md) before claiming support. Unknown or unmediated
 operations are blocked. Ordinary requests can still affect defective services;
 there is no zero-risk or tamper-proof claim.
 

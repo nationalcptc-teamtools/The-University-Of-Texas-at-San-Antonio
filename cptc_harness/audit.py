@@ -252,7 +252,7 @@ class AuditWriter:
     def capture(self, request_id: str, stream: str, data: bytes, classification: str) -> EvidenceRef:
         if self._failed or self._closed:
             raise PolicyError("audit writer is unavailable")
-        if stream not in {"stdout", "stderr", "response", "import", "tool_stdout", "tool_stderr", "raw"}: raise PolicyError("unknown evidence stream")
+        if stream not in {"stdout", "stderr", "response", "response_metadata", "import", "tool_stdout", "tool_stderr", "raw"}: raise PolicyError("unknown evidence stream")
         if not isinstance(data, bytes): raise PolicyError("evidence is not raw bytes")
         if classification not in _RAW_CLASSES | {"public", "synthetic"}:
             self._fail("unrecognized capture classification")
@@ -404,6 +404,26 @@ class AuditWriter:
         paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
         return publication_receipts_from_events(json.loads(line) for path in paths
             for line in read_private(path, 128 * 1024 * 1024).splitlines())
+
+    def control_receipts(self):
+        """Return bounded, integrity-verified operator-stop acknowledgements."""
+        if not self.verify().valid or not self.ready():
+            raise PolicyError("invalid audit cannot supply control receipts")
+        receipts = {}
+        paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
+        for path in paths:
+            for line in read_private(path, 128 * 1024 * 1024).splitlines():
+                event = json.loads(line)
+                if event.get("kind") != "operator_stop":
+                    continue
+                correlation = event.get("action_id")
+                data = event.get("data")
+                if (not isinstance(correlation, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}", correlation)
+                        or not isinstance(data, dict) or set(data) != {"interface", "actor", "source", "reason", "received_at", "received_monotonic_ns"}
+                        or correlation in receipts or len(receipts) >= 128):
+                    raise PolicyError("invalid operator control receipt")
+                receipts[correlation] = data
+        return receipts
 
     def rotate(self) -> AuditSeal:
         with self._lock:

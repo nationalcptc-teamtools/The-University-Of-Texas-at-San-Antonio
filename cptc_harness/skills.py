@@ -7,6 +7,7 @@ import json
 from typing import Any, Literal
 
 from .contracts import PolicyError
+from .disclosure import reject_protected
 
 MAX_CONTEXT_BYTES = 8192
 MAX_DECISION_BYTES = 2048
@@ -90,6 +91,9 @@ def compact_context(facts: dict[str, Any], limit: int = MAX_CONTEXT_BYTES) -> by
     """Serialize typed facts deterministically within the context budget."""
     if not isinstance(facts, dict) or not isinstance(limit, int) or limit < 128:
         raise PolicyError("invalid context budget")
+    # Truncation is permitted for ordinary metadata, never as a way to erase a
+    # nested raw/secret field before a provider sees the remaining context.
+    reject_protected(facts)
     clean = {key: facts[key] for key in sorted(facts) if isinstance(key, str) and key not in _FORBIDDEN}
     removed = []
     source_hash = hashlib.sha256(json.dumps(facts, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()).hexdigest()

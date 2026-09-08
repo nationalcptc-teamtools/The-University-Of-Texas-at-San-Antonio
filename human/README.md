@@ -4,6 +4,11 @@ For independent native tools and local collectors, start with
 [Using the tools without the harness](runbooks/without-harness.md). Those
 collectors and cards need no model or harness installation.
 
+For check coverage, findings and frozen observation waves, use the
+[competition assessment workflow](runbooks/competition-assessment.md).
+This development build has a finite detector catalog and explicit unsupported
+checks. It has not passed complete CPTC11 benchmark acceptance.
+
 `cptc-tools` is an operator-directed terminal entry point for the guarded
 harness. It lists the reviewed static registry, checks local prerequisites,
 creates and operates an owner-only workspace, imports reviewed offline files,

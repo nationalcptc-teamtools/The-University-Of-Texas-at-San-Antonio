@@ -22,6 +22,7 @@ from .contracts import PolicyError, canonical_json, digest
 from .policy import identifier, strict_object
 from .storage import read_private
 from .integrity import verified_worker, verified_executable
+from .disclosure import encoded_value, validate_items
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,7 @@ class DisclosureItem:
     value: object
     source_hash: str = ""
     excerpt_approval: str | None = None
+    schema_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -178,10 +180,14 @@ class DisclosureGate:
 
     def prepare(self, profile: ProviderProfile, items: tuple[DisclosureItem, ...]) -> str:
         validate_profile(profile)
+        # Validation happens before capability checks, reservations, or any
+        # provider transport setup.  A public root classification cannot carry
+        # nested raw evidence, credentials, headers, or sessions.
+        items = validate_items(items, maximum_bytes=self.decision_bytes)
         output = []
         total = 0
         for item in items:
-            raw = canonical_json(item.value)
+            raw = encoded_value(item.value, maximum_bytes=self.decision_bytes)
             size = len(raw)
             if item.classification not in {"public", "synthetic", "client_confidential", "approved_excerpt"}:
                 raise PolicyError("raw evidence and secrets have no provider disclosure capability")

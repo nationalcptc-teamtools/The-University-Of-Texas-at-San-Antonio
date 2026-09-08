@@ -86,6 +86,9 @@ class AuditService:
     def publication_receipts(self):
         return self._request("publication_receipts")
 
+    def control_receipts(self):
+        return self._request("control_receipts")
+
     def capture(self, request_id, stream, data, classification):
         return EvidenceRef(**self._request("capture", request_id=request_id, stream=stream,
                             data=base64.b64encode(data).decode(), classification=classification))

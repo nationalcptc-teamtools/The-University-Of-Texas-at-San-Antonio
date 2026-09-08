@@ -124,7 +124,15 @@ def test_signed_provider_capability_challenge_expiry_and_upstream_tools():
         with pytest.raises(PolicyError):
             gate.accept_capability(profile, sign(changed), "fresh")
     gate.accept_capability(profile, sign(payload), "fresh")
-    assert "443" in gate.prepare(profile, (DisclosureItem("facts", "client_confidential", {"ports": [443]}),))
+    # A valid provider attestation does not bypass the registered fact schema.
+    with pytest.raises(PolicyError):
+        gate.prepare(profile, (DisclosureItem("facts", "client_confidential", {"ports": [443]}),))
+    data = {"version": 1, "status": "complete", "reason": None, "facts_schema": "network.output_import",
+            "facts": {"observations": [{"track": "network", "target": "192.0.2.10", "check_id": "network_inventory",
+                                         "state": "observed", "source_sha256": "a" * 64,
+                                         "facts": {"port": 443, "state": "open"}}], "issues": [], "duplicates": 0}}
+    assert "443" in gate.prepare(profile, (DisclosureItem("result", "client_confidential", data,
+                                                         schema_id="network.output_import"),))
 
 
 def test_legacy_migration_preserves_entire_history_and_repeatability(tmp_path):

@@ -19,6 +19,12 @@ restricted evidence.
 An operation marked complete can still have incomplete collection. Preserve
 collector limitation codes and failed attempts; do not treat missing observations
 as a clean finding or complete coverage.
+Detection and advisory matching are deterministic. Never ask the model to
+rediscover CVEs from a full transcript. Use the recorded target, check, account
+role, component, evidence and collection state. A version match is a candidate;
+CWE and ATT&CK relationships do not mean exploitation succeeded. Preserve
+conflicts, unknown patch provenance and missing prerequisites. Expected CPTC11
+answers belong only to the external benchmark and must never enter runtime.
 
 Use the web header and session modules only with the bounded transport.  They
 make one metadata request under the registered request budget.  They do not
@@ -50,3 +56,9 @@ Use compact typed state; full output remains in local human-only audit storage.
 Never request raw evidence, credentials, local paths, arbitrary URLs, uploads,
 exports, clipboard access, policy edits or a different provider. Client-derived
 facts remain confidential even after names and addresses are removed.
+
+For human operation, see [the competition runbook](../../human/runbooks/competition-assessment.md).
+Humans use `checks`, `findings`, `gaps`, `coverage` and `report` without model
+calls. CLI access is not an extra capability granted to the production AI.
+Frozen observation waves are operator-only. The model cannot freeze, run,
+restart, repair or edit a wave; interrupted actions require human review.

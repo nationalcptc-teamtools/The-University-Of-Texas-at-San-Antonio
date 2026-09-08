@@ -40,6 +40,41 @@ def test_exact_dedup_preserves_conflicting_states_and_ownership():
     assert matching["contributors"] == ["second-operator", "synthetic-operator"]
 
 
+def test_detector_report_preserves_cve_candidate_and_audit_evidence_link():
+    value = {"request": {"request_id": "actual-action", "operator_id": "operator", "source": "operator",
+                         "module_id": "network.nmap_import", "target": None},
+             "result": {"status": "complete", "facts": {"issues": [], "observations": [{
+                 "target": "192.0.2.10", "track": "network", "check_id": "network_inventory", "state": "observed",
+                 "source_sha256": "a" * 64, "facts": {"ports": [{"port": 80, "state": "open", "protocol": "tcp",
+                                                            "product": "Apache httpd", "version": "2.4.49"}]}}]},
+                        "evidence": [{"evidence_id": "raw-import", "sha256": "a" * 64}]}}
+    report = report_records([value], expected_checks=[{"target": "192.0.2.10", "role_id": "unauthenticated",
+                                                      "rule_id": "apache_httpd_path_traversal"}])
+    candidate = next(item for item in report["detections"] if item["rule_id"] == "apache_httpd_path_traversal")
+    assert candidate["disposition"] == "candidate"
+    assert "CVE-2021-41773" in candidate["cve_ids"]
+    assert candidate["source_actions"] == ["actual-action"]
+    assert report["evidence_index"] == [{"evidence_id": "raw-import", "sha256": "a" * 64, "source_action": "actual-action"}]
+    assert report["model_calls"] == 0
+    assert report["benchmark_status"] == "not_evaluated_external_catalog_required"
+    assert "CVE-2021-41773" in markdown_report(report)
+
+
+def test_coverage_reports_missing_checks_without_clean_conclusions():
+    report = report_records([], expected_checks=[{"target": "192.0.2.10", "role_id": "low-privilege",
+                                                 "rule_id": "windows_service_acl"}])
+    assert report["check_coverage"][0]["disposition"] == "not_tested"
+    assert report["check_coverage"][0]["collection_complete"] is False
+
+
+def test_conflicting_evidence_identity_prevents_report():
+    a, b = record(), record("b")
+    a["result"]["evidence"][0]["sha256"] = "a" * 64
+    b["result"]["evidence"][0]["sha256"] = "b" * 64
+    with pytest.raises(PolicyError, match="conflicting captured evidence"):
+        report_records([a, b])
+
+
 def test_complete_import_with_limitations_remains_incomplete_collection():
     value = record()
     value["result"]["status"] = "complete"

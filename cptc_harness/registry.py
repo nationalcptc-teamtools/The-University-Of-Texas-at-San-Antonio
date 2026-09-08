@@ -50,8 +50,8 @@ def _batch_schema(facts: dict[str, Any], *, source: bool = True) -> dict[str, An
                          "state": {"type": "string", "maxLength": 32},
                          "facts": facts}
     required = ("track", "target", "check_id", "state", "facts")
+    observation_props["source_sha256"] = {"type": "string", "maxLength": 64}
     if source:
-        observation_props["source_sha256"] = {"type": "string", "maxLength": 64}
         required = required + ("source_sha256",)
     item = {"type": "object", "properties": observation_props, "required": required}
     return _schema({"observations": {"type": "array", "items": item, "maxItems": 2048},
@@ -97,6 +97,9 @@ _HOST_FACTS = _schema({
     "groups": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 2147483647}, "maxItems": 64},
     "path": {"type": "string", "maxLength": 256}, "mode": {"type": "string", "maxLength": 4},
     "owner": {"type": "string", "maxLength": 128}, "world_writable": {"type": "boolean"},
+    "provenance": {"type": "string", "enum": ("os_inventory", "operator_reviewed", "unknown")},
+    "writable_basis": {"type": "string", "enum": ("administrator", "current_principal", "low_privilege", "unknown")},
+    "privileged": {"type": "boolean"},
     "expected_binary": {"type": "boolean"},
     "name": {"type": "string", "maxLength": 128}, "state": {"type": "string", "maxLength": 16},
     "writable": {"type": "boolean"}, "capabilities": {"type": "array", "items": {"type": "string", "maxLength": 64}, "maxItems": 32},
@@ -211,6 +214,7 @@ def _validate_result(result: OperationResult) -> None:
         "cookie_header_present", "session_ref_present", "field", "present", "value", "value_length",
         "value_is_true", "value_is_nonzero",
         "uid", "euid", "gid", "groups", "path", "mode", "owner", "world_writable", "expected_binary", "name", "writable",
+        "provenance", "writable_basis", "privileged",
         "capabilities", "risky_capability", "reviewed", "sudo_access_observed", "evidence_ref", "sid", "domain_sid",
         "domain_name", "owner_sid", "non_admin_write", "inherited", "ace_count", "signing_required",
         "channel_binding_required", "accessible", "verified",

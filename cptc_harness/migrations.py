@@ -72,3 +72,92 @@ def migrate_legacy(root: Path, *, encrypted_storage_verified: bool = False) -> d
             return {"legacy_schema": 1, "harness_schema": 2, "preserved_records": after, "already_migrated": bool(existing)}
         finally:
             db.close()
+
+
+LEDGER_SCHEMA_VERSION = 1
+_LEDGER_DDL = (
+    """CREATE TABLE IF NOT EXISTS ledger_schema_migrations(
+        version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)""",
+    """CREATE TABLE IF NOT EXISTS reservation_scopes(
+        engagement TEXT NOT NULL, device TEXT NOT NULL, request_id TEXT NOT NULL,
+        scope_kind TEXT NOT NULL, scope_key TEXT NOT NULL, counter TEXT NOT NULL,
+        reserved INTEGER NOT NULL CHECK(reserved >= 0), ceiling INTEGER,
+        PRIMARY KEY(engagement,device,request_id,scope_kind,scope_key,counter))""",
+    """CREATE INDEX IF NOT EXISTS reservation_scope_totals
+        ON reservation_scopes(engagement,scope_kind,scope_key,counter)""",
+    """CREATE TABLE IF NOT EXISTS reservation_attempts(
+        engagement TEXT NOT NULL, device TEXT NOT NULL, request_id TEXT NOT NULL, attempt_id TEXT NOT NULL,
+        request_count INTEGER NOT NULL, request_bytes INTEGER NOT NULL, response_bytes INTEGER NOT NULL,
+        elapsed_ms INTEGER NOT NULL, deadline_ns INTEGER NOT NULL, started_ns INTEGER NOT NULL,
+        deadline_exceeded INTEGER NOT NULL, state TEXT NOT NULL,
+        PRIMARY KEY(engagement,device,request_id,attempt_id))""",
+    """CREATE TABLE IF NOT EXISTS reservation_attempt_events(
+        engagement TEXT NOT NULL, device TEXT NOT NULL, request_id TEXT NOT NULL,
+        attempt_id TEXT NOT NULL, event_id TEXT NOT NULL, request_bytes INTEGER NOT NULL,
+        response_bytes INTEGER NOT NULL,
+        PRIMARY KEY(engagement,device,request_id,attempt_id,event_id))""",
+    """CREATE TABLE IF NOT EXISTS assessment_waves(
+        engagement TEXT NOT NULL, device TEXT NOT NULL, wave_id TEXT NOT NULL,
+        workspace TEXT NOT NULL, operator TEXT NOT NULL, policy_revision TEXT NOT NULL,
+        policy_sha256 TEXT NOT NULL, release_sha256 TEXT NOT NULL, plan_sha256 TEXT NOT NULL,
+        budget_sha256 TEXT NOT NULL, plan_json TEXT NOT NULL, state TEXT NOT NULL,
+        created_at TEXT NOT NULL, frozen_at TEXT, started_at TEXT, finished_at TEXT, reason TEXT,
+        PRIMARY KEY(engagement,device,wave_id), UNIQUE(engagement,wave_id))""",
+    """CREATE TABLE IF NOT EXISTS assessment_items(
+        engagement TEXT NOT NULL, device TEXT NOT NULL, wave_id TEXT NOT NULL, item_id TEXT NOT NULL,
+        request_id TEXT NOT NULL, action_id TEXT NOT NULL, target_id TEXT NOT NULL, check_id TEXT NOT NULL,
+        role_id TEXT NOT NULL, module_id TEXT NOT NULL, state TEXT NOT NULL, result_json TEXT,
+        PRIMARY KEY(engagement,device,wave_id,item_id),
+        UNIQUE(engagement,request_id), UNIQUE(engagement,action_id))""",
+)
+
+
+def backfill_reservation_scopes(db: sqlite3.Connection) -> None:
+    """Derive additive accounting indexes without changing historical charges.
+
+    Call within the caller's transaction, including after a verified legacy
+    handover import. Unknown historical realms remain explicitly unattributed;
+    authentication admission must not reinterpret them as a known safe realm.
+    """
+    from .contracts import RESOURCE_COUNTERS
+    rows = db.execute("SELECT engagement,device,request_id,workspace,target,realm,workflow,bounds FROM reservations").fetchall()
+    for engagement, device, request, workspace, target, realm, workflow, encoded in rows:
+        try:
+            bounds = json.loads(encoded)
+            if not isinstance(bounds, dict): raise ValueError()
+            values = {key: bounds.get(key, 0) for key in RESOURCE_COUNTERS}
+            if any(type(value) is not int or not 0 <= value <= 2147483647 for value in values.values()): raise ValueError()
+        except (ValueError, TypeError):
+            raise PolicyError("historical reservation bounds cannot be migrated") from None
+        scopes = {"engagement": engagement, "device": device, "workspace": workspace or "-",
+                  "workflow": workflow or "default", "target": target or "-", "realm": realm or "-"}
+        for kind, key in scopes.items():
+            for counter, value in values.items():
+                old = db.execute("SELECT reserved FROM reservation_scopes WHERE engagement=? AND device=? AND request_id=? AND scope_kind=? AND scope_key=? AND counter=?",
+                                 (engagement, device, request, kind, key, counter)).fetchone()
+                if old is not None and old[0] != value:
+                    raise PolicyError("historical scope accounting conflicts with reservation")
+                db.execute("INSERT OR IGNORE INTO reservation_scopes VALUES (?,?,?,?,?,?,?,NULL)",
+                           (engagement, device, request, kind, key, counter, value))
+
+
+def ensure_ledger_schema(db: sqlite3.Connection) -> None:
+    """Transactional additive migration, separate from legacy web schema v2."""
+    from datetime import datetime, timezone
+    if db.in_transaction:
+        raise PolicyError("ledger migration requires an idle connection")
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute(_LEDGER_DDL[0])
+        versions = [row[0] for row in db.execute("SELECT version FROM ledger_schema_migrations ORDER BY version")]
+        if versions not in ([], [LEDGER_SCHEMA_VERSION]):
+            raise PolicyError("unsupported ledger migration history")
+        if not versions:
+            for statement in _LEDGER_DDL[1:]: db.execute(statement)
+            backfill_reservation_scopes(db)
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                LEDGER_SCHEMA_VERSION, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise

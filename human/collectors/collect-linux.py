@@ -22,6 +22,11 @@ SAFE_NAME = re.compile(r"^[A-Za-z0-9_.@:+-]{1,128}$")
 SERVICE_ROOTS = (Path("/etc/systemd/system"), Path("/run/systemd/system"))
 TASK_ROOTS = (Path("/etc/cron.d"), Path("/etc/cron.daily"), Path("/etc/cron.hourly"))
 SUID_ROOTS = (Path("/usr/bin"), Path("/usr/local/bin"), Path("/bin"))
+PERMISSION_PATHS = tuple(map(Path, (
+    "/etc", "/usr/local/bin", "/tmp", "/etc/passwd", "/etc/shadow",
+    "/etc/group", "/etc/gshadow", "/etc/sudoers", "/etc/sudoers.d",
+    "/etc/ssh/sshd_config", "/etc/ld.so.preload", "/etc/crontab",
+)))
 
 
 def flag(issues: list[str] | None, code: str) -> None:
@@ -33,6 +38,10 @@ def owner(uid: int) -> str:
     # NSS name lookups can trigger LDAP/SSSD network activity. Numeric ownership
     # is sufficient for this local-only observation profile.
     return str(uid)
+
+
+def writable_basis() -> str:
+    return "administrator" if os.geteuid() == 0 else "current_principal"
 
 
 def metadata(path: Path, issues: list[str] | None = None) -> tuple[os.stat_result, str] | None:
@@ -57,13 +66,19 @@ def identity(issues: list[str] | None = None) -> dict[str, object]:
 
 def permissions(issues: list[str] | None = None) -> list[dict[str, object]]:
     records = []
-    for path in (Path("/etc"), Path("/usr/local/bin"), Path("/tmp")):
+    for path in PERMISSION_PATHS:
         item = metadata(path, issues)
         if not item:
             continue
         info, name = item
+        # lstat-style metadata cannot establish the permissions of a symlink's
+        # destination. Do not label its conventional 0777 mode a vulnerability.
+        if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+            flag(issues, "collector_metadata_unavailable")
+            continue
         records.append({"kind": "permission", "path": name, "mode": f"{stat.S_IMODE(info.st_mode):04o}",
-                        "owner": owner(info.st_uid), "world_writable": bool(info.st_mode & stat.S_IWOTH)})
+                        "owner": owner(info.st_uid), "world_writable": bool(info.st_mode & stat.S_IWOTH),
+                        "provenance": "os_inventory"})
     return records
 
 
@@ -91,7 +106,8 @@ def directory_records(roots: tuple[Path, ...], kind: str, issues: list[str] | No
                 flag(issues, "collector_metadata_unavailable")
                 continue
             records.append({"kind": kind, "name": path.name[:128], "state": "unknown",
-                            "owner": owner(info.st_uid), "writable": writable})
+                            "owner": owner(info.st_uid), "writable": writable,
+                            "writable_basis": writable_basis()})
             if len(records) >= 96:
                 if entry_index + 1 < len(entries) or root_index + 1 < len(roots):
                     flag(issues, "collector_directory_limit")

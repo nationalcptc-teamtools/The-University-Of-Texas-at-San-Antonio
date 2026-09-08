@@ -12,7 +12,7 @@ file before assessment and repeat the applicable tests and pin review.
 ```sh
 python3 -m venv --system-site-packages .tools/operator-venv
 .tools/operator-venv/bin/python -m pip install --no-index --no-deps \
-  dist/cptc_guarded_harness-0.1.0a3-py3-none-any.whl
+  dist/cptc_guarded_harness-0.1.0a4-py3-none-any.whl
 .tools/operator-venv/bin/cptc-tools --help
 .tools/operator-venv/bin/cptc-tools modules
 .tools/operator-venv/bin/cptc-tools preflight --age "$PWD/.tools/age"
@@ -34,6 +34,14 @@ Create all engagement workspaces outside Git on approved protected storage.
 Do not reuse synthetic policies or test keys for client work. No AI provider is
 needed for human imports, native observations, coverage or reports.
 
-The archives and `dist/BUILD-RECEIPT.json` record evaluation evidence. Review
+The archives and `dist/BUILD-RECEIPT-a4.json` and `dist/VALIDATION-RECEIPT-a4.json` record evaluation evidence. Review
 `ACCEPTANCE.md` and `RELEASE-STATUS.json` for unsupported profiles and outstanding
 live gates. No artifact is uploaded by installation or export.
+
+Build locally with `scripts/package-harness.py --epoch <fixed-source-epoch>`
+using the pinned build environment. `PACKAGE-CONTENTS.json` lists every reviewed
+source, runtime and human-kit input. Review new files before updating that list;
+unlisted distribution inputs stop the build. The runtime wheel excludes tests
+and benchmark inputs. The source archive includes synthetic tests for offline
+verification, and the human kit includes its linked documentation and reviewed
+scanner resources. Two local wheel/source builds must agree byte for byte.

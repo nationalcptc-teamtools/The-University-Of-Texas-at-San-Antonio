@@ -118,14 +118,22 @@ class FakeTransport:
 
 
 def test_bounded_web_collects_metadata_and_human_only_capture():
+    from cptc_harness.contracts import EvidenceRef
     captured = []
     transport = FakeTransport()
     context = _context("web.headers", transport=transport)
-    context = ExecutionContext(**{**context.__dict__, "capture": lambda stream, data, cls: captured.append((stream, data, cls)) or None})
+    def capture(stream, data, cls):
+        captured.append((stream, data, cls))
+        return EvidenceRef(stream, None, stream, cls, None, hashlib.sha256(data).hexdigest(), len(data))
+    context = ExecutionContext(**{**context.__dict__, "capture": capture})
     result = build_registry().dispatch(context)
     assert result.status == "complete"
     assert transport.requests[0].path == "/"
-    assert captured == [("response", b"private raw response", "client_confidential_human_only")]
+    assert captured[0] == ("response", b"private raw response", "client_confidential_human_only")
+    assert captured[1][0] == "response_metadata" and captured[1][2] == "client_confidential_human_only"
+    assert json.loads(captured[1][1]) == result.facts["observations"][0]["facts"]
+    assert b"secret" not in captured[1][1]
+    assert result.facts["observations"][0]["source_sha256"] == hashlib.sha256(captured[1][1]).hexdigest()
     assert "private raw response" not in json.dumps(result.facts)
 
 

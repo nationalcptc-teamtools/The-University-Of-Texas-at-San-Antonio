@@ -29,6 +29,7 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     commands.add_parser("modules", help="list the static reviewed module registry")
+    commands.add_parser("checks", help="list finite detection checks and visible unsupported capabilities")
     preflight = commands.add_parser("preflight", help="inspect local prerequisites without opening a runtime")
     _workspace_argument(preflight)
     preflight.add_argument("--age", type=Path, help="pinned age executable to inspect")
@@ -59,11 +60,13 @@ def _parser() -> argparse.ArgumentParser:
     replay.add_argument("--evidence-id", required=True)
     replay.add_argument("--identity", type=Path, required=True, help="owner-only age identity; used only by an isolated local decryptor")
 
-    for name in ("coverage", "report", "audit-verify", "stop"):
+    for name in ("coverage", "report", "findings", "gaps", "audit-verify", "stop"):
         command = commands.add_parser(name)
         _workspace_argument(command)
         if name == "stop":
-            command.add_argument("--reason", default="operator stop")
+            command.add_argument("--reason", choices=("operator_request", "suspected_lockout", "health_degradation", "audit_failure"), default="operator_request", help="durable stop reason code")
+    from .campaign import add_cli_commands
+    add_cli_commands(commands, _workspace_argument)
     return parser
 
 
@@ -219,18 +222,18 @@ def _runtime(workspace: Path):
 
 
 def _stop(workspace: Path, reason: str) -> dict[str, Any]:
-    from .ledger import Ledger
+    from .audit_control import operator_stop
     from .policy import load_policy
     from .runtime import device_root
 
     policy = load_policy(workspace / "policy.json")
-    ledger = Ledger(device_root() / policy.engagement_id, policy.engagement_id, policy.device_id,
-                    policy_revision=policy.revision)
-    ledger.stop(reason)
-    return {"stopped": True, "new_work": "blocked", "reason": reason}
+    return operator_stop(device_root() / policy.engagement_id, policy, interface="human", reason=reason)
 
 
 def _execute(args: argparse.Namespace) -> Any:
+    if args.command == "checks":
+        from .check_catalog import capability_status
+        return {"checks": capability_status(), "model_calls": 0, "benchmark_complete": False}
     if args.command == "modules":
         return _modules()
     if args.command == "preflight":
@@ -248,14 +251,14 @@ def _execute(args: argparse.Namespace) -> Any:
             return replay_capture(runtime, module_id=args.module, action_id=args.action_id,
                                   evidence_id=args.evidence_id, identity=args.identity)
         finally:
-            runtime.audit.close()
+            runtime.close()
     if args.command == "run":
         runtime = _runtime(workspace)
         try:
             return runtime.run(args.module, target_id=args.target, input_path=args.input,
                                args=_strict_object(args.args), approval_id=args.approval)
         finally:
-            runtime.audit.close()
+            runtime.close()
     if args.command == "import":
         from .registry import build_registry
         spec = build_registry().get(args.module)
@@ -265,17 +268,30 @@ def _execute(args: argparse.Namespace) -> Any:
         try:
             return runtime.run(args.module, input_path=args.input)
         finally:
-            runtime.audit.close()
+            runtime.close()
     runtime = _runtime(workspace)
     try:
+        if args.command.startswith("assessment-"):
+            from .campaign import execute_cli
+            return execute_cli(runtime, args)
         if args.command == "coverage":
             return runtime.coverage()
         if args.command == "report":
             return runtime.report()
+        if args.command == "findings":
+            data = runtime.report(include_data=True)
+            return {"classification": "client_confidential", "model_calls": 0,
+                    "detections": data["detections"], "evidence_index": data["evidence_index"],
+                    "confirmation_policy": data["confirmation_policy"]}
+        if args.command == "gaps":
+            data = runtime.coverage()
+            return {"classification": "client_confidential", "model_calls": 0,
+                    "checks": [row for row in data["checks"] if not row.get("collection_complete") or row.get("limitations")],
+                    "capabilities": [row for row in data["capabilities"] if row["live_validation"] != "accepted"]}
         if args.command == "audit-verify":
             return to_json(runtime.audit.verify())
     finally:
-        runtime.audit.close()
+        runtime.close()
     raise PolicyError("unknown command")
 
 
@@ -290,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(to_json(result), indent=2, ensure_ascii=True, allow_nan=False))
         if isinstance(result, dict):
             outcome = result.get("result", result)
-            if isinstance(outcome, dict) and outcome.get("status") in {"blocked", "failed", "stopped", "uncertain"}:
+            if isinstance(outcome, dict) and outcome.get("status") in {"blocked", "failed", "stopped", "uncertain"} and not (args.command == "stop" and outcome.get("status") == "stopped"):
                 return 2
             if args.command == "audit-verify" and result.get("valid") is not True:
                 return 2

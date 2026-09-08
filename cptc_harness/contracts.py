@@ -100,6 +100,26 @@ class Bounds:
     auth_posts: int = 0
 
 
+RESOURCE_COUNTERS = ("request_limit", "output_bytes", "process_limit", "model_calls", "actions", "auth_posts")
+
+
+@dataclass(frozen=True)
+class BudgetLimit:
+    scope: Literal["engagement", "device", "workspace", "workflow", "target", "realm"]
+    key: str
+    counter: str
+    ceiling: int
+
+    def __post_init__(self):
+        if self.scope not in {"engagement", "device", "workspace", "workflow", "target", "realm"} or self.counter not in RESOURCE_COUNTERS:
+            raise PolicyError("invalid budget scope or counter")
+        if (not isinstance(self.key, str) or not 1 <= len(self.key) <= 512
+                or any(ord(c) < 32 or ord(c) == 127 for c in self.key)):
+            raise PolicyError("invalid budget scope key")
+        if type(self.ceiling) is not int or not 0 <= self.ceiling <= 2147483647:
+            raise PolicyError("invalid budget ceiling")
+
+
 @dataclass(frozen=True)
 class ModuleSpec:
     module_id: str
@@ -282,6 +302,7 @@ class PolicySnapshot:
     decision_bytes: int = 8192
     http_rate: float = 1.0
     contract_version: int = CONTRACT_VERSION
+    budget_limits: tuple[BudgetLimit, ...] = ()
 
 
 @dataclass(frozen=True)

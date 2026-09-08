@@ -46,8 +46,8 @@
     "uvicorn": "0.52.4",
     "wheel": "0.48.0"
   },
-  "lock_scope": "Installed environment closure, exact versions, not distribution-hash verification; Python 3.11-3.13 not executed.",
-  "version": "0.1.0a2",
+  "lock_scope": "Installed environment closure, exact versions, not distribution-hash verification; 197 deterministic tests also pass on Python 3.11.15, whose lack of memfd support blocks full isolated runtime. Python 3.12-3.13 unvalidated.",
+  "version": "0.1.0a4",
   "native_tools": [
     {
       "tool_id": "nmap",

@@ -1,4 +1,4 @@
-# Acceptance status — private alpha 0.1.0a3
+# Acceptance status — private alpha 0.1.0a4
 
 The approved plan is implemented in part. The enforcement foundation and the
 listed fixture-tested interfaces are available for private evaluation. The full
@@ -13,8 +13,10 @@ servers. It includes real bubblewrap workers, real age encryption/decryption,
 real Chromium with user cgroup limits, the stdio MCP protocol and the isolated
 signing/secret/audit processes. Dependency and executable versions are recorded
 in `RELEASE-ENVIRONMENT.json` and `cptc_harness/resources/release-integrity.json`.
-Only Linux x86_64 / Python 3.14.7 was exercised; the language target remains
-Python 3.11+ and other supported-version runs are still required.
+Full isolated tests use Linux x86_64 / Python 3.14.7. Pure deterministic tests
+also pass on Python 3.11.15; this installed 3.11 interpreter lacks memfd support
+and is not admitted for isolated runtime execution. See READINESS.md for the
+new accounting/wave/detection evidence and all remaining implementation gates.
 
 | Area | Evidence in tests | Limits of that evidence |
 |---|---|---|
@@ -81,6 +83,29 @@ report hashes and reject internal publication/history/quarantine paths. Syntheti
 crash, disk/error, tamper and export tests exercise these boundaries; this is not
 hardware power-cut validation. Independent review found no remaining blocker in
 this changed surface. Exact final suite counts are in RELEASE-STATUS.json.
+
+## A4 deterministic assessment and enforcement verification
+
+The final suite passes 532 tests and 17 subtests. The original 34 web regressions
+remain included. Another 197 deterministic tests pass on Python 3.11.15; that
+environment is not approved for isolated execution.
+
+New coverage includes atomic six-scope/six-counter reservations, persistent
+ceilings, additive migration, one-use wave claims, immutable results, independent
+stop intent and conservative crash recovery. Missing active or queued records
+roll back recovery and latch the stop. A real encrypted-audit loopback wave
+collects two paced observations and makes no duplicate requests after restart.
+Independent final wave review passed 51 focused tests with no remaining material
+blocker in the reviewed surface.
+
+Finite detections preserve exact target/component/action/evidence binding and
+show incomplete access. The offline advisory library has synthetic version,
+identity, backport and supersedence cases; 196 RPM pairs match installed librpm.
+The external benchmark comparator cannot pass an empty or incomplete catalog.
+No independent CPTC11 expected-weakness catalog has yet been established.
+
+See READINESS.md for per-capability gaps. In particular, declared reservations
+do not imply a complete wire-traffic meter, and authentication remains disabled.
 
 ## Explicitly outstanding work
 

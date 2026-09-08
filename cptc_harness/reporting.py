@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import re
 from .contracts import PolicyError, canonical_json
 
 
@@ -16,7 +17,30 @@ def summarize_result(result: dict) -> dict:
     return {"collection_state": state, "issues": issues, "observation_count": count}
 
 
-def report_records(records: list[dict]) -> dict:
+def evidence_index(records: list[dict]) -> list[dict]:
+    """Link permitted captured evidence to its originating audited action.
+
+    Runtime verifies the result receipts and audit artifacts before calling us.
+    Legacy references lacking a checksum remain in the legacy observations but
+    cannot substantiate a new detector or benchmark conclusion.
+    """
+    found = {}
+    for record in records:
+        action = record["request"]["request_id"]
+        for item in record["result"].get("evidence", []):
+            ident, sha = item.get("evidence_id"), item.get("sha256")
+            if not isinstance(ident, str) or not ident or not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{64}", sha):
+                continue
+            row = {"evidence_id": ident, "sha256": sha, "source_action": action}
+            if ident in found and found[ident] != row:
+                raise PolicyError("conflicting captured evidence identity")
+            found[ident] = row
+    return [found[key] for key in sorted(found)]
+
+
+def report_records(records: list[dict], *, expected_checks=()) -> dict:
+    from .detection import classify_records
+    classified = classify_records(records, expected_checks=expected_checks)
     evidence = {item["evidence_id"]: item for record in records for item in record["result"].get("evidence", [])}
     items = {}
     for record in records:
@@ -50,7 +74,11 @@ def report_records(records: list[dict]) -> dict:
                             "status": record["result"].get("status", "complete"),
                             "reason": record["result"].get("reason"),
                             **summarize_result(record["result"])} for record in records],
-            "observations": sorted(items.values(), key=lambda item: (str(item["target"]), str(item["track"]), str(item["check"]), item["id"]))}
+            "observations": sorted(items.values(), key=lambda item: (str(item["target"]), str(item["track"]), str(item["check"]), item["id"])),
+            "detector_catalog_version": classified["catalog_version"],
+            "detections": classified["detections"], "check_coverage": classified["coverage"],
+            "evidence_index": evidence_index(records), "model_calls": 0,
+            "benchmark_status": "not_evaluated_external_catalog_required"}
 
 
 def markdown_report(report: dict) -> str:
@@ -70,6 +98,15 @@ def markdown_report(report: dict) -> str:
         detail = ", ".join(item["issues"]) or item.get("reason") or "none reported"
         lines.append("| " + " | ".join(escape(value) for value in
                      (item["action_id"], item["module_id"], item["status"], item["collection_state"], item["observation_count"], detail)) + " |")
+    lines.extend(["", "## Deterministic check results", "",
+                  "Version matches are candidates. Related CVEs, CWEs and ATT&CK techniques do not prove exploitation.", "",
+                  "| Target | Component | Check | Role | Outcome | References | Limitations |",
+                  "|---|---|---|---|---|---|---|"])
+    for item in report.get("detections", []):
+        refs = item["cve_ids"] + item["cwe_ids"] + item["attack_techniques"]
+        lines.append("| " + " | ".join(escape(value) for value in (
+            item["target"], item.get("component_id", "unspecified"), item["rule_id"], item["role_id"],
+            item["disposition"], ", ".join(refs) or "none", ", ".join(item["limitations"]) or "none reported")) + " |")
     lines.extend(["", "Full typed facts, source hashes, deduplication and retest fields are in observations.json.",
                   "Unsupported or untested modules remain visible in coverage.json. Raw evidence remains encrypted in local audit storage.", ""])
     return "\n".join(lines)

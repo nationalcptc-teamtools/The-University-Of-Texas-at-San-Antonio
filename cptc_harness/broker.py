@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from .contracts import (Approval, AuditEvent, ExecutionContext, OperationRequest,
                         OperationResult, PolicyError, canonical_json, digest, validate_schema)
+from .audit_control import required_emit, required_release
 
 
 class Broker:
@@ -16,7 +17,7 @@ class Broker:
         self.result_sink = result_sink
 
     def execute(self, request: OperationRequest, *, actor: str, handler: Any | None = None,
-                input_bytes: bytes = b"", source: Any | None = None) -> OperationResult:
+                input_bytes: bytes = b"", source: Any | None = None, _wave_claim=None) -> OperationResult:
         """Validate, reserve, audit intent, then invoke only the registry dispatch path."""
         reserved = False
         dispatched = False
@@ -31,6 +32,7 @@ class Broker:
             if spec is None: raise PolicyError("module is not registered")
             if request.source == "model":
                 self.ledger.charge(request.request_id, "actions", 1, workflow_id=request.workflow_id,
+                                   workspace_id=request.workspace_id, budget_limits=self.policy.budget_limits,
                                    limits={"actions": int(getattr(self.policy, "model_actions", 0))})
             if "operator_only" in spec.effects and request.source != "operator":
                 raise PolicyError("module requires an explicit operator request")
@@ -47,13 +49,19 @@ class Broker:
             limits = {"model_calls": int(getattr(self.policy, "model_calls", 0)),
                       "actions": int(getattr(self.policy, "model_actions", 0))}
             if target_policy is not None: limits["request_limit"] = int(target_policy.request_limit)
-            reservation = self.ledger.reserve(request.request_id, spec.bounds, workspace_id=request.workspace_id,
-                                target_id=(f"{request.target.scheme}://{request.target.host}:{request.target.port}" if request.target else None),
-                                auth_realm=target_policy.auth_realm if target_policy else "",
-                                workflow_id=request.workflow_id, limits=limits)
+            if target_policy is not None: limits["auth_posts"] = int(target_policy.auth_attempts)
+            if _wave_claim is None:
+                reservation = self.ledger.reserve(request.request_id, spec.bounds, workspace_id=request.workspace_id,
+                                    target_id=(f"{request.target.scheme}://{request.target.host}:{request.target.port}" if request.target else None),
+                                    auth_realm=target_policy.auth_realm if target_policy else "",
+                                    workflow_id=request.workflow_id, limits=limits,
+                                    budget_limits=getattr(self.policy, "budget_limits", ()))
+            else:
+                from .campaign import activate_reserved_request
+                reservation = activate_reserved_request(self, request, _wave_claim)
             reserved = True
             self.audit.reserve_output(request.request_id, spec.bounds.output_bytes)
-            self.audit.emit(AuditEvent("operation_intent", request.request_id,
+            required_emit(self.audit, self.ledger, AuditEvent("operation_intent", request.request_id,
                 {"module": spec.module_id, "version": spec.version, "target": request.target.target_id if request.target else None,
                  "source_sha256": spec.source_hash, "args_hash": digest(request.args), "validated_args": request.args,
                  "bounds": spec.bounds.__dict__, "actor": actor, "workflow_id": request.workflow_id,
@@ -72,30 +80,32 @@ class Broker:
             result = self.registry.dispatch(context)
             self._audit_ready()
             if not isinstance(result, OperationResult): raise PolicyError("registered module returned an invalid result")
+            if result.status not in {"complete", "failed", "blocked", "stopped", "uncertain"}:
+                raise PolicyError("registered module returned an invalid status")
             validate_schema(result.facts, spec.output_schema)
             if self.ledger.stopped() and result.status == "complete":
                 result = OperationResult("stopped", result.facts, result.evidence, self.ledger.stop_reason(), result.usage)
             self.ledger.finish(request.request_id, result.usage, state=result.status)
-            self.audit.emit(AuditEvent("operation_result", request.request_id,
+            required_emit(self.audit, self.ledger, AuditEvent("operation_result", request.request_id,
                 {"status": result.status, "reason": result.reason, "usage": result.usage,
                  "evidence": [e.evidence_id for e in result.evidence]}))
-            self.audit.release_output(request.request_id)
+            required_release(self.audit, self.ledger, request.request_id)
             return self._record(request, result)
         except PolicyError as exc:
             if dispatched:
                 self.ledger.stop("operation outcome uncertain after dispatch")
                 self.ledger.finish(request.request_id, state="uncertain")
-                self._best_effort("operation_uncertain", request.request_id, {"reason": "policy or collection failure after dispatch"})
+                required_emit(self.audit, self.ledger, AuditEvent("operation_uncertain", request.request_id, {"reason": "policy or collection failure after dispatch"}))
                 return self._record(request, OperationResult("uncertain", reason="operation outcome uncertain; human review required"))
             if reserved:
                 self.ledger.finish(request.request_id, state="stopped" if self.ledger.stopped() else "blocked")
-            self._best_effort("operation_denied", request.request_id, {"reason": str(exc)})
+            required_emit(self.audit, self.ledger, AuditEvent("operation_denied", request.request_id, {"reason": str(exc)}))
             return self._record(request, OperationResult("stopped" if self.ledger.stopped() else "blocked", reason=str(exc)))
         except Exception:
             self.ledger.stop("audit, storage, or execution outcome uncertain")
             if reserved:
                 self.ledger.finish(request.request_id, state="uncertain")
-            self._best_effort("operation_uncertain", request.request_id, {"reason": "registered operation failed"})
+            required_emit(self.audit, self.ledger, AuditEvent("operation_uncertain", request.request_id, {"reason": "registered operation failed"}))
             return self._record(request, OperationResult("uncertain", reason="registered operation failed"))
 
     def _record(self, request, result):
@@ -104,7 +114,9 @@ class Broker:
                 self.result_sink(request, result)
             except Exception:
                 self.ledger.stop("result storage or audit failed")
-                self._best_effort("result_storage_uncertain", request.request_id, {"reason": "result record could not be checkpointed"})
+                # The primary result receipt failed; a secondary best-effort
+                # event would falsely imply a durable outcome.  The stop latch
+                # forces human reconciliation instead.
                 return OperationResult("uncertain", reason="result storage or audit failed; human review required")
         return result
 
@@ -160,9 +172,6 @@ class Broker:
         expiry = _parse_time(approval.expires_at)
         if expiry is None or expiry <= datetime.now(timezone.utc): raise PolicyError("approval is expired")
 
-    def _best_effort(self, kind: str, request_id: str, data: dict[str, Any]) -> None:
-        try: self.audit.emit(AuditEvent(kind, request_id, data))
-        except Exception: pass
 
 
 def _parse_time(text: str) -> datetime | None:

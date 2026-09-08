@@ -17,6 +17,7 @@ from .policy import load_policy, save_policy
 from .registry import build_registry
 from .storage import private_directory, read_private, write_json
 from .publication import Publications
+from .audit_control import reconcile_stop_intents
 
 
 def device_root():
@@ -60,6 +61,14 @@ class Runtime:
         self.audit = AuditService(self.root / "audit", self.policy, age_binary=config["age_binary"], age_recipient=config["age_recipient"])
         self.clock = self.audit.clock
         try:
+            # Pending stop controls predate this writer.  Replay their fixed,
+            # receipt-bound metadata before admitting any other Runtime work.
+            reconcile_stop_intents(self.ledger, self.audit, policy=self.policy)
+            recovered = self.ledger.recover_waves(workspace_id=self.policy.workspace_id)
+            if recovered:
+                from .audit_control import required_emit
+                required_emit(self.audit, self.ledger, AuditEvent("assessment_recovery", data={
+                    "items": [to_json(claim) for claim in recovered], "status": "uncertain", "automatic_retry": False}))
             self.ledger.enroll_workspace(self.policy.workspace_id, self.audit.origin_id, hashlib.sha256(str(self.root).encode()).hexdigest())
             self.publications = Publications(self.root, self.audit, self.ledger)
             self.publications.recover()
@@ -69,7 +78,47 @@ class Runtime:
         self.registry = build_registry()
         self.network = NetworkBroker(self.policy, audit=self.audit, ledger=self.ledger)
         self.broker = Broker(self.policy, self.registry, self.ledger, self.audit, network=self.network, clock=self.clock, result_sink=self._record_result)
+        from .campaign import AssessmentCampaign
+        self.campaign = AssessmentCampaign(self.broker)
         self.workflows = Workflows(self.ledger_root / "workflows", self.broker)
+
+    def verify_check_result(self, result) -> None:
+        """Human review boundary: callers cannot provide their own audit indexes."""
+        from .assessment_contracts import CheckResult, verify_assessment_result
+        from .campaign import _stored_plan, request_for
+        from .reporting import evidence_index
+        if type(result) is not CheckResult or not self.audit.verify().valid or not self.audit.ready():
+            raise PolicyError("verified audit and typed check result required")
+        plan = _stored_plan(self.ledger, result.wave_id, result.plan_sha256)
+        self.campaign._verify(plan)
+        records = self._records(); actions = {}
+        for item in plan.items:
+            request = request_for(plan, item, self.policy)
+            record = next((r for r in records if r["request"]["request_id"] == request.request_id), None)
+            if record is None: continue
+            if record["request"] != to_json(request): raise PolicyError("audited request differs from assessment plan")
+            stored = self.ledger._db.execute("SELECT state,result_json FROM assessment_items WHERE engagement=? AND device=? AND wave_id=? AND item_id=?",
+                (self.policy.engagement_id, self.policy.device_id, plan.wave_id, item.item_id)).fetchone()
+            if not stored or not stored[1] or json.loads(stored[1]) != record["result"] or stored[0] != record["result"]["status"]:
+                raise PolicyError("assessment result differs from durable audit record")
+            actions[request.request_id] = {"request_id": request.request_id, "target_id": item.target_id,
+                "check_id": item.check_id, "role_id": item.role_id, "module_id": item.module_id,
+                "plan_sha256": plan.sha256, "item_id": item.item_id, "status": stored[0],
+                "evidence_ids": [e["evidence_id"] for e in record["result"]["evidence"]]}
+        index = {e["evidence_id"]: {"source_action": e["source_action"], "sha256": e["sha256"]} for e in evidence_index(records)}
+        verify_assessment_result(result, plan, verified_actions=actions, verified_evidence=index)
+
+    def close(self) -> None:
+        """Reconcile durable stop intent before a clean audit shutdown."""
+        try:
+            reconcile_stop_intents(self.ledger, self.audit, policy=self.policy)
+        except Exception:
+            try:
+                self.ledger.stop("operator control reconciliation failed")
+            finally:
+                self.audit.close()
+            raise PolicyError("operator stop reconciliation failed; workspace remains stopped") from None
+        self.audit.close()
 
     def export_handover(self, recipient_device_id, recipient_key_fingerprint, signer, *, seal_id=None):
         if not self.audit.verify().valid:
@@ -133,6 +182,8 @@ class Runtime:
 
     def coverage(self):
         from .reporting import summarize_result
+        from .check_catalog import capability_status, expected_checks
+        from .detection import classify_records
         try:
             if not self.audit.verify().valid or not self.audit.ready():
                 raise PolicyError("verified audit required before coverage")
@@ -148,7 +199,12 @@ class Runtime:
                               "issue_attempts": sum(bool(r["result"].get("facts", {}).get("issues")) for r in matching),
                               "unsuccessful_attempts": sum(r["result"]["status"] != "complete" for r in matching),
                               "live_validation": "unverified"})
-            data = {"classification": "client_confidential", "modules": items, "finding_confirmation": "Requires evidence-backed human review"}
+            classified = classify_records(results, expected_checks=expected_checks(self.policy, self.registry))
+            data = {"classification": "client_confidential", "modules": items,
+                    "checks": classified["coverage"], "capabilities": capability_status(),
+                    "detector_catalog_version": classified["catalog_version"],
+                    "coverage_basis": "assigned targets and finite check catalog; explicit credentialed role plans still required",
+                    "model_calls": 0, "finding_confirmation": "Requires evidence-backed human review"}
             self.audit.emit(AuditEvent("coverage_intent", data={"profiles": len(items), "records": len(results)}))
             self._publish_derived([(self.root / "coverage.json", canonical_json(data) + b"\n")],
                 AuditEvent("coverage_generated", data={"profiles": len(items), "records": len(results)}))
@@ -179,20 +235,31 @@ class Runtime:
             self.ledger.stop("result record integrity failure")
             raise PolicyError("result records failed integrity verification; engagement stopped") from None
 
-    def report(self):
+    def report(self, *, include_data=False):
         from .reporting import report_records, markdown_report
+        from .check_catalog import capability_status, expected_checks
+        from .contracts import digest
         try:
             if not self.audit.verify().valid or not self.audit.ready():
                 raise PolicyError("verified audit required before reporting")
             records = self._records()
-            data = report_records(records)
+            data = report_records(records, expected_checks=expected_checks(self.policy, self.registry))
+            data["scope_sha256"] = digest(self.policy.scope)
+            data["policy_sha256"] = digest(self.policy)
+            data["capabilities"] = capability_status()
+            # Deployment/image provenance must be supplied and independently
+            # verified by the operator; policy identity cannot stand in for it.
+            data["provenance_sha256"] = None
             self.audit.emit(AuditEvent("report_intent", data={"records": len(records), "observations": len(data["observations"])}))
             self._publish_derived([
                 (self.root / "reports/observations.json", canonical_json(data) + b"\n"),
                 (self.root / "reports/observations.md", markdown_report(data).encode()),
             ], AuditEvent("report_complete", data={"observations": len(data["observations"]),
                 "sha256": hashlib.sha256(canonical_json(data)).hexdigest(), "model_calls": 0}))
+            if include_data:
+                return data
             return {"classification": "client_confidential", "observations": len(data["observations"]),
+                    "detections": len(data["detections"]), "check_results": len(data["check_coverage"]),
                     "json": str(self.root / "reports/observations.json"), "markdown": str(self.root / "reports/observations.md"), "model_calls": 0}
         except Exception as exc:
             self.ledger.stop("report storage or audit failed")

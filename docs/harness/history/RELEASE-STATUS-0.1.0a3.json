@@ -1,0 +1,246 @@
+{
+  "version": "0.1.0a3",
+  "classification": "public-development-metadata",
+  "status": "private_alpha_not_competition_accepted",
+  "checked_at_utc": "2026-09-08T03:54:01.269073Z",
+  "full_approved_plan_complete": false,
+  "active_profiles_live_accepted": 0,
+  "remote_push_authorized": false,
+  "validation": {
+    "pytest": {
+      "command": "python3 -m pytest -q tests web",
+      "passed": 293,
+      "subtests_passed": 17,
+      "seconds": 98.55,
+      "skipped": 0
+    },
+    "legacy_unittest": {
+      "command": "python3 -m unittest discover -s web -p 'test_*.py'",
+      "passed": 34,
+      "seconds": 15.143
+    },
+    "independent_review": {
+      "requested_model": "gpt-5.6-luna",
+      "scope": "Operator capture, encrypted offline replay, collector limitations, bounded HTTP cleanup, publication crash recovery and accepted-only exports",
+      "final_focused_passed": 38,
+      "reported_blockers_in_reviewed_surface": 0,
+      "full_live_release_approval": false
+    },
+    "source_secret_scan": {
+      "tool": "gitleaks",
+      "result": "passed_with_eight_reviewed_exact_public_file_hash_exceptions",
+      "configuration": ".gitleaks.toml"
+    },
+    "worker_and_executable_pins": "22 worker, executable, native tool and scanner-resource pin groups match on tested host; includes full Java/ZAP file trees",
+    "compileall": "passed",
+    "diff_check": "passed",
+    "human_cli_final_regression": {
+      "passed": 12,
+      "scope": "Human capture/replay, unsuccessful exit status, catalog and operator boundaries"
+    },
+    "juice_shop_operator_preflight": {
+      "guest_inventory": "verified",
+      "container_identity_and_health": "verified",
+      "local_private_route": "verified",
+      "http_health_checks_passed": 2,
+      "raw_evidence": "restricted local encrypted audit outside Git",
+      "service_changes": 0,
+      "active_profile_acceptance": false
+    },
+    "publication_recovery": {
+      "focused_passed": 70,
+      "seconds": 11.11,
+      "scope": "Recovery/export/report/integrity tests including receipt sequence ordering, crash points, missing files, permissions and symlinks"
+    },
+    "lab_observation_smoke": {
+      "new_response_capture": "complete",
+      "new_target_requests": 1,
+      "offline_nuclei_replay": "complete",
+      "offline_zap_replay": "complete",
+      "offline_replay_target_requests": 0,
+      "model_calls": 0,
+      "raw_evidence": "Restricted local encrypted audit outside Git",
+      "audit_verified": true,
+      "post_service_health": "verified; unchanged image and restart count",
+      "infrastructure_changes": 0,
+      "prior_release_live_exercised": [
+        "network.nmap_inventory",
+        "web.headers",
+        "web.session"
+      ],
+      "cptc11_human_one_port_nmap_and_import": "complete",
+      "guest_authenticated_collection": "Blocked pending trusted guest host identity; no guest authentication attempted",
+      "full_live_acceptance": false
+    }
+  },
+  "efficiency": {
+    "classification": "synthetic",
+    "tokenizer": "tiktoken 0.12.0 / o200k_base",
+    "baseline_version": "24-observations-6-turns-v1",
+    "input_tokens_baseline": 40752,
+    "input_tokens_compact": 4644,
+    "input_token_reduction_percent": 88.6,
+    "comparison": "Same compact preamble on all six turns; accumulated raw transcript versus typed state changes.",
+    "actual_model_calls": 0,
+    "network_target_requests": 0,
+    "synthetic_stdout_bytes_retained": 43398,
+    "fixture_sha256": "a26dfd153cf1184faee469da9cb0ca44dcc5b8126638ea4dd62af2679096202a",
+    "audit_verified": true,
+    "limitations": "Input-token fixture comparison only; no claim about actual provider tokenizer, billing, output tokens, or reasoning usage.",
+    "tested_release": "0.1.0a3"
+  },
+  "profiles": [
+    {
+      "id": "network.nmap_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": true,
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false
+    },
+    {
+      "id": "network.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "network.nmap_inventory",
+      "mode": "bounded",
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "live_evidence": true,
+      "restriction": "Exactly one approved IPv4 TCP port, no application payload",
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.capture_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "web.nuclei_observation",
+      "mode": "offline",
+      "admission": "native_offline_fixture_tested_human_only",
+      "live_evidence": true,
+      "restriction": "One reviewed local HTTP response, no network or model calls",
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.zap_observation",
+      "mode": "offline",
+      "admission": "native_offline_fixture_tested_human_only",
+      "live_evidence": true,
+      "restriction": "One reviewed local HTTP response, no network or model calls",
+      "live_evidence_type": "offline analysis of human-collected bounded lab evidence",
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.response_capture",
+      "mode": "bounded",
+      "admission": "operator_only_fixture_tested_and_lab_smoke",
+      "live_evidence": true,
+      "full_live_acceptance": false,
+      "restriction": "One GET at exact approved target base, 32768-byte raw cap, encrypted evidence; zero model access; no redirects or retries"
+    },
+    {
+      "id": "web.headers",
+      "mode": "bounded",
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "live_evidence": true,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.session",
+      "mode": "bounded",
+      "admission": "bounded_fixture_tested_prior_a2_lab_smoke",
+      "live_evidence": true,
+      "full_live_acceptance": false
+    },
+    {
+      "id": "web.nuclei",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "web.zap",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "linux.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "linux.inventory",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "windows_ad.output_import",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "windows_ad.inventory",
+      "mode": "bounded",
+      "admission": "unsupported_no_contained_runner",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.result_intake",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.zerologon",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.dos",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.spraying",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "exploitation.domain_change",
+      "mode": "manual_only",
+      "admission": "manual_only",
+      "live_evidence": false
+    },
+    {
+      "id": "reporting.records",
+      "mode": "offline",
+      "admission": "offline_fixture_tested",
+      "live_evidence": false
+    }
+  ],
+  "blocking_gates": [
+    "Active Nuclei/ZAP, remote host execution and additional protocol profiles are not implemented/admitted; native one-port IPv4 Nmap and offline passive analysis have bounded lab smoke evidence.",
+    "Authenticated session and active controlled-account testing are not admitted.",
+    "No automated proof profile is admitted.",
+    "Client browser login and recipient-bound client MCP transport are not admitted.",
+    "Actual supplied AI authorization, retention and upstream tool controls are not verified.",
+    "Full live profile acceptance remains pending. Bounded Juice Shop capture, offline replay and earlier observations passed; authenticated guest collection requires trusted guest host identity.",
+    "PowerShell execution and Python 3.11-3.13 validation remain pending.",
+    "The full future-profile and failure-mode adversarial corpus is incomplete."
+  ],
+  "package_note": "Private wheel, sdist and human kit are local evaluation artifacts. Final hashes and installed-wheel smoke evidence are recorded in dist/BUILD-RECEIPT.json; packaging does not satisfy live gates.",
+  "active_profiles_live_exercised": 4
+}

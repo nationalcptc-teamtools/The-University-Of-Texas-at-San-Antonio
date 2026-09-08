@@ -25,6 +25,11 @@ class MCPFacade:
         return [{"module_id": name, "description": self.runtime.registry.get(name).description,
                  "mode": self.runtime.registry.get(name).mode} for name in state["modules"]]
 
+    def stop(self):
+        """Owner-bound embeddings call the same durable control path as the CLI."""
+        from .audit_control import operator_stop
+        return operator_stop(self.runtime.ledger_root, self.runtime.policy, interface="mcp", source="model", ledger=self.runtime.ledger)
+
     def action(self, module_id: str, arguments: dict):
         workflows = self.runtime.workflows
         path = workflows._path(self.workflow_id)
@@ -54,9 +59,9 @@ class MCPFacade:
                 write_json(path, state)
                 # No evidence paths, raw outputs, source documents or secrets are
                 # exposed through MCP. Classification inherits engagement origin.
-                data = {"status": result.status, "facts": result.facts, "reason": result.reason}
+                data = {"version": 1, "status": result.status, "facts": result.facts, "reason": result.reason, "facts_schema": spec.module_id}
                 classification = "synthetic" if state["synthetic"] else "client_confidential"
-                return json.loads(self.gate.prepare(self.profile, (DisclosureItem("result", classification, data),)))[0]["data"]
+                return json.loads(self.gate.prepare(self.profile, (DisclosureItem("result", classification, data, schema_id=spec.module_id),)))[0]["data"]
             except Exception:
                 state["state"] = "uncertain"
                 write_json(path, state)
@@ -83,6 +88,11 @@ def serve(runtime, workflow_id, profile):
             return facade.action(module_id, arguments)
         except PolicyError:
             return {"status": "blocked", "reason": "workflow policy denied the request"}
+
+    @server.tool()
+    def cptc_stop() -> dict:
+        """Latch a stop through the owner-only device control queue."""
+        return facade.stop()
 
     server.run(transport="stdio")
     return 0

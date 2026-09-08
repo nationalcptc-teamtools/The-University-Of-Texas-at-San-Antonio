@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from typing import Callable
+import hashlib
 
 from ..contracts import (ExecutionContext, OperationResult, TargetRequest,
-                         ToolRequest)
+                         ToolRequest, canonical_json)
 from ..parsers import parse_network_output
 from .base import Collector, batch_result, blocked, stopped, tool_result
 
@@ -51,10 +52,19 @@ class WebCollector:
                      "session_ref_present": bool(response.session_ref),
                      "truncated": bool(response.truncated)}
             state = "candidate" if set_cookie and not response.session_ref else "observed"
-        return OperationResult(status="complete", facts={"observations": [{
+        observation = {
             "track": "web", "target": target.canonical_url, "check_id": self.check_id,
             "state": state, "facts": facts,
-        }], "issues": [], "duplicates": 0}, evidence=evidence)
+        }
+        # Capture the exact typed metadata that supports the check. Body-only
+        # evidence cannot substantiate a header assertion. This is a new source
+        # receipt; historical observations without it remain unlinked.
+        metadata = canonical_json(facts)
+        metadata_evidence = _capture(context, "response_metadata", metadata, "client_confidential_human_only")
+        if metadata_evidence:
+            observation["source_sha256"] = hashlib.sha256(metadata).hexdigest()
+            evidence += metadata_evidence
+        return OperationResult(status="complete", facts={"observations": [observation], "issues": [], "duplicates": 0}, evidence=evidence)
 
 
 class ToolCollector:
