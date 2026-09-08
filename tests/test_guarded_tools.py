@@ -136,10 +136,10 @@ class FakeTools:
         return ToolOutput(stdout=b'{"target":"192.0.2.10","port":443,"state":"open"}', status="complete", exit_code=0)
 
 
-def test_contained_tool_uses_fixed_profile_and_parses_typed_output():
+def test_native_nmap_cannot_be_replaced_by_a_generic_tool_runner():
     result = build_registry().dispatch(_context("network.nmap_inventory", tools=FakeTools()))
-    assert result.status == "complete"
-    assert result.facts["observations"][0]["facts"]["port"] == 443
+    assert result.status == "blocked"
+    assert not result.facts
 
 
 def test_model_bounded_action_requires_operator_approval():

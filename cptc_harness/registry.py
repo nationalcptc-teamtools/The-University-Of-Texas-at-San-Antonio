@@ -19,6 +19,8 @@ from .parsers import (parse_linux_output, parse_network_output, parse_nmap_xml,
 from .collectors.imports import (exploit_import, linux_import, network_import,
                                  nmap_import, reporting_import, web_import,
                                  windows_import)
+from .passive import PassiveCollector
+from .nmap_bridge import NmapCollector
 
 
 class _FrozenDict(dict):
@@ -79,6 +81,11 @@ _WEB_SESSION_FACTS = _schema({"status": {"type": "integer", "minimum": 100, "max
                               "truncated": {"type": "boolean"}})
 _WEB_CAPTURE_FACTS = _schema({**dict(_WEB_HEADER_FACTS["properties"]),
                               "cookie_header_present": {"type": "boolean"}, "session_ref_present": {"type": "boolean"}})
+_PASSIVE_FACTS = _schema({"scanner": {"type": "string", "enum": ("nuclei", "zap")},
+                         "rule_id": {"type": "string", "maxLength": 64},
+                         "severity": {"type": "string", "enum": ("info", "low", "medium", "high", "critical")},
+                         "confidence": {"type": "integer", "minimum": 0, "maximum": 4},
+                         "matches": {"type": "integer", "minimum": 0, "maximum": 16}})
 _HOST_FACTS = _schema({
     "field": {"type": "string", "maxLength": 64}, "present": {"type": "boolean"},
     "value_length": {"type": "integer", "minimum": 0, "maximum": 128},
@@ -131,9 +138,13 @@ def _spec(module_id: str, track: str, mode: str, description: str, *, tool_id: s
 _SPECS = (
     _spec("network.nmap_import", "network", "offline", "Import Nmap XML service inventory.", output_schema=_batch_schema(_NETWORK_FACTS)),
     _spec("network.output_import", "network", "offline", "Import a reviewed network inventory.", output_schema=_batch_schema(_NETWORK_FACTS)),
-    _spec("network.nmap_inventory", "network", "bounded", "Run the pinned CPTC Nmap inventory profile.",
+    _spec("network.nmap_inventory", "network", "bounded", "Observe one approved IPv4 TCP port with pinned Nmap and a parent-only connect broker.",
           tool_id="nmap-cptc-inventory-v1", effects=("network_observation",)),
     _spec("web.capture_import", "web", "offline", "Import a reviewed web response capture.", output_schema=_batch_schema(_WEB_CAPTURE_FACTS)),
+    _spec("web.nuclei_observation", "web", "offline", "Analyze one human-selected response with networkless pinned Nuclei.",
+          tool_id="nuclei", output_schema=_batch_schema(_PASSIVE_FACTS)),
+    _spec("web.zap_observation", "web", "offline", "Analyze one human-selected response with networkless pinned ZAP passive rules.",
+          tool_id="zap", output_schema=_batch_schema(_PASSIVE_FACTS)),
     _spec("web.headers", "web", "bounded", "Read response metadata and browser security header presence.",
           effects=("http_request", "human_only_capture"), output_schema=_batch_schema(_WEB_HEADER_FACTS, source=False)),
     _spec("web.session", "web", "bounded", "Record session-cookie metadata for human review.",
@@ -160,8 +171,10 @@ _SPECS = tuple(_SPECS)
 _HANDLERS: dict[str, Collector] = {
     "network.nmap_import": nmap_import(),
     "network.output_import": network_import(),
-    "network.nmap_inventory": ToolCollector(tool_id="nmap-cptc-inventory-v1", parser=parse_network_output, scoped=True),
+    "network.nmap_inventory": NmapCollector(),
     "web.capture_import": web_import(),
+    "web.nuclei_observation": PassiveCollector("nuclei"),
+    "web.zap_observation": PassiveCollector("zap"),
     "web.headers": WebCollector("web_headers"),
     "web.session": WebCollector("web_session"),
     "web.nuclei": UnsupportedScannerCollector("Nuclei"),
@@ -199,6 +212,7 @@ def _validate_result(result: OperationResult) -> None:
         "channel_binding_required", "accessible", "verified",
         "human_result", "evidence_attached", "evidence_ref_present", "finding_id", "severity",
         "evidence_state", "retest_state", "coverage_state", "duplicate", "reviewed", "evidence_ref",
+        "scanner", "rule_id", "confidence", "matches",
     }
     for item in observations:
         if not isinstance(item, dict) or set(item) - {"track", "target", "check_id", "state", "facts", "source_sha256"}:

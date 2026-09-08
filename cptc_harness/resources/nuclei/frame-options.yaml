@@ -1,0 +1,16 @@
+id: cptc-observe-missing-frame-options
+info:
+  name: Missing X-Frame-Options observation
+  author: cptc-toolkit
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+    matchers:
+      - type: word
+        part: header
+        negative: true
+        words:
+          - "X-Frame-Options:"
+        case-insensitive: true

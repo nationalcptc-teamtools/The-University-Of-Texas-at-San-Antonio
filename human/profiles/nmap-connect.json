@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "profile_id": "nmap-connect-v1",
+  "tool": "nmap",
+  "mode": "bounded",
+  "admission": "one approved port after policy and scope gates",
+  "network": "one broker-pinned IPv4 TCP destination; native worker has no target route",
+  "flags": [
+    "-n",
+    "-Pn",
+    "-sT",
+    "--max-retries=0"
+  ],
+  "forbidden": [
+    "-sV",
+    "-sC",
+    "-A",
+    "--script",
+    "-p-",
+    "host discovery"
+  ],
+  "execution": "human reviewed contained profile; this file is declarative",
+  "review_status": "native_synthetic_fixture_tested_live_pending"
+}

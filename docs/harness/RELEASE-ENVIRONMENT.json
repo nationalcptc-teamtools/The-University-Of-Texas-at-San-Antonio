@@ -46,5 +46,40 @@
     "uvicorn": "0.52.4",
     "wheel": "0.48.0"
   },
-  "lock_scope": "Installed environment closure, exact versions, not distribution-hash verification; Python 3.11-3.13 not executed."
+  "lock_scope": "Installed environment closure, exact versions, not distribution-hash verification; Python 3.11-3.13 not executed.",
+  "version": "0.1.0a2",
+  "native_tools": [
+    {
+      "tool_id": "nmap",
+      "version": "7.991",
+      "sha256": "ee8f517262c083b934de98844064c01d5b0cf6bdf9ffac39032187bf303303cc"
+    },
+    {
+      "tool_id": "nmap-shim",
+      "version": "1",
+      "sha256": "6c4e83b3ee6ebc3507726d0fd5e0cc08ab33ff2dcc0b02fd5875992211176af3"
+    },
+    {
+      "tool_id": "nuclei",
+      "version": "3.11.1",
+      "sha256": "4c5c5042cc116c5bd223d32007ca8b5594aa84549b4d024855802f2e88f05fa2"
+    },
+    {
+      "tool_id": "java",
+      "version": "26.0.2",
+      "sha256": "e3523667798f60d262b41c1744219529ec6fa22d3c6c215a0ee8d173e7613725"
+    },
+    {
+      "tool_id": "zap",
+      "version": "2.17.0",
+      "sha256": "015dda4709b5ef79736086bb41e8e2a4e95b04cf6625f14d6bcc02b197c99c0c"
+    }
+  ],
+  "native_catalog": "cptc_harness/resources/tool-catalog.json",
+  "zap_archive": {
+    "version": "2.17.0",
+    "source": "https://github.com/zaproxy/zaproxy/releases/download/v2.17.0/ZAP_2.17.0_Linux.tar.gz",
+    "sha256": "efe799aaa3627db683b43f00c9c210aea0b75c00cc8f0a0f0434d12bb3ddde5a"
+  },
+  "deployment_scope": "Reviewed paths and executable/runtime hashes for this host. No automatic admission on another host or after updates."
 }

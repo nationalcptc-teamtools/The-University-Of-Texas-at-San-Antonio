@@ -1,0 +1,45 @@
+env:
+  contexts:
+    - name: capture
+      urls:
+        - http://capture.invalid/
+  parameters:
+    failOnError: true
+    failOnWarning: true
+    progressToStdout: true
+jobs:
+  - type: passiveScan-config
+    parameters:
+      scanOnlyInScope: false
+      maxBodySizeInBytesToScan: 32768
+      maxAlertsPerRule: 8
+      disableAllRules: true
+    rules:
+      - id: 10010
+        threshold: Medium
+      - id: 10011
+        threshold: Medium
+      - id: 10020
+        threshold: Medium
+      - id: 10021
+        threshold: Medium
+      - id: 10035
+        threshold: Medium
+      - id: 10038
+        threshold: Medium
+      - id: 10054
+        threshold: Medium
+      - id: 10055
+        threshold: Medium
+  - type: import
+    parameters:
+      type: har
+      fileName: /capture.txt
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 1
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: /tmp
+      reportFile: observations

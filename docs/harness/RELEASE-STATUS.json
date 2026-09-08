@@ -1,39 +1,45 @@
 {
-  "version": "0.1.0a1",
+  "version": "0.1.0a2",
   "classification": "public-development-metadata",
   "status": "private_alpha_not_competition_accepted",
-  "checked_at_utc": "2026-09-07T23:40:32.455505Z",
+  "checked_at_utc": "2026-09-08T01:08:19.420295Z",
   "full_approved_plan_complete": false,
   "active_profiles_live_accepted": 0,
   "remote_push_authorized": false,
   "validation": {
     "pytest": {
       "command": "python3 -m pytest -q tests web",
-      "passed": 128,
+      "passed": 172,
       "subtests_passed": 17,
-      "seconds": 34.73,
+      "seconds": 75.19,
       "skipped": 0
     },
     "legacy_unittest": {
       "command": "python3 -m unittest discover -s web -p 'test_*.py'",
       "passed": 34,
-      "seconds": 15.131
+      "seconds": 15.133
     },
     "independent_review": {
       "requested_model": "gpt-5.6-luna",
-      "scope": "Multiple enforcement/integration reviews and final orphan-result/audit/report verification",
-      "final_focused_passed": 37,
+      "scope": "Native Nmap, passive Nuclei/ZAP, human CLI, containment, parsers, encrypted capture, cleanup and final dependency-label follow-up",
+      "final_focused_passed": 5,
       "reported_blockers_in_reviewed_surface": 0,
-      "full_live_release_approval": false
+      "full_live_release_approval": false,
+      "final_catalog_followup": "1 passed; no remaining blocker; full human tests 6 passed"
     },
     "source_secret_scan": {
       "tool": "gitleaks",
-      "result": "passed_with_one_reviewed_exact_source_hash_false_positive",
+      "result": "passed_with_eight_reviewed_exact_public_file_hash_exceptions",
       "configuration": ".gitleaks.toml"
     },
-    "worker_and_executable_pins": "all 9 match on tested host",
+    "worker_and_executable_pins": "22 worker, executable, native tool and scanner-resource pin groups match on tested host; includes full Java/ZAP file trees",
     "compileall": "passed",
-    "diff_check": "passed"
+    "diff_check": "passed",
+    "human_cli_final_regression": {
+      "passed": 6,
+      "seconds": 3.08,
+      "scope": "Includes final missing-dependency and duplicate catalog refusal after full suite"
+    }
   },
   "efficiency": {
     "classification": "synthetic",
@@ -66,14 +72,29 @@
     {
       "id": "network.nmap_inventory",
       "mode": "bounded",
-      "admission": "unsupported_no_contained_runner",
-      "live_evidence": false
+      "admission": "native_synthetic_integration_only_live_pending",
+      "live_evidence": false,
+      "restriction": "Exactly one approved IPv4 TCP port, no application payload"
     },
     {
       "id": "web.capture_import",
       "mode": "offline",
       "admission": "offline_fixture_tested",
       "live_evidence": false
+    },
+    {
+      "id": "web.nuclei_observation",
+      "mode": "offline",
+      "admission": "native_offline_fixture_tested_human_only",
+      "live_evidence": false,
+      "restriction": "One reviewed local HTTP response, no network or model calls"
+    },
+    {
+      "id": "web.zap_observation",
+      "mode": "offline",
+      "admission": "native_offline_fixture_tested_human_only",
+      "live_evidence": false,
+      "restriction": "One reviewed local HTTP response, no network or model calls"
     },
     {
       "id": "web.headers",
@@ -161,7 +182,7 @@
     }
   ],
   "blocking_gates": [
-    "Native scanner and remote host containment profiles are not implemented/admitted.",
+    "Active Nuclei/ZAP, remote host execution and additional protocol profiles are not implemented/admitted; native one-port IPv4 Nmap and offline passive analysis are fixture-tested.",
     "Authenticated session and active controlled-account testing are not admitted.",
     "No automated proof profile is admitted.",
     "Client browser login and recipient-bound client MCP transport are not admitted.",
@@ -170,5 +191,5 @@
     "PowerShell execution and Python 3.11-3.13 validation remain pending.",
     "The full future-profile and failure-mode adversarial corpus is incomplete."
   ],
-  "package_note": "Wheel and sdist are local evaluation artifacts. Final artifact hashes are recorded beside the packages; build success does not satisfy live release gates."
+  "package_note": "Private wheel, sdist and human kit are local evaluation artifacts. Final hashes and installed-wheel smoke evidence are recorded in dist/BUILD-RECEIPT.json; packaging does not satisfy live gates."
 }

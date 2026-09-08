@@ -1,6 +1,9 @@
 include README.md AGENTS.md pyproject.toml MANIFEST.in .gitleaks.toml
 recursive-include docs/harness *.md *.txt *.json *.lock
 recursive-include scripts *.py *.ps1
+recursive-include cptc_harness/native *.c *.sh
+recursive-include human *.md *.json *.xml *.csv *.py *.ps1
+include human/cptc-tools
 recursive-include skills/cptc-harness *.md
 recursive-include tests *.py *.json *.xml
 include web/README.md web/AGENTS.md web/BUILDOUT-PROPOSAL.md

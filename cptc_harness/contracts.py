@@ -313,6 +313,8 @@ class ExecutionContext:
     stopped: Callable[[], bool] = lambda: False
     source: SourceRef | None = None
     input_bytes: bytes = b""
+    # Trusted, process-local capability. Never populated from model JSON.
+    network: Any | None = None
 
 
 @dataclass(frozen=True)

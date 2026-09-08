@@ -5,3 +5,16 @@ useDefault = true
 description = "Reviewed false positive: exact public source-code SHA256 for the pinned secret worker, not a credential"
 regexTarget = "match"
 regexes = ['''secret_worker\.py": "640fcd52bb4026d2b62190b5b427f99dd22a686d00f05b441572b7a70f25260d"''']
+
+[[allowlists]]
+description = "Reviewed false positives: exact SHA256 pins of public Java and ZAP distribution files, verified against installed files"
+regexTarget = "match"
+regexes = [
+  '''keytool":\ "fbbcaddc0b913238abd4d4d1d1eeea2b311bc79fda4cccdc46a6f6809cc0eba2"''',
+  '''jdk\.security\.auth\.jmod":\ "a7d742ac2c5427646583abf10121e801fc701d6dd93ce142e006359b61c79ad6"''',
+  '''jmxremote\.access":\ "0c25d26ee212ca1e8c33f67c3c460d43fe849c3a1d23dbe341148517602b280c"''',
+  '''jmxremote\.password\.template":\ "0273b6a6b9e20e6ce54c5aee70164028e0395063b2b7d39060a40b6495543dbf"''',
+  '''log4j\-1\.2\-api\-2\.25\.2\.jar":\ "cb8e6efed1a386bb2789bfe45388850dd86b6d6b5858913e8c3f25690beb3251"''',
+  '''log4j\-api\-2\.25\.2\.jar":\ "9fd66c9fe0bea06fa9666c147989a46cafaa92b4a88753697d3945cc43338cbb"''',
+  '''openapi\-beta\-48\.zap":\ "8384f8b71a0cb8a69bfc859603d7418f2d9b59ceb499063909e11e78e152c698"''',
+]

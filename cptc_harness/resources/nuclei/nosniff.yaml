@@ -1,0 +1,16 @@
+id: cptc-observe-missing-nosniff
+info:
+  name: Missing X-Content-Type-Options observation
+  author: cptc-toolkit
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+    matchers:
+      - type: word
+        part: header
+        negative: true
+        words:
+          - "X-Content-Type-Options:"
+        case-insensitive: true

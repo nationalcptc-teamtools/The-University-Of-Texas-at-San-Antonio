@@ -69,10 +69,80 @@
       "outcome": "Findings tracked and corrected before packaging",
       "owned_files": [],
       "validation": "Final integrated validation is recorded in RELEASE-STATUS.json and ACCEPTANCE.md; worker intermediate claims are not release approval."
+    },
+    {
+      "role": "tooling_planner",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "xhigh",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed by collaboration status; no substitution requested",
+      "task": "Native and independent human work packages",
+      "owned_files": [
+        "docs/harness/NATIVE-TOOLS-PLAN.md (planning inputs, main recorded)"
+      ],
+      "outcome": "Read-only plan completed before delegation",
+      "validation": "See RELEASE-STATUS.json for final integrated evidence; intermediate worker claims do not admit capabilities."
+    },
+    {
+      "role": "tooling_implementer",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed by collaboration status; no substitution requested",
+      "task": "Human CLI, local collectors, runbooks, profiles and fixtures",
+      "owned_files": [
+        "cptc_harness/human.py",
+        "human/",
+        "tests/test_human.py"
+      ],
+      "outcome": "Integrated, reviewed and fixture-tested; main corrected catalog labels during packaging",
+      "validation": "See RELEASE-STATUS.json for final integrated evidence; intermediate worker claims do not admit capabilities."
+    },
+    {
+      "role": "enforcement_builder",
+      "requested_model": "gpt-5.6-terra",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed by collaboration status; no substitution requested",
+      "task": "Initial native Nmap draft",
+      "owned_files": [
+        "cptc_harness/nmap_bridge.py",
+        "cptc_harness/native/",
+        "tests/test_native_nmap.py"
+      ],
+      "outcome": "Draft failed integration review and was not admitted; replaced by focused Terra package",
+      "validation": "See RELEASE-STATUS.json for final integrated evidence; intermediate worker claims do not admit capabilities."
+    },
+    {
+      "role": "native_probe_builder",
+      "requested_model": "gpt-5.6-terra",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed by collaboration status; no substitution requested",
+      "task": "Result-only AF_UNIX Nmap bridge and native adversarial fixtures",
+      "owned_files": [
+        "cptc_harness/nmap_bridge.py",
+        "cptc_harness/native/",
+        "tests/test_native_nmap.py"
+      ],
+      "outcome": "Integrated and fixture-tested; independent review findings corrected, including cleanup uncertainty and explicit IPv6 denial",
+      "validation": "See RELEASE-STATUS.json for final integrated evidence; intermediate worker claims do not admit capabilities."
+    },
+    {
+      "role": "review_cptc_controls",
+      "requested_model": "gpt-5.6-luna",
+      "requested_effort": "high",
+      "actual_model": null,
+      "actual_model_evidence": "Provider-reported model identity is not exposed by collaboration status; no substitution requested",
+      "task": "Independent native/passive/human capability review",
+      "owned_files": [],
+      "outcome": "Reviewed, concrete blockers corrected and focused regressions passed; final catalog-label follow-up recorded in release status",
+      "validation": "See RELEASE-STATUS.json for final integrated evidence; intermediate worker claims do not admit capabilities."
     }
   ],
   "integration": {
     "owner": "main",
-    "responsibility": "Contracts, migration, runtime, provider/secret/signing/audit process composition, reports, CLI/MCP/workflows, evidence exports, corrective enforcement edits and final validation."
+    "responsibility": "Contracts, migration, runtime, provider/secret/signing/audit process composition, reports, CLI/MCP/workflows, evidence exports, corrective enforcement edits and final validation.",
+    "native_continuation": "Main owns passive Nuclei/ZAP implementation, registry/runtime wiring, native pins, resource closure, packaging, installed CLI validation and acceptance metadata."
   }
 }

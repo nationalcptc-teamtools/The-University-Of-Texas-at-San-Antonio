@@ -64,7 +64,7 @@ class Broker:
                 request_limit=spec.bounds.request_limit) if request.target and self.network else None
             context = ExecutionContext(request, spec, self.policy, transport=transport, tools=self.tools,
                 capture=lambda stream, data, classification: self.audit.capture(request.request_id, stream, data, classification),
-                stopped=self.ledger.stopped, input_bytes=input_bytes, source=source)
+                stopped=self.ledger.stopped, input_bytes=input_bytes, source=source, network=self.network)
             # Registry dispatch is the only normal invocation. A supplied handler cannot replace it.
             dispatched = True
             result = self.registry.dispatch(context)

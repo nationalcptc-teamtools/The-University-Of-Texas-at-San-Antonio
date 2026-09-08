@@ -1,4 +1,4 @@
-# Acceptance status — private alpha 0.1.0a1
+# Acceptance status — private alpha 0.1.0a2
 
 The approved plan is implemented in part. The enforcement foundation and the
 listed fixture-tested interfaces are available for private evaluation. The full
@@ -26,7 +26,7 @@ Python 3.11+ and other supported-version runs are still required.
 | Browser | Real isolated Chromium and proxy, route/method/body caps, hash drift, manual-login refusal | Synthetic/public only; full malicious-browser/WS flood corpus incomplete |
 | MCP | Actual initialize/list-tools/list-resources, two tools only, twelve-action budget, denied unknown action | Synthetic-only; stdio recipient identity cannot authorize client disclosure |
 | Audit | Complete bounded bytes, stream identity, UTC/sequence/hash chain, secret-key redaction, overflow, allocation failure, tampering, permission drift, every rotation checkpoint and persistent failure markers | Simulated disk failures/crashes; not hardware power-cut validation or administrator resistance |
-| Isolation | No home reads, worker/executable pins, closed descriptors, no ambient environment, process creation denial, resource/output caps and cancellation | No native network scanner profile admitted; hostile host administrator out of boundary |
+| Isolation | No home reads, pins, closed descriptors, no ambient environment, process denial, resource/output caps; actual attempted native passive egress denied | Host administrator remains outside the boundary; profiles are narrowly admitted |
 | Exports / timelines | Exact reviewed file set, age encrypt/decrypt, wrong-key rejection, source preservation, modified-input rejection, signed merge, source audit-chain verification | Encrypted local export only; interruption corpus not exhaustive; no uploads |
 | Imports / reporting | Vulnerable/hardened/malformed/unsupported fixtures across tracks, typed values, scope checks, deduplication, candidate states, reviewed evidence linkage, forged/missing result stops | Not every requested scanner/proof has a supported profile; Windows collector not executed |
 | Efficiency | Fixed 24-observation/6-turn benchmark, 40,752 baseline vs 4,644 compact input tokens, 43,398 stdout bytes retained | 88.6% fewer fixture input tokens; zero real model calls; not a provider billing claim |
@@ -37,12 +37,35 @@ tests. `BUILD-AGENTS.json` records requested roles/models and outcomes. The
 collaboration API does not expose provider-reported actual model identity, so
 that field remains null rather than inferring it from the request.
 
+## Native and human continuation
+
+The standalone human CLI and local collection kit are implemented. Native
+Nmap now has real one-connect IPv4 open/refused fixtures through AF_UNIX,
+preflight/pin/scope refusal, duplicate request denial, bounded output, stop and
+cleanup uncertainty tests. A full Runtime test verifies encrypted auditing,
+exactly one spent probe and persistent budget denial of a second request.
+
+Nuclei and ZAP run offline in a networkless worker. Vulnerable, hardened,
+incomplete, malformed and unknown-rule fixtures are tested. Nuclei must emit
+its processing receipt; an empty stream fails. ZAP requires one exact site and
+eight reviewed rule IDs. A real synthetic scanner tries to connect to a host
+listener and is denied. Java's runtime/configuration closure is pinned and a
+mutation test fails admission. Raw stdout/stderr retain stream identity and
+are encrypted by the real audit writer. Neither passive module sends a target
+request or makes a model call.
+
+The native/human independent review identified a silent Nuclei skip, permissive
+report shapes, missing egress evidence, incomplete Java pins, delayed admission
+stop handling and a cleanup-stop edge. These were fixed with explicit regressions.
+Final review found no remaining blocker in the exercised changes; live acceptance
+and broader profiles are not implied. Exact counts are in RELEASE-STATUS.json.
+
 ## Explicitly outstanding work
 
-1. Admit a safe native Nmap profile after proving all traffic is mediated and
-   budgets remain enforced. Until then use reviewed offline Nmap XML imports.
-2. Review and contain specific Nuclei templates and ZAP workflows. Their registry
-   entries currently return unsupported; wrapper invocation alone is insufficient.
+1. Complete live acceptance for the one-port Nmap and HTTP observation profiles.
+   IPv6 native Nmap and broader discovery/probe modes remain unadmitted.
+2. Any future active Nuclei/ZAP profile needs separate reviewed effects, budgets
+   and containment. Their original active registry IDs remain unsupported.
 3. Admit remote Linux and Windows/AD collectors, authenticated session handling,
    controlled-account comparisons and more complete TLS/protocol observations.
    Run the PowerShell collection aid on an appropriate isolated Windows fixture.

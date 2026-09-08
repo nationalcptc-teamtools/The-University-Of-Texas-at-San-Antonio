@@ -1,0 +1,16 @@
+id: cptc-observe-missing-csp
+info:
+  name: Missing Content-Security-Policy observation
+  author: cptc-toolkit
+  severity: info
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+    matchers:
+      - type: word
+        part: header
+        negative: true
+        words:
+          - "Content-Security-Policy:"
+        case-insensitive: true

@@ -1,0 +1,1 @@
+{"schema":"cptc.windows_ad.inventory.v1","target":"ad.example.test","controls":{"network_access":false,"sudo_used":false,"service_changes":false},"records":[{"kind":"controlled_account","reviewed":true,"accessible":true,"verified":true,"evidence_ref":"synthetic/account-proof"}]}

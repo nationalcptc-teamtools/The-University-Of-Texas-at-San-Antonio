@@ -22,9 +22,11 @@ make one metadata request under the registered request budget.  They do not
 follow redirects, submit credentials, or expose response bodies or header
 values to the model.
 
-Native Nmap, Nuclei, ZAP and remote host collectors remain visibly unsupported
-until reviewed containment exists. Authentication, client browser login and
-client-data stdio MCP are not admitted in this release.
+Native Nmap observes exactly one registered TCP port through a pinned parent-only
+connect broker. Offline Nuclei/ZAP observation modules require a human-selected
+response artifact; the model cannot supply raw captures. Active Nuclei/ZAP,
+remote host execution, authentication, client browser login and client-data
+stdio MCP are not admitted in this release.
 Zerologon, password spraying, DoS/crash testing, and domain changes are
 manual-only.  Ask a human to perform those checks and import the reviewed
 result card.  Never create an alias, wrapper, shell command, arbitrary scanner

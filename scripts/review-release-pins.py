@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
 
 
 def main():
@@ -29,6 +30,18 @@ def main():
             candidate[group][name] = actual
             results.append({"kind": group, "name": name, "status": "match" if actual == expected else "changed",
                             "expected_sha256": expected, "observed_sha256": actual})
+    sys.path.insert(0, str(package.parent))
+    from cptc_harness.tool_catalog import catalog_status, verified_resource
+    for row in catalog_status():
+        results.append({"kind": "native_tools", "name": row["tool_id"], "status": "match" if row["admitted"] else "unavailable_or_unadmitted"})
+    native_manifest = json.loads((package / "resources/tool-catalog.json").read_bytes())
+    for name in native_manifest.get("resources", {}):
+        try:
+            verified_resource(name)
+            status = "match"
+        except Exception:
+            status = "changed_or_unavailable"
+        results.append({"kind": "scanner_resources", "name": name, "status": status})
     if args.propose:
         if any(result["status"] == "unavailable" for result in results):
             parser.error("Cannot propose a partial manifest; resolve unavailable files first")

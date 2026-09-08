@@ -1,10 +1,15 @@
-# Guarded CPTC harness — private alpha 0.1.0a1
+# Guarded CPTC harness — private alpha 0.1.0a2
 
 This terminal-first harness implements a local policy broker, persistent budgets,
 encrypted evidence capture, UTC audit files, typed imports, bounded HTTP metadata
 observations, compact AI workflows and deterministic reports. The existing
 `web/cptc_web.py` workflow and its report format remain available to human operators.
 They are not granted to the AI as shell capabilities.
+
+The operator entry point is `cptc-tools`. It adds no model calls to imports,
+observations, coverage or reporting. The independent [human kit](../../human/README.md)
+also supplies local Linux/Windows collectors, native-tool procedures and manual
+evidence cards for teams using their own workflow.
 
 **This is a private development alpha, not an accepted competition release.**
 No active profile has completed the required live acceptance. Read
@@ -16,6 +21,8 @@ there is no zero-risk or tamper-proof claim.
 
 Run from the private source worktree or install the private wheel. Python 3.11+
 is the language target; the tested host uses Linux x86_64 and Python 3.14.7.
+See [LOCAL-INSTALL.md](LOCAL-INSTALL.md) for the operator installation and
+standalone human kit.
 The isolation profiles require working unprivileged bubblewrap namespaces.
 Synthetic browser tests also require the pinned Chromium, Playwright and a user
 systemd instance with cgroup resource enforcement. Other operating systems have
@@ -23,6 +30,9 @@ not been admitted.
 
 ```sh
 python3 scripts/bootstrap-harness.py --install-age
+python3 scripts/bootstrap-native-tools.py --install-zap
+sh cptc_harness/native/build-nmap-shim.sh .tools/native/nmap-connect.so
+python3 -m cptc_harness.human preflight
 python3 -m cptc_harness doctor
 python3 scripts/review-release-pins.py
 python3 -m pytest -q tests web
@@ -91,7 +101,9 @@ classification, approval or policy fields.
 | Linux and Windows/AD imports | Typed identity, permissions, service/task, privilege and protocol observations |
 | Human result / finding / coverage / retest imports | Typed, source-hashed, human-reviewed records |
 | `web.headers`, `web.session` | One eligible-target HTTP metadata request; synthetic integration tested; live acceptance pending |
-| Native Nmap, Nuclei and ZAP execution | Unsupported; no contained scanner admitted |
+| `network.nmap_inventory` | Pinned native Nmap, exactly one TCP connect through the parent broker; native synthetic fixtures tested |
+| `web.nuclei_observation`, `web.zap_observation` | Offline native analysis of one human-selected response; networkless workers, reviewed rules and encrypted streams |
+| Active `web.nuclei`, `web.zap` | Unsupported; no active scanner profile admitted |
 | Remote Linux/Windows execution | Unsupported; operator collection scripts supplied separately |
 | Authenticated login and controlled-account active comparisons | Unsupported; no target credential adapter admitted |
 | TLS and protocol inventory beyond current HTTP metadata/import fields | Incomplete; no additional live profile admitted |
@@ -108,6 +120,13 @@ and evidence links. `confirmed_by_human` means a reviewed human claim linked to
 an integrity-checked local artifact; it is not independent exploit validation.
 
 Manual-only cards are included in `cptc_harness/resources/MANUAL-ONLY-CARDS.md`.
+
+## Native observation tools
+
+See [NATIVE-TOOLS.md](NATIVE-TOOLS.md) for exact tool boundaries, capture input,
+reviewed versions, human use and preparation. The tool catalog pins binaries,
+ZAP's files and Java runtime/configuration closure; it never treats an available
+binary as an automatic admission. Source/native changes require review and tests.
 The model can request a human decision and record operator-selected results.
 It cannot launch the test, generate an executable network script, change a
 service/domain, run a custom scanner template or register new runtime tools.

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "profile_id": "nuclei-passive-v1",
+  "tool": "nuclei",
+  "mode": "offline",
+  "admission": "requires web.nuclei_observation and an exact reviewed input envelope",
+  "network": "none",
+  "template_policy": "four pinned release templates, including mandatory processing receipt; no arbitrary templates",
+  "review_status": "native_synthetic_fixture_tested",
+  "execution": "declarative profile; active nuclei remains unsupported",
+  "template_hashes": {
+    "csp.yaml": "9c23f8b350fd5dd87595dbe75c317ee55a97612fa567c2ed1babb340dfe8b439",
+    "frame-options.yaml": "9a46bf79aafa92680d365b9fe7f9af224ade9d06544be79452d0e4fd008abe1f",
+    "nosniff.yaml": "b257923e773eb92db7ca020ca331185bc3cba81c01c61855f590da89324236cd",
+    "processed.yaml": "e3d9c1480a5c10473804f74f8e14e0fbabf2e9fd51e347fb1700fb612a5ef617"
+  }
+}
