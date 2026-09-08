@@ -136,7 +136,7 @@ def test_capture_rate_and_scope_gates_have_no_retry(monkeypatch):
 def test_early_failures_close_acquired_descriptors(monkeypatch, failure):
     import cptc_harness.network as module
     from test_response_capture import POLICY, TARGET
-    real_create = os.memfd_create
+    real_create = module.memfd_create
     descriptors = []
     def allocate(*args, **kwargs):
         if failure == "second_memfd" and descriptors:
@@ -144,7 +144,7 @@ def test_early_failures_close_acquired_descriptors(monkeypatch, failure):
         descriptor = real_create(*args, **kwargs)
         descriptors.append(descriptor)
         return descriptor
-    monkeypatch.setattr(module.os, "memfd_create", allocate)
+    monkeypatch.setattr(module, "memfd_create", allocate)
     network = NetworkBroker(POLICY)
     if failure == "intent":
         monkeypatch.setattr(network, "_event", lambda *_: (_ for _ in ()).throw(OSError("synthetic audit failure")))

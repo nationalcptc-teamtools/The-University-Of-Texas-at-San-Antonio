@@ -1,5 +1,6 @@
 """Bubblewrap runner for fixed, reviewed local workers."""
 from __future__ import annotations
+from .memfd import memfd_create, MFD_CLOEXEC, MFD_ALLOW_SEALING, seal_readonly
 
 import hashlib
 import ctypes
@@ -36,25 +37,30 @@ class IsolatedRunner:
                 return WorkerCapture("blocked", reason="worker hash mismatch")
             launcher = str(verified_executable("/usr/bin/bwrap"))
             socket_fd: int | None = None
-            if grant is not None:
-                if self.grant_validator is None or not grant.grant_id or not grant.expires_at:
-                    return WorkerCapture("blocked", reason="unverified network grant")
-                socket_fd = self.grant_validator(grant)
-                if socket_fd is None: return WorkerCapture("blocked", reason="invalid network grant")
-                # stdin is transport data only in this narrow reviewed mode; arbitrary dual inputs are rejected.
-                if stdin: return WorkerCapture("blocked", reason="network worker cannot receive arbitrary stdin")
-            seccomp_fd = fork_denial_filter()
-            command = [launcher, "--unshare-all", "--cap-drop", "ALL", "--seccomp", str(seccomp_fd), "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib",
-                       "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev",
-                       "--die-with-parent", "--new-session", "--clearenv", "--dir", "/tmp", "--chdir", "/tmp", "--",
-                       spec.executable, *spec.args]
             try:
-                process = subprocess.Popen(command, stdin=socket_fd if socket_fd is not None else subprocess.PIPE,
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True, pass_fds=(seccomp_fd,), env={},
-                    preexec_fn=self._limits(spec), start_new_session=True)
+                if grant is not None:
+                    if self.grant_validator is None or not grant.grant_id or not grant.expires_at:
+                        return WorkerCapture("blocked", reason="unverified network grant")
+                    socket_fd = self.grant_validator(grant)
+                    if socket_fd is None: return WorkerCapture("blocked", reason="invalid network grant")
+                    # stdin is transport data only in this narrow reviewed mode; arbitrary dual inputs are rejected.
+                    if stdin: return WorkerCapture("blocked", reason="network worker cannot receive arbitrary stdin")
+                seccomp_fd = fork_denial_filter()
+                command = [launcher, "--unshare-all", "--cap-drop", "ALL", "--seccomp", str(seccomp_fd), "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib",
+                           "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev",
+                           "--die-with-parent", "--new-session", "--clearenv", "--dir", "/tmp", "--chdir", "/tmp", "--",
+                           spec.executable, *spec.args]
+                try:
+                    process = subprocess.Popen(command, stdin=socket_fd if socket_fd is not None else subprocess.PIPE,
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True, pass_fds=(seccomp_fd,), env={},
+                        preexec_fn=self._limits(spec), start_new_session=True)
+                finally:
+                    os.close(seccomp_fd)
+                return self._collect(process, stdin if socket_fd is None else b"", spec.bounds.output_bytes, spec.bounds.timeout_s, started, stopped)
             finally:
-                os.close(seccomp_fd)
-            return self._collect(process, stdin if socket_fd is None else b"", spec.bounds.output_bytes, spec.bounds.timeout_s, started, stopped)
+                if socket_fd is not None:
+                    try: os.close(socket_fd)
+                    except OSError: pass
         except (OSError, ValueError, PolicyError) as exc:
             return WorkerCapture("failed", reason="isolation setup failed", elapsed_s=time.monotonic()-started)
 
@@ -128,7 +134,7 @@ def fork_denial_filter() -> int:
     context = library.seccomp_init(0x7FFF0000)  # SCMP_ACT_ALLOW
     if not context:
         raise PolicyError("seccomp initialization failed")
-    fd = os.memfd_create("cptc-fork-filter", os.MFD_CLOEXEC)
+    fd = memfd_create("cptc-fork-filter", MFD_CLOEXEC)
     try:
         for call in (b"fork", b"vfork", b"clone", b"clone3", b"unshare", b"setns"):
             number = library.seccomp_syscall_resolve_name(call)

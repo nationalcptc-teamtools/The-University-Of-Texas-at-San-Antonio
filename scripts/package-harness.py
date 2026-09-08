@@ -20,7 +20,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = Path("docs/harness/PACKAGE-CONTENTS.json")
-BUILD_ROOTS = {"cptc_harness", "human", "skills", "docs", "scripts", "tests"}
+BUILD_ROOTS = {"cptc_harness", "human", "skills", "docs", "scripts", "testing", "tests"}
+EXCLUDED_BUILD_PARTS = {"__pycache__", ".pytest_cache", ".mypy_cache"}
 GENERATED_SOURCE = {"PKG-INFO", "setup.cfg", *(
     "cptc_guarded_harness.egg-info/" + name for name in (
         "PKG-INFO", "SOURCES.txt", "dependency_links.txt", "entry_points.txt", "requires.txt", "top_level.txt"))}
@@ -57,6 +58,32 @@ def verify_source_inputs(root, contents, paths):
             raise ValueError("missing or symlinked reviewed distribution input")
         if any(parent.is_symlink() for parent in path.parents if parent != root and root in parent.parents):
             raise ValueError("symlinked distribution parent")
+
+
+def physical_distribution_inputs(root):
+    """List physical recursive-manifest inputs, including Git-ignored files."""
+    names = []
+    for root_name in sorted(BUILD_ROOTS):
+        base = root / root_name
+        if base.is_symlink():
+            names.append(root_name)
+            continue
+        if not base.is_dir():
+            continue
+        for directory, dirnames, filenames in os.walk(base, followlinks=False):
+            directory_path = Path(directory)
+            for child in tuple(dirnames):
+                candidate = directory_path / child
+                if child in EXCLUDED_BUILD_PARTS:
+                    dirnames.remove(child)
+                elif candidate.is_symlink():
+                    names.append(str(candidate.relative_to(root)))
+                    dirnames.remove(child)
+            for filename in filenames:
+                if filename == ".DS_Store" or filename.endswith((".pyc", ".pyo", ".sqlite3", ".sqlite3-wal", ".sqlite3-shm")):
+                    continue
+                names.append(str((directory_path / filename).relative_to(root)))
+    return names
 
 
 def verify_wheel(wheel, contents, version):
@@ -123,8 +150,7 @@ def main():
     if args.epoch < 315532800: parser.error("epoch must be representable by wheel ZIP timestamps")
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
     contents = reviewed_contents(ROOT)
-    paths = [os.fsdecode(name) for name in subprocess.check_output(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=ROOT).split(b"\0") if name]
+    paths = physical_distribution_inputs(ROOT)
     verify_source_inputs(ROOT, contents, paths)
     args.output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="cptc-private-build-") as temporary:

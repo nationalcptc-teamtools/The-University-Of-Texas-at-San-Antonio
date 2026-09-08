@@ -1,5 +1,6 @@
 """Single networkless audit process; callers have no raw-evidence read RPC."""
 from __future__ import annotations
+from .memfd import memfd_create, MFD_CLOEXEC, MFD_ALLOW_SEALING, seal_readonly, write_all
 import base64
 from dataclasses import asdict
 import json
@@ -33,30 +34,61 @@ class AuditService:
         self.clock = ClockService()
         self._lock = threading.Lock()
         self._closed = False
-        self.channel, child = socket.socketpair()
-        self.channel.settimeout(30)
-        config = os.memfd_create("cptc-audit-config", os.MFD_CLOEXEC)
-        os.write(config, canonical_json({"policy": asdict(policy), "age_recipient": age_recipient}))
-        os.lseek(config, 0, 0)
-        worker = verified_worker("audit_worker.py")
-        command = [str(verified_executable("/usr/bin/bwrap")), "--unshare-all", "--die-with-parent", "--cap-drop", "ALL", "--clearenv",
-                   "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin",
-                   "--proc", "/proc", "--dev", "/dev", "--ro-bind", str(Path(__file__).parent), "/pkg/cptc_harness",
-                   "--bind", str(self.root), "/audit", "--ro-bind", str(Path(age_binary).resolve()), "/age",
-                   "--ro-bind-data", str(config), "/config.json", "--ro-bind", str(worker), "/worker.py",
-                   str(verified_executable("/usr/bin/python3")), "-I", "/worker.py"]
+        self.channel = None
+        self.process = None
+        parent = child = None
+        config = None
+        process = None
         try:
-            self.process = subprocess.Popen(command, stdin=child, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                            pass_fds=(config,), close_fds=True, env={}, start_new_session=True)
-        finally:
-            child.close()
-            os.close(config)
-        try:
+            parent, child = socket.socketpair()
+            parent.settimeout(30)
+            config = memfd_create("cptc-audit-config", MFD_CLOEXEC | MFD_ALLOW_SEALING)
+            write_all(config, canonical_json({"policy": asdict(policy), "age_recipient": age_recipient}))
+            os.lseek(config, 0, os.SEEK_SET)
+            seal_readonly(config)
+            worker = verified_worker("audit_worker.py")
+            command = [str(verified_executable("/usr/bin/bwrap")), "--unshare-all", "--die-with-parent", "--cap-drop", "ALL", "--clearenv",
+                       "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin",
+                       "--proc", "/proc", "--dev", "/dev", "--ro-bind", str(Path(__file__).parent), "/pkg/cptc_harness",
+                       "--bind", str(self.root), "/audit", "--ro-bind", str(Path(age_binary).resolve()), "/age",
+                       "--ro-bind-data", str(config), "/config.json", "--ro-bind", str(worker), "/worker.py",
+                       str(verified_executable("/usr/bin/python3")), "-I", "/worker.py"]
+            process = subprocess.Popen(command, stdin=child, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       pass_fds=(config,), close_fds=True, env={}, start_new_session=True)
+            child.close(); child = None
+            os.close(config); config = None
+            self.channel, parent = parent, None
+            self.process, process = process, None
             info = self._request("info")
             self.origin_id, self.evidence_cap = info["origin_id"], info["evidence_cap"]
         except Exception:
-            self.close()
+            self._closed = True
+            if process is not None:
+                self._terminate_reap(process)
+            if self.process is not None:
+                self._terminate_reap(self.process)
+                self.process = None
+            for resource in (child, parent, self.channel):
+                if resource is not None:
+                    try: resource.close()
+                    except OSError: pass
+            self.channel = None
+            if config is not None:
+                try: os.close(config)
+                except OSError: pass
             raise
+
+    @staticmethod
+    def _terminate_reap(process) -> None:
+        try:
+            if process.poll() is None:
+                try: os.killpg(process.pid, signal.SIGKILL)
+                except (ProcessLookupError, OSError):
+                    try: process.kill()
+                    except (ProcessLookupError, OSError): pass
+            process.wait(timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
 
     def _request(self, method, **arguments):
         with self._lock:
@@ -123,10 +155,7 @@ class AuditService:
         except Exception:
             pass
         self._closed = True
-        self.channel.close()
-        if getattr(self, "process", None) and self.process.poll() is None:
-            try:
-                self.process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                os.killpg(self.process.pid, signal.SIGKILL)
-                self.process.wait(timeout=3)
+        if self.channel is not None:
+            self.channel.close()
+        if self.process is not None:
+            self._terminate_reap(self.process)

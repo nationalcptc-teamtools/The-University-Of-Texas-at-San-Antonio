@@ -1,5 +1,6 @@
 """Bounded provider sessions. All outbound bytes pass a classification gate first."""
 from __future__ import annotations
+from .memfd import memfd_create, MFD_CLOEXEC, MFD_ALLOW_SEALING, seal_readonly, write_all
 from dataclasses import asdict, dataclass, field
 import copy
 import base64
@@ -292,11 +293,80 @@ class IsolatedHTTP:
     def cancel(self):
         self.cancelled.set()
         process = self.process
-        if process and process.poll() is None:
+        try:
+            alive = process is not None and process.poll() is None
+        except (OSError, ValueError):
+            alive = process is not None
+        if alive:
             try:
                 os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
+            except OSError:
+                try: process.kill()
+                except (OSError, ProcessLookupError): pass
+
+    @staticmethod
+    def _close_resource(resource):
+        if resource is None:
+            return True
+        for _ in range(2):
+            try:
+                resource.close()
+                return True
+            except (OSError, ValueError):
                 pass
+        return False
+
+    @staticmethod
+    def _close_descriptor(descriptor):
+        if descriptor is None:
+            return True
+        try:
+            os.close(descriptor)
+            return True
+        except OSError:
+            return False
+
+    def _finalize_process(self, process):
+        """Bounded, non-raising worker teardown used from exception finalizers."""
+        if process is None:
+            return True
+        try:
+            alive = process.poll() is None
+        except (OSError, ValueError):
+            alive = True
+        reaped = not alive
+        if alive:
+            self.cancelled.set()
+            try: self.cancel()
+            except Exception: pass
+            for timeout in (1.0, 0.5):
+                try:
+                    process.communicate(timeout=timeout)
+                    reaped = True
+                    break
+                except subprocess.TimeoutExpired:
+                    try: os.killpg(process.pid, signal.SIGKILL)
+                    except OSError:
+                        try: process.kill()
+                        except (OSError, ProcessLookupError): pass
+                except (OSError, ValueError):
+                    try:
+                        process.wait(timeout=timeout)
+                        reaped = True
+                    except (OSError, ValueError, subprocess.TimeoutExpired):
+                        pass
+                    break
+            if not reaped:
+                try:
+                    process.wait(timeout=0.25)
+                    reaped = True
+                except (OSError, ValueError, subprocess.TimeoutExpired):
+                    try: reaped = process.poll() is not None
+                    except (OSError, ValueError): reaped = False
+        close_results = [self._close_resource(getattr(process, name, None))
+                         for name in ("stdin", "stdout", "stderr")]
+        streams_closed = all(close_results)
+        return reaped and streams_closed
 
     def exchange(self, body: dict, credential=None) -> dict:
         profile = self.profile
@@ -320,12 +390,16 @@ class IsolatedHTTP:
         request = canonical_json(config)
         if len(canonical_json(body)) > profile.max_request_bytes:
             raise PolicyError("provider request exceeds fixed allowance")
-        memfd = os.memfd_create("cptc-provider-request", os.MFD_CLOEXEC)
+        memfd = memfd_create("cptc-provider-request", MFD_CLOEXEC | MFD_ALLOW_SEALING)
         connection = None
         secret_fd = None
+        cleanup_complete = True
+        result = None
+        primary_error = None
         try:
-            os.write(memfd, request)
+            write_all(memfd, request)
             os.lseek(memfd, 0, os.SEEK_SET)
+            seal_readonly(memfd)
             answer = answers[0]
             connection = socket.socket(answer[0], answer[1], answer[2])
             connection.settimeout(min(profile.timeout_s, 10))
@@ -358,22 +432,28 @@ class IsolatedHTTP:
             result = json.loads(output)
             if not result.get("ok"):
                 raise PolicyError("provider transport failed; no automatic retry")
-            return result
         except subprocess.TimeoutExpired:
-            self.cancel()
-            self.process.communicate()
-            raise PolicyError("provider deadline exceeded; no automatic retry") from None
+            self.cancelled.set()
+            primary_error = PolicyError("provider deadline exceeded; no automatic retry")
+        except PolicyError as failure:
+            primary_error = failure
         except (OSError, ValueError):
-            raise PolicyError("isolated provider transport unavailable") from None
+            if self.process is not None:
+                self.cancelled.set()
+            primary_error = PolicyError("isolated provider transport unavailable")
         finally:
-            if self.process and self.process.poll() is None:
-                self.cancel()
-                self.process.communicate(timeout=2)
-            os.close(memfd)
-            if secret_fd is not None:
-                os.close(secret_fd)
-            if connection:
-                connection.close()
+            cleanup_complete = self._finalize_process(self.process)
+            cleanup_complete = self._close_descriptor(memfd) and cleanup_complete
+            cleanup_complete = self._close_descriptor(secret_fd) and cleanup_complete
+            cleanup_complete = self._close_resource(connection) and cleanup_complete
+        if primary_error is not None:
+            if not cleanup_complete:
+                self.cancelled.set()
+            raise primary_error from None
+        if not cleanup_complete:
+            self.cancelled.set()
+            raise PolicyError("provider cleanup incomplete; outcome uncertain")
+        return result
 
 
 def ssl_ca():

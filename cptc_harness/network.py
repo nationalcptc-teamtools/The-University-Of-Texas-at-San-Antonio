@@ -1,8 +1,8 @@
 """Pinned, direct HTTP transport. It deliberately has no general socket API."""
 from __future__ import annotations
+from .memfd import memfd_create, MFD_CLOEXEC, MFD_ALLOW_SEALING, seal_readonly, write_all
 
 from dataclasses import asdict
-from contextlib import ExitStack
 import base64
 from contextlib import ExitStack
 import http.client
@@ -128,8 +128,8 @@ class NetworkBroker:
             remaining = deadline - time.monotonic()
             if remaining <= 0: raise OSError("network deadline exceeded")
             sock = socket.create_connection((address, target.port), timeout=min(remaining, 5)); cleanup.callback(sock.close); sock.setblocking(True)
-            reqfd = os.memfd_create("cptc-http-request", flags=os.MFD_CLOEXEC); cleanup.callback(os.close, reqfd); os.write(reqfd, request); os.lseek(reqfd, 0, 0)
-            codefd = os.memfd_create("cptc-http-worker", flags=os.MFD_CLOEXEC); cleanup.callback(os.close, codefd); os.write(codefd, script); os.lseek(codefd, 0, 0)
+            reqfd = memfd_create("cptc-http-request", flags=MFD_CLOEXEC | MFD_ALLOW_SEALING); cleanup.callback(os.close, reqfd); write_all(reqfd, request); os.lseek(reqfd, 0, os.SEEK_SET); seal_readonly(reqfd)
+            codefd = memfd_create("cptc-http-worker", flags=MFD_CLOEXEC | MFD_ALLOW_SEALING); cleanup.callback(os.close, codefd); write_all(codefd, script); os.lseek(codefd, 0, os.SEEK_SET); seal_readonly(codefd)
             command = [launcher, "--unshare-all", "--cap-drop", "ALL", "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev", "--die-with-parent", "--new-session", "--clearenv", "--dir", "/tmp", "--dir", "/etc", "--dir", "/etc/ca-certificates", "--dir", "/etc/ca-certificates/extracted", "--ro-bind", "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "--ro-bind-data", str(reqfd), "/request.json", "--ro-bind-data", str(codefd), "/worker.py", "--", interpreter, "-I", "/worker.py"]
             self._event("process_intent", {"worker": "bounded-http-v1", "source_sha256": hashlib.sha256(script).hexdigest(), "command": command, "cwd": "/", "environment": {}, "address": address, "port": target.port, "method": method, "path": path, "timeout_s": timeout, "output_bytes": maximum})
             try:
@@ -201,12 +201,11 @@ class NetworkBroker:
         # in allocation, intent logging, connect, launch, capture and reaping.
         with ExitStack() as resources:
             def memfd(name, payload):
-                descriptor = os.memfd_create(name, flags=os.MFD_CLOEXEC)
+                descriptor = memfd_create(name, flags=MFD_CLOEXEC | MFD_ALLOW_SEALING)
                 resources.callback(os.close, descriptor)
-                with os.fdopen(os.dup(descriptor), "wb") as writer:
-                    writer.write(payload)
-                    writer.flush()
-                os.lseek(descriptor, 0, 0)
+                write_all(descriptor, payload)
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                seal_readonly(descriptor)
                 return descriptor
             reqfd = memfd("cptc-response-request", request)
             codefd = memfd("cptc-response-worker", script)

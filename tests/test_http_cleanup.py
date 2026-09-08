@@ -26,12 +26,13 @@ def test_second_memfd_failure_closes_connected_socket_and_first_fd(monkeypatch):
     real_open, real_close = os.open, os.close
     monkeypatch.setattr("cptc_harness.network.verified_executable", lambda path: path)
     monkeypatch.setattr("cptc_harness.network.socket.create_connection", lambda *_args, **_kw: sock)
+    monkeypatch.setattr("cptc_harness.network.seal_readonly", lambda _fd: None)
     calls = []
     def memfd(_name, **_kw):
         calls.append(1)
         if len(calls) == 2: raise OSError("second allocation failed")
         return real_open("/dev/null", os.O_RDWR)
-    monkeypatch.setattr("cptc_harness.network.os.memfd_create", memfd)
+    monkeypatch.setattr("cptc_harness.network.memfd_create", memfd)
     def close(fd):
         closed.append(fd); real_close(fd)
     monkeypatch.setattr("cptc_harness.network.os.close", close)
@@ -47,7 +48,8 @@ def test_launch_failure_closes_all_setup_resources(monkeypatch):
     real_open, real_close = os.open, os.close
     monkeypatch.setattr("cptc_harness.network.verified_executable", lambda path: path)
     monkeypatch.setattr("cptc_harness.network.socket.create_connection", lambda *_args, **_kw: sock)
-    monkeypatch.setattr("cptc_harness.network.os.memfd_create", lambda _name, **_kw: real_open("/dev/null", os.O_RDWR))
+    monkeypatch.setattr("cptc_harness.network.seal_readonly", lambda _fd: None)
+    monkeypatch.setattr("cptc_harness.network.memfd_create", lambda _name, **_kw: real_open("/dev/null", os.O_RDWR))
     monkeypatch.setattr("cptc_harness.network.subprocess.Popen", lambda *_args, **_kw: (_ for _ in ()).throw(OSError("launch failed")))
     def close(fd):
         closed.append(fd); real_close(fd)

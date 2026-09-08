@@ -54,6 +54,7 @@ def test_reviewed_file_symlink_cannot_read_other_data(tmp_path):
 def test_reviewed_checkout_inputs_and_human_dependencies_are_complete():
     contents = package.reviewed_contents(ROOT)
     package.verify_source_inputs(ROOT, contents, contents["source"])
+    package.verify_source_inputs(ROOT, contents, package.physical_distribution_inputs(ROOT))
     assert "human/runbooks/without-harness.md" in contents["human"]
     assert "docs/harness/LIVE-TOOLING-CONTINUATION.md" in contents["human"]
     assert "cptc_harness/resources/zap-passive.yaml" in contents["human"]
@@ -63,3 +64,13 @@ def test_reviewed_checkout_inputs_and_human_dependencies_are_complete():
 def test_tar_normalization_is_independent_of_input_order():
     a = [("b.txt", b"two", False), ("a.txt", b"one", True)]
     assert package.tar_bytes(a, 1788839662) == package.tar_bytes(list(reversed(a)), 1788839662)
+
+
+def test_physical_input_listing_rejects_ignored_unreviewed_recursive_member(tmp_path):
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / ".gitignore").write_text("ignored.json\n")
+    (tmp_path / "tests" / "ignored.json").write_text("synthetic")
+    paths = package.physical_distribution_inputs(tmp_path)
+    assert "tests/ignored.json" in paths
+    with pytest.raises(ValueError, match="unreviewed distribution input"):
+        package.verify_source_inputs(tmp_path, {"source": set()}, paths)

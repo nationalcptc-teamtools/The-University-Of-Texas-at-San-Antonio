@@ -1,5 +1,6 @@
 """Offline Nuclei/ZAP analysis of one human-selected response. No target sockets."""
 from __future__ import annotations
+from .memfd import memfd_create, MFD_CLOEXEC, MFD_ALLOW_SEALING, seal_readonly, write_all
 import base64
 import hashlib
 import json
@@ -127,12 +128,15 @@ def parse_output(engine, raw, scheme="http"):
 
 
 def _memfd(name, data):
-    import fcntl
-    fd = os.memfd_create(name, flags=os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
-    os.write(fd, data)
-    os.lseek(fd, 0, 0)
-    fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)
-    return fd
+    fd = memfd_create(name, flags=MFD_CLOEXEC | MFD_ALLOW_SEALING)
+    try:
+        write_all(fd, data)
+        os.lseek(fd, 0, os.SEEK_SET)
+        seal_readonly(fd)
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
 
 
 def zap_report(stdout):
@@ -165,13 +169,37 @@ def run_native(engine, payload, context, evidence, output_limit):
     def event(kind, data):
         if context.network:
             context.network._event(kind, data)
+    def cleanup_event(kind, data):
+        # Cleanup telemetry must never replace the scan error being unwound.
+        try: event(kind, data)
+        except Exception: pass
+    def cleanup_capture(name, raw):
+        # Evidence storage is an external cleanup dependency.  A storage or
+        # policy failure here must be recorded without replacing the scanner
+        # outcome that caused finalization.
+        try:
+            reference = context.capture(name, raw, "restricted_raw")
+            if reference is not None:
+                evidence.append(reference)
+            return True
+        except Exception:
+            cleanup_event("capture_incomplete", {"scanner": engine, "reason": "failure output capture unavailable"})
+            return False
     def kill():
         if process is not None:
-            subprocess.run(["/usr/bin/systemctl", "--user", "kill", "--signal=KILL", unit], env=host_env,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+            try:
+                subprocess.run(["/usr/bin/systemctl", "--user", "kill", "--signal=KILL", unit], env=host_env,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3, check=True)
+            except (OSError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+                cleanup_event("passive_process_cleanup", {"scanner": engine, "systemd_kill": "unavailable"})
             if process.poll() is None:
-                try: os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError: pass
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except OSError:
+                    try: process.kill()
+                    except (OSError, ProcessLookupError): pass
     try:
         inner = [str(bwrap), "--unshare-all", "--hostname", "cptc-passive", "--die-with-parent", "--new-session",
                  "--clearenv", "--cap-drop", "ALL", "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib",
@@ -247,24 +275,43 @@ def run_native(engine, payload, context, evidence, output_limit):
         try:
             kill()
             if process is not None:
-                process.wait(timeout=3)
+                stdin = process.stdin
+                if stdin is not None:
+                    try: stdin.close()
+                    except (OSError, ValueError): pass
+                try:
+                    process.wait(timeout=3)
+                except (OSError, subprocess.TimeoutExpired):
+                    kill()
+                    try: process.wait(timeout=1)
+                    except (OSError, subprocess.TimeoutExpired):
+                        cleanup_event("capture_incomplete", {"scanner": engine, "reason": "native process could not be reaped"})
                 # Failure output is still captured up to the reserved allowance.
                 for name in streams:
                     stream = getattr(process, name)
                     if stream:
-                        os.set_blocking(stream.fileno(), True)
-                        chunk = stream.read(output_limit + 1)
-                        remaining = output_limit - sum(map(len, streams.values()))
-                        if chunk[:remaining]:
-                            evidence.append(context.capture(name, chunk[:remaining], "restricted_raw"))
+                        try:
+                            os.set_blocking(stream.fileno(), True)
+                            chunk = stream.read(output_limit + 1)
+                            remaining = output_limit - sum(map(len, streams.values()))
+                            if chunk[:remaining]:
+                                cleanup_capture(name, chunk[:remaining])
                             streams[name].extend(chunk[:remaining])
-                        if len(chunk) > remaining:
-                            event("capture_incomplete", {"scanner": engine, "reason": "failure output exceeded capture cap"})
-                        stream.close()
-                event("passive_process_closed", {"scanner": engine, "exit_code": process.returncode})
+                            if len(chunk) > remaining:
+                                cleanup_event("capture_incomplete", {"scanner": engine, "reason": "failure output exceeded capture cap"})
+                        except (OSError, ValueError):
+                            cleanup_event("capture_incomplete", {"scanner": engine, "reason": "failure output could not be drained"})
+                        finally:
+                            try: stream.close()
+                            except OSError: pass
+                cleanup_event("passive_process_closed", {"scanner": engine, "exit_code": process.returncode})
         finally:
-            selector.close()
-            for fd in fds: os.close(fd)
+            try: selector.close()
+            except (OSError, ValueError):
+                cleanup_event("passive_process_cleanup", {"scanner": engine, "selector_close": "failed"})
+            for fd in fds:
+                try: os.close(fd)
+                except OSError: pass
 
 
 class PassiveCollector:
