@@ -1,0 +1,29 @@
+{
+  "schema": "cptc.team-env.manifest.v2",
+  "expected_architecture": "amd64",
+  "bundles": {
+    "evidence": ["jq", "unzip", "age", "python3", "python3-venv", "git"],
+    "network": ["nmap", "nbtscan", "onesixtyone", "whois", "sslscan"],
+    "web": ["gobuster", "nikto", "sqlmap", "wpscan", "whatweb", "wafw00f", "ffuf", "zaproxy"],
+    "linux": ["peass", "john", "hashcat"],
+    "windows_ad": ["smbclient", "python3-impacket", "netexec", "certipy-ad", "enum4linux", "smbmap"],
+    "compose_host": ["docker.io", "docker-cli", "docker-compose"]
+  },
+  "packages": {
+    "jq": {"required": true, "reason": "Read structured local evidence."}, "unzip": {"required": true, "reason": "Read approved local archives."}, "age": {"required": true, "reason": "Encrypt local evidence."}, "python3": {"required": true, "reason": "Run reviewed local Python tools."}, "python3-venv": {"required": true, "reason": "Create isolated local Python environments."}, "git": {"required": true, "reason": "Inspect approved local source checkouts."},
+    "nmap": {"required": true, "reason": "Run approved network inventory work."}, "nbtscan": {"required": true, "reason": "Run approved NetBIOS inventory work."}, "onesixtyone": {"required": true, "reason": "Run approved SNMP inventory work."}, "whois": {"required": true, "reason": "Read approved registration facts."}, "sslscan": {"required": true, "reason": "Inspect approved TLS services."},
+    "gobuster": {"required": true, "reason": "Run approved web content checks."}, "nikto": {"required": true, "reason": "Run approved web checks."}, "sqlmap": {"required": true, "reason": "Support reviewed SQL assessment work."}, "wpscan": {"required": true, "reason": "Run approved WordPress checks."}, "whatweb": {"required": true, "reason": "Identify approved web technology facts."}, "wafw00f": {"required": true, "reason": "Identify approved web filtering facts."}, "ffuf": {"required": true, "reason": "Run approved web content checks."}, "zaproxy": {"required": false, "reason": "Use only when this native Kali package is available."},
+    "peass": {"required": true, "reason": "Support reviewed Linux privilege assessment work."}, "john": {"required": true, "reason": "Support approved password-audit work."}, "hashcat": {"required": true, "reason": "Support approved password-audit work."},
+    "smbclient": {"required": true, "reason": "Inspect approved SMB services."}, "python3-impacket": {"required": true, "reason": "Support reviewed Windows and AD work."}, "netexec": {"required": true, "reason": "Support reviewed Windows and AD work."}, "certipy-ad": {"required": true, "reason": "Support reviewed AD certificate work."}, "enum4linux": {"required": true, "reason": "Support approved SMB enumeration work."}, "smbmap": {"required": true, "reason": "Support approved SMB share work."},
+    "docker.io": {"required": true, "reason": "Container runtime for private Compose applications."}, "docker-cli": {"required": true, "reason": "Docker client for private Compose applications."}, "docker-compose": {"required": true, "reason": "Compose client for Harbinger and Merlin."}
+  },
+  "profiles": {
+    "tester": {"bundles": ["evidence", "network", "web", "linux", "windows_ad"]}, "scribe": {"bundles": ["evidence"]},
+    "harbinger_host": {"bundles": ["evidence", "compose_host"]}, "merlin_host": {"bundles": ["evidence", "compose_host"]},
+    "both": {"includes": ["harbinger_host", "merlin_host"]}
+  },
+  "applications": {
+    "harbinger": {"type": "compose", "profile": "harbinger_host", "release_input": "local_private_source_or_operator_archive"},
+    "merlin": {"type": "compose", "profile": "merlin_host", "release_input": "local_private_source_or_operator_archive"}
+  }
+}

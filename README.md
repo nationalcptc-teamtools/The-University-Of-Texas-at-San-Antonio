@@ -19,6 +19,8 @@ python3 -m cptc_harness modules
 python3 scripts/test-harness.py
 ```
 
+The separate private team applications are [Harbinger](https://github.com/Moriz82/Harbinger) for technical evidence and [Merlin](https://github.com/Moriz82/Merlin) for scribe drafting and reviewed Ghostwriter delivery. They do not execute assessment tools or connect to this AI harness. Use [team-env-setup](tools/team-env-setup/README.md) to prepare their reviewed Kali host packages.
+
 All client-derived data remains confidential. Raw evidence is encrypted before
 persistence and is unavailable to the AI transport. Unknown-impact and
 manual-only procedures have no execution path through the broker. This is a
