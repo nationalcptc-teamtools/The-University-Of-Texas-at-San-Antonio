@@ -4,7 +4,7 @@ recursive-include scripts *.py
 recursive-include testing *.py
 recursive-include cptc_harness/native *.c *.sh
 recursive-include skills/cptc-harness *.md
-recursive-include tests *.py *.json *.xml
+recursive-include tests *.py *.json *.xml *.md *.bin
 global-exclude __pycache__ *.py[cod] *.sqlite3 *.sqlite3-* .DS_Store
 prune .tools
 prune .superpowers

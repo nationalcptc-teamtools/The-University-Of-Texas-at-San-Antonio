@@ -26,6 +26,7 @@ include = ["cptc_harness*"]
 cptc_harness = [
   "resources/CPTC-RULES-2025-10.txt", "resources/MANUAL-ONLY-CARDS.md",
   "resources/release-integrity.json", "resources/tool-catalog.json",
+  "resources/scanner-profiles-v1.json",
   "resources/zap-passive.yaml", "resources/nuclei/csp.yaml",
   "resources/nuclei/frame-options.yaml", "resources/nuclei/nosniff.yaml",
   "resources/nuclei/processed.yaml", "native/build-nmap-shim.sh",

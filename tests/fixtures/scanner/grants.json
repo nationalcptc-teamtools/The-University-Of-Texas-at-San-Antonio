@@ -1,0 +1,25 @@
+[
+  {
+    "profile_id": "network.nse_smb2_security_mode",
+    "target_id": "dell-synth-smb",
+    "endpoints": [
+      {"protocol": "tcp", "address": "192.0.2.20", "port": 445},
+      {"protocol": "udp", "address": "192.0.2.20", "port": 137}
+    ]
+  },
+  {
+    "profile_id": "network.nse_smb2_time",
+    "target_id": "dell-synth-smb",
+    "endpoints": [
+      {"protocol": "tcp", "address": "192.0.2.20", "port": 445},
+      {"protocol": "udp", "address": "192.0.2.20", "port": 137}
+    ]
+  },
+  {
+    "profile_id": "network.msf_http_version",
+    "target_id": "web-synth",
+    "endpoints": [
+      {"protocol": "tcp", "address": "192.0.2.15", "port": 80}
+    ]
+  }
+]

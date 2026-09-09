@@ -1,7 +1,7 @@
 {
   "version": 1,
   "classification": "public-development-metadata",
-  "reviewed_at": "2026-09-08",
+  "reviewed_at": "2026-09-09",
   "reviewed_by": "Codex primary-source review; human release-owner review required before redistribution",
   "copied_external_source_files": [],
   "components": [
@@ -19,16 +19,60 @@
       ]
     },
     {
+      "name": "cryptography",
+      "version": "50.0.1",
+      "use": "declared Python runtime dependency",
+      "source": "https://github.com/pyca/cryptography/tree/50.0.1",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "license_source": "https://github.com/pyca/cryptography/blob/50.0.1/LICENSE",
+      "copied_files": [],
+      "distributed": false,
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
+      ]
+    },
+    {
+      "name": "Metasploit Framework",
+      "version": "6.5.0-1.1 signed system package",
+      "use": "design-only exact auxiliary/scanner/http/http_version profile; no runtime admission",
+      "source": "https://github.com/rapid7/metasploit-framework/tree/6.5.0",
+      "license": "BSD-3-Clause top-level framework; bundled components have separate licenses",
+      "license_source": "https://github.com/rapid7/metasploit-framework/blob/6.5.0/LICENSE",
+      "copied_files": [],
+      "distributed": false,
+      "obligations": [
+        "Do not copy or redistribute the framework tree from this project",
+        "Pin and review the selected module, Ruby runtime closure, bundled component licenses and notices before execution admission",
+        "Reviewed local module SHA-256: 6e926772126818f13ff6dd1e687097d01200192731126aa267ec0d9d20da1e4f",
+        "Reviewed local top-level license SHA-256: b0567d8639fa81ff23400edbc4667905d5f7145b519e38317746e227eee847b4"
+      ]
+    },
+    {
+      "name": "Model Context Protocol Python SDK",
+      "version": "1.29.0",
+      "use": "optional Python MCP dependency",
+      "source": "https://github.com/modelcontextprotocol/python-sdk/tree/v1.29.0",
+      "license": "MIT",
+      "license_source": "https://github.com/modelcontextprotocol/python-sdk/blob/v1.29.0/LICENSE",
+      "copied_files": [],
+      "distributed": false,
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
+      ]
+    },
+    {
       "name": "Nmap",
-      "version": "7.991 system package",
-      "use": "operator-installed executable invoked through the bounded broker",
+      "version": "7.991-1.1 signed system package",
+      "use": "operator-installed one-port broker plus synthetic-only exact NSE profile design",
       "source": "https://nmap.org/",
       "license": "LicenseRef-Nmap-Public-Source-License-Version-0.95",
       "license_source": "https://nmap.org/npsl/",
       "copied_files": [],
       "distributed": false,
       "obligations": [
-        "Do not embed or redistribute Nmap without a release-specific NPSL or OEM review"
+        "Do not embed or redistribute Nmap without a release-specific NPSL or OEM review",
+        "Live NSE admission requires the executable, selected scripts, NSE libraries, dependency tree and license closure to be pinned",
+        "Reviewed local executable SHA-256: ee8f517262c083b934de98844064c01d5b0cf6bdf9ffac39032187bf303303cc"
       ]
     },
     {
@@ -58,38 +102,12 @@
       ]
     },
     {
-      "name": "cryptography",
-      "version": "50.0.1",
-      "use": "declared Python runtime dependency",
-      "source": "https://github.com/pyca/cryptography/tree/50.0.1",
-      "license": "Apache-2.0 OR BSD-3-Clause",
-      "license_source": "https://github.com/pyca/cryptography/blob/50.0.1/LICENSE",
-      "copied_files": [],
-      "distributed": false,
-      "obligations": [
-        "Dependency is resolved separately and is not embedded in project archives"
-      ]
-    },
-    {
       "name": "Playwright Python",
       "version": "1.62.0",
       "use": "optional Python browser dependency",
       "source": "https://github.com/microsoft/playwright-python/tree/v1.62.0",
       "license": "Apache-2.0",
       "license_source": "https://github.com/microsoft/playwright-python/blob/v1.62.0/LICENSE",
-      "copied_files": [],
-      "distributed": false,
-      "obligations": [
-        "Dependency is resolved separately and is not embedded in project archives"
-      ]
-    },
-    {
-      "name": "Model Context Protocol Python SDK",
-      "version": "1.29.0",
-      "use": "optional Python MCP dependency",
-      "source": "https://github.com/modelcontextprotocol/python-sdk/tree/v1.29.0",
-      "license": "MIT",
-      "license_source": "https://github.com/modelcontextprotocol/python-sdk/blob/v1.29.0/LICENSE",
       "copied_files": [],
       "distributed": false,
       "obligations": [
@@ -110,19 +128,6 @@
       ]
     },
     {
-      "name": "tiktoken",
-      "version": "0.12.0",
-      "use": "optional Python token-benchmark dependency",
-      "source": "https://github.com/openai/tiktoken/tree/0.12.0",
-      "license": "MIT",
-      "license_source": "https://github.com/openai/tiktoken/blob/0.12.0/LICENSE",
-      "copied_files": [],
-      "distributed": false,
-      "obligations": [
-        "Dependency is resolved separately and is not embedded in project archives"
-      ]
-    },
-    {
       "name": "setuptools",
       "version": "81.0.0",
       "use": "pinned build dependency",
@@ -133,6 +138,19 @@
       "distributed": false,
       "obligations": [
         "Build dependency is not embedded in project archives"
+      ]
+    },
+    {
+      "name": "tiktoken",
+      "version": "0.12.0",
+      "use": "optional Python token-benchmark dependency",
+      "source": "https://github.com/openai/tiktoken/tree/0.12.0",
+      "license": "MIT",
+      "license_source": "https://github.com/openai/tiktoken/blob/0.12.0/LICENSE",
+      "copied_files": [],
+      "distributed": false,
+      "obligations": [
+        "Dependency is resolved separately and is not embedded in project archives"
       ]
     },
     {

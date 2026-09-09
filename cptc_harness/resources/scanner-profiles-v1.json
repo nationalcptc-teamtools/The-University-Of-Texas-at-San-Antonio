@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "catalog_sha256": "fba8ffdf4b7c480ca5421fca55327a9843bba8761bdb269c797a471ec7c2f8d6",
+  "profiles": [
+    {
+      "profile_id": "network.nse_smb2_security_mode",
+      "family": "nse",
+      "upstream_id": "smb2-security-mode.nse",
+      "runner_id": "design.nmap.nse-smb2-security-mode-v1",
+      "tier": "observation",
+      "mode": "synthetic_only",
+      "protocol": "smb",
+      "port": 445,
+      "budget": {
+        "tcp_connects": 2,
+        "udp_datagrams": 1,
+        "protocol_requests": 2,
+        "tx_bytes": 4096,
+        "rx_bytes": 16384,
+        "timeout_s": 15.0,
+        "cpu_s": 10.0,
+        "output_bytes": 16384,
+        "process_limit": 1,
+        "auth_attempts": 0
+      },
+      "source": {
+        "repository": "https://github.com/nmap/nmap",
+        "path": "scripts/smb2-security-mode.nse",
+        "revision": "package:nmap-7.991-1.1",
+        "sha256": "184a49f77869088d10309ae5b4c37ffa7065b984436aae2aba77ba86d4d801ae",
+        "license": "LicenseRef-Nmap-Public-Source-License-Version-0.95",
+        "redistributable": false
+      },
+      "allowed_options": [],
+      "effects": [
+        "network_observation",
+        "no_authentication",
+        "no_retry",
+        "no_fallback"
+      ]
+    },
+    {
+      "profile_id": "network.nse_smb2_time",
+      "family": "nse",
+      "upstream_id": "smb2-time.nse",
+      "runner_id": "design.nmap.nse-smb2-time-v1",
+      "tier": "observation",
+      "mode": "synthetic_only",
+      "protocol": "smb",
+      "port": 445,
+      "budget": {
+        "tcp_connects": 2,
+        "udp_datagrams": 1,
+        "protocol_requests": 2,
+        "tx_bytes": 4096,
+        "rx_bytes": 16384,
+        "timeout_s": 15.0,
+        "cpu_s": 10.0,
+        "output_bytes": 16384,
+        "process_limit": 1,
+        "auth_attempts": 0
+      },
+      "source": {
+        "repository": "https://github.com/nmap/nmap",
+        "path": "scripts/smb2-time.nse",
+        "revision": "package:nmap-7.991-1.1",
+        "sha256": "10811428d078bb00427171bc7da327ff5b17a3f02db3517715cea8c853f026c4",
+        "license": "LicenseRef-Nmap-Public-Source-License-Version-0.95",
+        "redistributable": false
+      },
+      "allowed_options": [],
+      "effects": [
+        "network_observation",
+        "no_authentication",
+        "no_retry",
+        "no_fallback"
+      ]
+    },
+    {
+      "profile_id": "network.msf_http_version",
+      "family": "msf",
+      "upstream_id": "auxiliary/scanner/http/http_version",
+      "runner_id": "design.msf.http-version-v1",
+      "tier": "observation",
+      "mode": "design_only",
+      "protocol": "http",
+      "port": 80,
+      "budget": {
+        "tcp_connects": 1,
+        "udp_datagrams": 0,
+        "protocol_requests": 1,
+        "tx_bytes": 4096,
+        "rx_bytes": 16384,
+        "timeout_s": 10.0,
+        "cpu_s": 10.0,
+        "output_bytes": 16384,
+        "process_limit": 1,
+        "auth_attempts": 0
+      },
+      "source": {
+        "repository": "https://github.com/rapid7/metasploit-framework",
+        "path": "modules/auxiliary/scanner/http/http_version.rb",
+        "revision": "package:metasploit-6.5.0-1.1",
+        "sha256": "6e926772126818f13ff6dd1e687097d01200192731126aa267ec0d9d20da1e4f",
+        "license": "BSD-3-Clause",
+        "redistributable": false
+      },
+      "allowed_options": [],
+      "effects": [
+        "network_observation",
+        "no_authentication",
+        "no_retry",
+        "no_fallback"
+      ]
+    }
+  ]
+}

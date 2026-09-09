@@ -64,6 +64,11 @@ class Runtime:
             # Pending stop controls predate this writer.  Replay their fixed,
             # receipt-bound metadata before admitting any other Runtime work.
             reconcile_stop_intents(self.ledger, self.audit, policy=self.policy)
+            interrupted = self.ledger.recover_attempts()
+            if interrupted:
+                from .audit_control import required_emit
+                required_emit(self.audit, self.ledger, AuditEvent("transport_attempt_recovery", data={
+                    "attempts": list(interrupted), "status": "uncertain", "automatic_retry": False}))
             recovered = self.ledger.recover_waves(workspace_id=self.policy.workspace_id)
             if recovered:
                 from .audit_control import required_emit

@@ -67,8 +67,18 @@ reserved before dispatch and remain consumed after ambiguity.
   relationships, collection limitations, findings, and check-level coverage.
 - Native API, declarative captured-request, test-only isolated browser, and stdio
   MCP transports with strict typed response envelopes.
+- A design-only scanner catalog with exact source hashes, fixed runners,
+  immutable plan semantics, deterministic candidate mapping, exact pinned Nmap
+  request fixtures, and a sealed loopback-only compound protocol validator.
+  These components do not execute NSE or Metasploit.
 
-Active Nuclei/ZAP, broad Nmap/NSE, authenticated remote collection, controlled
+The feature sometimes called “autopwn” is a deterministic
+candidate-to-verification planner in this harness. It maps typed observations
+to one exact reviewed profile or a manual card. It cannot choose modules,
+construct payloads, open sessions, execute scanners, retry proofs, or expand
+scope.
+
+Active Nuclei/ZAP, live NSE/Metasploit, broad Nmap/NSE, authenticated remote collection, controlled
 account comparisons, database metadata collection, and automated exploitation
 are not admitted in this alpha. A banner or version match is a candidate, not a
 confirmed vulnerability. Missing access cannot become a clean result.

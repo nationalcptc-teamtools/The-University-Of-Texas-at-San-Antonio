@@ -74,7 +74,7 @@ def migrate_legacy(root: Path, *, encrypted_storage_verified: bool = False) -> d
             db.close()
 
 
-LEDGER_SCHEMA_VERSION = 1
+LEDGER_SCHEMA_VERSION = 2
 _LEDGER_DDL = (
     """CREATE TABLE IF NOT EXISTS ledger_schema_migrations(
         version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)""",
@@ -87,13 +87,16 @@ _LEDGER_DDL = (
         ON reservation_scopes(engagement,scope_kind,scope_key,counter)""",
     """CREATE TABLE IF NOT EXISTS reservation_attempts(
         engagement TEXT NOT NULL, device TEXT NOT NULL, request_id TEXT NOT NULL, attempt_id TEXT NOT NULL,
+        tcp_connects INTEGER NOT NULL, udp_datagrams INTEGER NOT NULL,
         request_count INTEGER NOT NULL, request_bytes INTEGER NOT NULL, response_bytes INTEGER NOT NULL,
         elapsed_ms INTEGER NOT NULL, deadline_ns INTEGER NOT NULL, started_ns INTEGER NOT NULL,
         deadline_exceeded INTEGER NOT NULL, state TEXT NOT NULL,
         PRIMARY KEY(engagement,device,request_id,attempt_id))""",
     """CREATE TABLE IF NOT EXISTS reservation_attempt_events(
         engagement TEXT NOT NULL, device TEXT NOT NULL, request_id TEXT NOT NULL,
-        attempt_id TEXT NOT NULL, event_id TEXT NOT NULL, request_bytes INTEGER NOT NULL,
+        attempt_id TEXT NOT NULL, event_id TEXT NOT NULL,
+        tcp_connects INTEGER NOT NULL, udp_datagrams INTEGER NOT NULL,
+        request_count INTEGER NOT NULL, request_bytes INTEGER NOT NULL,
         response_bytes INTEGER NOT NULL,
         PRIMARY KEY(engagement,device,request_id,attempt_id,event_id))""",
     """CREATE TABLE IF NOT EXISTS assessment_waves(
@@ -150,13 +153,34 @@ def ensure_ledger_schema(db: sqlite3.Connection) -> None:
     try:
         db.execute(_LEDGER_DDL[0])
         versions = [row[0] for row in db.execute("SELECT version FROM ledger_schema_migrations ORDER BY version")]
-        if versions not in ([], [LEDGER_SCHEMA_VERSION]):
+        if versions not in ([], [1], [1, 2]):
             raise PolicyError("unsupported ledger migration history")
         if not versions:
             for statement in _LEDGER_DDL[1:]: db.execute(statement)
             backfill_reservation_scopes(db)
+            applied = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (1, applied))
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (2, applied))
+        elif versions == [1]:
+            for table, columns in {
+                "reservation_attempts": (
+                    "tcp_connects INTEGER NOT NULL DEFAULT 0",
+                    "udp_datagrams INTEGER NOT NULL DEFAULT 0",
+                ),
+                "reservation_attempt_events": (
+                    "tcp_connects INTEGER NOT NULL DEFAULT 0",
+                    "udp_datagrams INTEGER NOT NULL DEFAULT 0",
+                    "request_count INTEGER NOT NULL DEFAULT 0",
+                ),
+            }.items():
+                existing = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+                for definition in columns:
+                    name = definition.split()[0]
+                    if name not in existing:
+                        db.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+            backfill_reservation_scopes(db)
             db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
-                LEDGER_SCHEMA_VERSION, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+                2, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
         db.commit()
     except Exception:
         db.rollback()

@@ -15,12 +15,15 @@ import threading
 import uuid
 from typing import Any
 
-from .contracts import Bounds, BudgetLimit, MergeBundle, MergeReport, PolicyError, Reservation
+from .contracts import (Bounds, BudgetLimit, MergeBundle, MergeReport,
+                        PolicyError, Reservation, RESOURCE_COUNTERS)
 from .contracts import canonical_json, digest
 from .storage import private_directory
 
 
-_COUNTERS = ("request_limit", "output_bytes", "process_limit", "model_calls", "actions", "auth_posts")
+_COUNTERS = RESOURCE_COUNTERS
+_TRANSPORT_COUNTERS = ("tcp_connects", "udp_datagrams", "protocol_requests", "tx_bytes", "rx_bytes")
+_TARGET_SCOPED_COUNTERS = frozenset(("request_limit", *_TRANSPORT_COUNTERS))
 _ID_RE = re.compile(r"^[^\x00-\x1f\x7f]+$")
 _WAVE_TERMINAL = frozenset({"complete", "failed", "blocked", "stopped", "uncertain"})
 
@@ -460,7 +463,7 @@ class Ledger:
             ceiling = self._reserve_locked(request_id, bounds, workspace_id=workspace_id, target_id=target_id,
                                            auth_realm=auth_realm, workflow_id=workflow_id, limits=limits,
                                            budget_limits=budget_limits, state="running", enforce_inflight=True)
-        remaining = {k: max(0, int(limit - (self.usage(target_id=target_id) if k == "request_limit" and target_id
+        remaining = {k: max(0, int(limit - (self.usage(target_id=target_id) if k in _TARGET_SCOPED_COUNTERS and target_id
                                            else self.usage(workflow_id)).get(k, 0)))
                      for k, limit in ceiling.items() if k in _COUNTERS}
         return Reservation(request_id, bounds, remaining)
@@ -514,9 +517,20 @@ class Ledger:
             ceiling[key] = min(ceiling.get(key, value), value)
         scope_keys = {"engagement": self.engagement_id, "device": self.device_id, "workspace": workspace_id or "-",
                       "workflow": workflow_id or "default", "target": target_id or "-", "realm": auth_realm or "-"}
-        legacy_scope = {"request_limit": "target" if target_id else "workflow", "auth_posts": "realm",
-                        "model_calls": "workflow", "actions": "workflow", "output_bytes": "workflow",
-                        "process_limit": "workflow"}
+        target_or_workflow = "target" if target_id else "workflow"
+        legacy_scope = {
+            "request_limit": target_or_workflow,
+            "tcp_connects": target_or_workflow,
+            "udp_datagrams": target_or_workflow,
+            "protocol_requests": target_or_workflow,
+            "tx_bytes": target_or_workflow,
+            "rx_bytes": target_or_workflow,
+            "auth_posts": "realm",
+            "model_calls": "workflow",
+            "actions": "workflow",
+            "output_bytes": "workflow",
+            "process_limit": "workflow",
+        }
         effective_limits: dict[tuple[str, str], int] = {}
         for scope, scope_key in scope_keys.items():
             for counter in _COUNTERS:
@@ -570,6 +584,259 @@ class Ledger:
                 raise PolicyError("reservation is not active")
             self._db.execute("UPDATE reservations SET state=?, usage=? WHERE engagement=? AND device=? AND request_id=?",
                              (state, json.dumps(usage, sort_keys=True), self.engagement_id, self.device_id, request_id))
+
+    @staticmethod
+    def _transport_values(*, tcp_connects=0, udp_datagrams=0, protocol_requests=0,
+                          tx_bytes=0, rx_bytes=0) -> dict[str, int]:
+        values = {
+            "tcp_connects": tcp_connects,
+            "udp_datagrams": udp_datagrams,
+            "protocol_requests": protocol_requests,
+            "tx_bytes": tx_bytes,
+            "rx_bytes": rx_bytes,
+        }
+        if any(type(value) is not int or not 0 <= value <= 2147483647 for value in values.values()):
+            raise PolicyError("invalid transport usage event")
+        if not any(values.values()):
+            raise PolicyError("empty transport usage event")
+        return values
+
+    def begin_attempt(self, request_id: str, attempt_id: str, *, started_ns: int, deadline_ns: int) -> None:
+        """Persist one network-attempt intent before a worker can emit traffic."""
+        _safe_id(request_id, 128); _safe_id(attempt_id, 128)
+        if (type(started_ns) is not int or type(deadline_ns) is not int or started_ns < 0
+                or deadline_ns <= started_ns):
+            raise PolicyError("invalid transport attempt timing")
+        self._assert_mutable()
+        with self._tx():
+            self._assert_mutable()
+            if self.stopped():
+                raise PolicyError("engagement is stopped")
+            row = self._db.execute(
+                "SELECT state FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+                (self.engagement_id, self.device_id, request_id),
+            ).fetchone()
+            if row is None or row[0] not in {"running", "dispatching"}:
+                raise PolicyError("transport attempt requires an active reservation")
+            if self._db.execute(
+                "SELECT 1 FROM reservation_attempts WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?",
+                (self.engagement_id, self.device_id, request_id, attempt_id),
+            ).fetchone():
+                raise PolicyError("transport attempt id was already used")
+            self._db.execute(
+                """INSERT INTO reservation_attempts(
+                    engagement,device,request_id,attempt_id,tcp_connects,udp_datagrams,
+                    request_count,request_bytes,response_bytes,elapsed_ms,deadline_ns,
+                    started_ns,deadline_exceeded,state)
+                   VALUES (?,?,?,?,0,0,0,0,0,0,?,?,0,'running')""",
+                (self.engagement_id, self.device_id, request_id, attempt_id, deadline_ns, started_ns),
+            )
+
+    def record_attempt_event(self, request_id: str, attempt_id: str, event_id: str, **raw_values) -> bool:
+        """Append one idempotent measured event and preserve any overrun."""
+        _safe_id(request_id, 128); _safe_id(attempt_id, 128); _safe_id(event_id, 128)
+        if set(raw_values) - set(_TRANSPORT_COUNTERS):
+            raise PolicyError("unknown transport usage field")
+        values = self._transport_values(**raw_values)
+        ordered = tuple(values[key] for key in _TRANSPORT_COUNTERS)
+        failure = None
+        created = False
+        self._assert_mutable()
+        with self._tx():
+            self._assert_mutable()
+            attempt = self._db.execute(
+                "SELECT state FROM reservation_attempts WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?",
+                (self.engagement_id, self.device_id, request_id, attempt_id),
+            ).fetchone()
+            if attempt is None:
+                raise PolicyError("transport event requires an active attempt")
+            old = self._db.execute(
+                """SELECT tcp_connects,udp_datagrams,request_count,request_bytes,response_bytes
+                   FROM reservation_attempt_events
+                   WHERE engagement=? AND device=? AND request_id=? AND attempt_id=? AND event_id=?""",
+                (self.engagement_id, self.device_id, request_id, attempt_id, event_id),
+            ).fetchone()
+            if old is not None:
+                if tuple(old) == ordered:
+                    return False
+                if attempt[0] == "running":
+                    self._db.execute(
+                        "UPDATE reservation_attempts SET state='uncertain' WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?",
+                        (self.engagement_id, self.device_id, request_id, attempt_id),
+                    )
+                self._db.execute("INSERT OR IGNORE INTO stops VALUES (?,?)", (self.engagement_id, "transport event receipt conflict"))
+                failure = "transport event receipt conflict"
+            else:
+                if attempt[0] != "running":
+                    raise PolicyError("transport event requires an active attempt")
+                self._db.execute(
+                    """INSERT INTO reservation_attempt_events(
+                        engagement,device,request_id,attempt_id,event_id,tcp_connects,
+                        udp_datagrams,request_count,request_bytes,response_bytes)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (self.engagement_id, self.device_id, request_id, attempt_id, event_id, *ordered),
+                )
+                created = True
+                totals = self._attempt_totals_locked(request_id)
+                encoded = self._db.execute(
+                    "SELECT bounds FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+                    (self.engagement_id, self.device_id, request_id),
+                ).fetchone()[0]
+                bounds = json.loads(encoded)
+                if any(totals[key] > int(bounds.get(key, 0)) for key in _TRANSPORT_COUNTERS):
+                    self._db.execute(
+                        "UPDATE reservation_attempts SET state='uncertain' WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?",
+                        (self.engagement_id, self.device_id, request_id, attempt_id),
+                    )
+                    self._db.execute("INSERT OR IGNORE INTO stops VALUES (?,?)", (self.engagement_id, "transport allowance exceeded"))
+                    failure = "transport allowance exceeded"
+                self._refresh_attempt_totals_locked(request_id, attempt_id)
+        if failure:
+            raise PolicyError(failure)
+        return created
+
+    def _attempt_totals_locked(self, request_id: str, attempt_id: str | None = None) -> dict[str, int]:
+        where = "engagement=? AND device=? AND request_id=?"
+        params: list[Any] = [self.engagement_id, self.device_id, request_id]
+        if attempt_id is not None:
+            where += " AND attempt_id=?"; params.append(attempt_id)
+        row = self._db.execute(
+            f"""SELECT COALESCE(SUM(tcp_connects),0),COALESCE(SUM(udp_datagrams),0),
+                       COALESCE(SUM(request_count),0),COALESCE(SUM(request_bytes),0),
+                       COALESCE(SUM(response_bytes),0)
+                  FROM reservation_attempt_events WHERE {where}""",
+            params,
+        ).fetchone()
+        return dict(zip(_TRANSPORT_COUNTERS, (int(value) for value in row), strict=True))
+
+    def _refresh_attempt_totals_locked(self, request_id: str, attempt_id: str) -> dict[str, int]:
+        totals = self._attempt_totals_locked(request_id, attempt_id)
+        self._db.execute(
+            """UPDATE reservation_attempts
+                  SET tcp_connects=?,udp_datagrams=?,request_count=?,request_bytes=?,response_bytes=?
+                WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?""",
+            (*tuple(totals[key] for key in _TRANSPORT_COUNTERS), self.engagement_id, self.device_id, request_id, attempt_id),
+        )
+        return totals
+
+    def finish_attempt(self, request_id: str, attempt_id: str, *, state: str, ended_ns: int) -> dict[str, Any]:
+        """Seal an attempt; a passed deadline can never become a success."""
+        _safe_id(request_id, 128); _safe_id(attempt_id, 128)
+        if state not in {"complete", "failed", "blocked", "stopped", "uncertain"}:
+            raise PolicyError("invalid transport attempt state")
+        if type(ended_ns) is not int or ended_ns < 0:
+            raise PolicyError("invalid transport completion timing")
+        self._assert_mutable()
+        with self._tx():
+            self._assert_mutable()
+            row = self._db.execute(
+                """SELECT state,started_ns,deadline_ns FROM reservation_attempts
+                   WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?""",
+                (self.engagement_id, self.device_id, request_id, attempt_id),
+            ).fetchone()
+            if row is None:
+                raise PolicyError("unknown transport attempt")
+            if row[0] != "running":
+                receipt = self._attempt_receipt_locked(request_id, attempt_id)
+                if receipt["state"] == state:
+                    return receipt
+                raise PolicyError("terminal transport receipt is immutable")
+            started_ns, deadline_ns = int(row[1]), int(row[2])
+            if ended_ns < started_ns:
+                raise PolicyError("transport monotonic time moved backwards")
+            exceeded = ended_ns > deadline_ns
+            final_state = "uncertain" if exceeded and state == "complete" else state
+            totals = self._refresh_attempt_totals_locked(request_id, attempt_id)
+            self._db.execute(
+                """UPDATE reservation_attempts SET elapsed_ms=?,deadline_exceeded=?,state=?
+                   WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?""",
+                ((ended_ns - started_ns) // 1_000_000, int(exceeded), final_state,
+                 self.engagement_id, self.device_id, request_id, attempt_id),
+            )
+            if final_state == "uncertain":
+                self._db.execute("INSERT OR IGNORE INTO stops VALUES (?,?)", (self.engagement_id, "transport outcome uncertain"))
+            return {
+                "attempt_id": attempt_id,
+                "state": final_state,
+                "started_ns": started_ns,
+                "deadline_ns": deadline_ns,
+                "elapsed_ms": (ended_ns - started_ns) // 1_000_000,
+                "deadline_exceeded": exceeded,
+                "usage": totals,
+            }
+
+    def _attempt_receipt_locked(self, request_id: str, attempt_id: str) -> dict[str, Any]:
+        row = self._db.execute(
+            """SELECT state,started_ns,deadline_ns,elapsed_ms,deadline_exceeded,
+                      tcp_connects,udp_datagrams,request_count,request_bytes,response_bytes
+               FROM reservation_attempts
+              WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?""",
+            (self.engagement_id, self.device_id, request_id, attempt_id),
+        ).fetchone()
+        if row is None:
+            raise PolicyError("unknown transport attempt")
+        return {
+            "attempt_id": attempt_id,
+            "state": row[0],
+            "started_ns": int(row[1]),
+            "deadline_ns": int(row[2]),
+            "elapsed_ms": int(row[3]),
+            "deadline_exceeded": bool(row[4]),
+            "usage": dict(zip(_TRANSPORT_COUNTERS, (int(value) for value in row[5:]), strict=True)),
+        }
+
+    def attempt_receipt(self, request_id: str) -> dict[str, Any]:
+        _safe_id(request_id, 128)
+        attempts = [
+            self._attempt_receipt_locked(request_id, row[0])
+            for row in self._db.execute(
+                """SELECT attempt_id FROM reservation_attempts
+                   WHERE engagement=? AND device=? AND request_id=? ORDER BY started_ns,attempt_id""",
+                (self.engagement_id, self.device_id, request_id),
+            )
+        ]
+        if not attempts:
+            raise PolicyError("no transport attempts for request")
+        usage = {key: sum(item["usage"][key] for item in attempts) for key in _TRANSPORT_COUNTERS}
+        return {"request_id": request_id, "usage": usage, "attempts": attempts}
+
+    def recover_attempts(self) -> tuple[dict[str, Any], ...]:
+        """Mark every crash-interrupted parent action uncertain without retry."""
+        recovered = []
+        self._assert_mutable()
+        with self._tx():
+            self._assert_mutable()
+            rows = self._db.execute(
+                """SELECT request_id FROM reservations
+                   WHERE engagement=? AND device=? AND state IN ('running','dispatching')
+                   ORDER BY request_id""",
+                (self.engagement_id, self.device_id),
+            ).fetchall()
+            for (request_id,) in rows:
+                attempts = self._db.execute(
+                    """SELECT attempt_id,state FROM reservation_attempts
+                       WHERE engagement=? AND device=? AND request_id=? ORDER BY started_ns,attempt_id""",
+                    (self.engagement_id, self.device_id, request_id),
+                ).fetchall()
+                for attempt_id, attempt_state in attempts:
+                    self._refresh_attempt_totals_locked(request_id, attempt_id)
+                    if attempt_state == "running":
+                        self._db.execute(
+                            """UPDATE reservation_attempts SET state='uncertain'
+                               WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?""",
+                            (self.engagement_id, self.device_id, request_id, attempt_id),
+                        )
+                    recovered.append({"request_id": request_id, "attempt_id": attempt_id, "state": "uncertain"})
+                self._db.execute(
+                    """UPDATE reservations SET state='uncertain'
+                       WHERE engagement=? AND device=? AND request_id=? AND state IN ('running','dispatching')""",
+                    (self.engagement_id, self.device_id, request_id),
+                )
+                if not attempts:
+                    recovered.append({"request_id": request_id, "attempt_id": None, "state": "uncertain"})
+            if recovered:
+                self._db.execute("INSERT OR IGNORE INTO stops VALUES (?,?)", (self.engagement_id, "interrupted active reservation"))
+        return tuple(recovered)
 
     def charge(self, request_id: str, counter: str, amount: int, *, workflow_id: str = "default", workspace_id: str = "", limits: dict[str, int] | None = None, budget_limits=()) -> None:
         self._assert_mutable()
@@ -644,11 +911,12 @@ class Ledger:
         _fingerprint(recipient_key_fingerprint)
         with self._tx():
             if (self._db.execute("SELECT 1 FROM reservation_scopes WHERE ceiling IS NOT NULL LIMIT 1").fetchone()
-                    or self._db.execute("SELECT 1 FROM assessment_waves LIMIT 1").fetchone()
-                    or self._db.execute("SELECT 1 FROM reservation_attempts LIMIT 1").fetchone()):
-                raise PolicyError("v2 handover cannot preserve scoped ceilings, waves, or attempts")
+                    or self._db.execute("SELECT 1 FROM assessment_waves LIMIT 1").fetchone()):
+                raise PolicyError("v2 handover cannot preserve scoped ceilings or waves")
             if not self._db.execute("SELECT 1 FROM stops WHERE engagement=?", (self.engagement_id,)).fetchone():
                 raise PolicyError("handover requires a stopped ledger")
+            if self._db.execute("SELECT 1 FROM reservation_attempts WHERE state='running'").fetchone():
+                raise PolicyError("handover requires no running transport attempts")
             if self._db.execute("SELECT 1 FROM reservations WHERE engagement=? AND state='running'", (self.engagement_id,)).fetchone():
                 raise PolicyError("handover requires no running reservations")
             existing = self._db.execute("SELECT seal_id FROM handover_seals LIMIT 1").fetchone()
@@ -747,10 +1015,19 @@ class Ledger:
                 scoped = {}
                 for item in combined:
                     values = item["bounds"]
-                    for counter, grouping, ceiling in (("request_limit", "target", 24), ("model_calls", "workflow", 6),
-                                                        ("actions", "workflow", 12), ("auth_posts", "realm", 2)):
+                    for counter, grouping, ceiling in (
+                        ("request_limit", "target", 24),
+                        ("tcp_connects", "target", 24),
+                        ("udp_datagrams", "target", 24),
+                        ("protocol_requests", "target", 24),
+                        ("tx_bytes", "target", 1048576),
+                        ("rx_bytes", "target", 4194304),
+                        ("model_calls", "workflow", 6),
+                        ("actions", "workflow", 12),
+                        ("auth_posts", "realm", 2),
+                    ):
                         key = (counter, item[grouping])
-                        scoped[key] = scoped.get(key, 0) + values[counter]
+                        scoped[key] = scoped.get(key, 0) + values.get(counter, 0)
                         if scoped[key] > ceiling:
                             raise PolicyError("handover exceeds combined target, realm, or workflow allowance")
                 for item in assignments:
@@ -812,12 +1089,20 @@ class Ledger:
             if item["state"] not in {"complete", "finished", "blocked", "stopped", "failed", "uncertain"}:
                 raise PolicyError("invalid handover reservation state")
             bounds = item["bounds"]
-            if not isinstance(bounds, dict) or set(bounds) != set(asdict(Bounds())) or any(type(bounds[k]) is not int or not 0 <= bounds[k] <= 2147483647 for k in _COUNTERS):
+            current_fields = set(asdict(Bounds()))
+            transport_fields = set(_TRANSPORT_COUNTERS)
+            bound_fields = frozenset(bounds) if isinstance(bounds, dict) else frozenset()
+            if (not isinstance(bounds, dict) or bound_fields not in {frozenset(current_fields), frozenset(current_fields - transport_fields)}
+                    or any(type(bounds.get(key, 0)) is not int or not 0 <= bounds.get(key, 0) <= 2147483647 for key in _COUNTERS)):
                 raise PolicyError("invalid handover reservation bounds")
             timeout = bounds["timeout_s"]
             if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or not 0 <= timeout <= 3600:
                 raise PolicyError("invalid handover reservation timeout")
-            if bounds["request_limit"] > 24 or bounds["actions"] > 12 or bounds["model_calls"] > 6 or bounds["auth_posts"] > 2 or bounds["output_bytes"] > 131072:
+            if (bounds["request_limit"] > 24 or bounds["actions"] > 12 or bounds["model_calls"] > 6
+                    or bounds["auth_posts"] > 2 or bounds["output_bytes"] > 131072
+                    or bounds.get("tcp_connects", 0) > 24 or bounds.get("udp_datagrams", 0) > 24
+                    or bounds.get("protocol_requests", 0) > 24 or bounds.get("tx_bytes", 0) > 1048576
+                    or bounds.get("rx_bytes", 0) > 4194304):
                 raise PolicyError("handover reservation exceeds release ceiling")
             if not isinstance(item["usage"], dict) or any(key not in _COUNTERS or type(value) is not int or value < 0 for key, value in item["usage"].items()):
                 raise PolicyError("invalid handover usage")

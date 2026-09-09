@@ -126,11 +126,16 @@ _CODE_HASH = hashlib.sha256(b"".join(str(path.relative_to(_CODE_ROOT)).encode() 
 
 
 def _spec(module_id: str, track: str, mode: str, description: str, *, tool_id: str | None = None,
-          effects: tuple[str, ...] = (), output_schema: dict[str, Any] | None = None) -> ModuleSpec:
+          effects: tuple[str, ...] = (), output_schema: dict[str, Any] | None = None,
+          bounds: Bounds | None = None) -> ModuleSpec:
     profile_hash = hashlib.sha256((module_id + "|1.0.0|" + track + "|" + mode + "|" + description + "|" + (tool_id or "") + "|" + _CODE_HASH).encode()).hexdigest()
     return ModuleSpec(module_id=module_id, version="1.0.0", track=track, mode=mode, effects=effects,
-                      bounds=Bounds(
+                      bounds=bounds or Bounds(
                           timeout_s=30.0, request_limit=1 if mode == "bounded" else 0,
+                          tcp_connects=1 if mode == "bounded" else 0,
+                          protocol_requests=1 if mode == "bounded" else 0,
+                          tx_bytes=4096 if mode == "bounded" else 0,
+                          rx_bytes=131072 if mode == "bounded" else 0,
                           output_bytes=131072, process_limit=1),
                       input_schema=_schema(), output_schema=_freeze(output_schema or _batch_schema(_NETWORK_FACTS)),
                       tool_id=tool_id, source_hash=profile_hash,
@@ -143,7 +148,9 @@ _SPECS = (
     _spec("network.nmap_import", "network", "offline", "Import Nmap XML service inventory.", output_schema=_batch_schema(_NETWORK_FACTS)),
     _spec("network.output_import", "network", "offline", "Import a reviewed network inventory.", output_schema=_batch_schema(_NETWORK_FACTS)),
     _spec("network.nmap_inventory", "network", "bounded", "Observe one approved IPv4 TCP port with pinned Nmap and a parent-only connect broker.",
-          tool_id="nmap-cptc-inventory-v1", effects=("network_observation",)),
+          tool_id="nmap-cptc-inventory-v1", effects=("network_observation",),
+          bounds=Bounds(timeout_s=30.0, request_limit=1, tcp_connects=1,
+                        output_bytes=131072, process_limit=1)),
     _spec("web.capture_import", "web", "offline", "Import a reviewed web response capture.", output_schema=_batch_schema(_WEB_CAPTURE_FACTS)),
     _spec("web.nuclei_observation", "web", "offline", "Analyze one human-selected response with networkless pinned Nuclei.",
           tool_id="nuclei", output_schema=_batch_schema(_PASSIVE_FACTS)),

@@ -1,0 +1,18 @@
+[
+  {
+    "target_id": "web-synth",
+    "address": "192.0.2.15",
+    "port": 80,
+    "service": "http",
+    "scheme": "http",
+    "cves": []
+  },
+  {
+    "target_id": "dell-synth-smb",
+    "address": "192.0.2.20",
+    "port": 445,
+    "service": "microsoft-ds",
+    "scheme": null,
+    "cves": []
+  }
+]

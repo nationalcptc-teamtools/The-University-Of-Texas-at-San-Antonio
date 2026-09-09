@@ -58,9 +58,25 @@ def test_reviewed_checkout_inputs_are_complete_and_ai_only():
     assert set(contents) == {"version", "classification", "runtime", "source"}
     assert "docs/harness/LIVE-TOOLING-CONTINUATION.md" in contents["source"]
     assert "cptc_harness/resources/zap-passive.yaml" in contents["runtime"]
+    assert "cptc_harness/resources/scanner-profiles-v1.json" in contents["runtime"]
+    assert "cptc_harness/scanner_catalog.py" in contents["runtime"]
+    assert "tests/test_scanner_catalog.py" in contents["source"]
+    assert "tests/fixtures/scanner/relay/README.md" in contents["source"]
+    assert "tests/fixtures/scanner/relay/nmap-7.991-nbstat-wildcard.bin" in contents["source"]
+    assert "tests/fixtures/scanner/relay/nmap-7.991-smb2-negotiate.bin" in contents["source"]
+    assert "tests/test_scanner_catalog.py" not in contents["runtime"]
     assert all(not name.startswith("human/") for name in contents["source"])
     assert "cptc_harness/human.py" not in contents["runtime"]
     assert not contents["runtime"] & {name for name in contents["source"] if name.startswith("tests/")}
+
+
+def test_installed_wheel_layout_loads_packaged_scanner_catalog(tmp_path):
+    contents = package.reviewed_contents(ROOT)
+    wheel_path = tmp_path / "reviewed-runtime.whl"
+    with zipfile.ZipFile(wheel_path, "w") as wheel:
+        for name in sorted(contents["runtime"]):
+            wheel.write(ROOT / name, name)
+    package.verify_installed_scanner_catalog(wheel_path)
 
 
 def test_tar_normalization_is_independent_of_input_order():

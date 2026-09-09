@@ -28,6 +28,12 @@ on redistribution and embedding. External binaries and their dependency trees
 remain outside the wheel and source archive unless the inventory is
 updated with every required notice and the package allowlist is reviewed.
 
+Metasploit is also an operator-installed system dependency. Its top-level
+framework license does not establish one license for every bundled component.
+Do not copy or redistribute the framework tree. Pin and review the selected
+module, runtime closure, notices, and component licenses before a profile can
+move beyond design-only tests.
+
 The machine-readable record is
 [`THIRD-PARTY-INVENTORY.json`](THIRD-PARTY-INVENTORY.json). Any future copied
 source entry must name each repository path in `copied_files`; an empty list

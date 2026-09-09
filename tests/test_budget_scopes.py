@@ -39,7 +39,7 @@ def test_scopes_charge_every_counter_across_finished_actions(tmp_path, scope, ke
         reserve(store, 'two', budgets=(limit,), counter=counter, **second)
     assert spent(store, scope, key, counter) == 1
     assert store._db.execute('SELECT COUNT(*) FROM reservations').fetchone()[0] == 1
-    assert store._db.execute('SELECT COUNT(*) FROM reservation_scopes').fetchone()[0] == 36
+    assert store._db.execute('SELECT COUNT(*) FROM reservation_scopes').fetchone()[0] == 6 * len(RESOURCE_COUNTERS)
     assert store._db.execute('SELECT * FROM assignments').fetchall() == before
 
 
@@ -109,6 +109,16 @@ def test_model_charges_are_bound_to_workspace_scopes(tmp_path):
     with pytest.raises(PolicyError, match='scoped budget'):
         store.charge('two', 'model_calls', 1, workspace_id='ws', workflow_id='other')
     assert spent(store, 'workspace', 'ws', 'model_calls') == 1
+
+
+def test_transport_remaining_uses_the_target_scope_across_workflows(tmp_path):
+    store = Ledger(tmp_path, 'eng', 'device', policy_revision='v1', limits={'tcp_connects': 2})
+    first = reserve(store, 'one', workflow='first', counter='tcp_connects')
+    assert first.remaining['tcp_connects'] == 1
+    store.finish('one')
+
+    second = reserve(store, 'two', workflow='second', counter='tcp_connects')
+    assert second.remaining['tcp_connects'] == 0
 
 
 def test_v2_handover_refuses_to_lose_new_scope_ceilings(tmp_path):

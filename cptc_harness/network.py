@@ -42,6 +42,49 @@ class _Transport:
     def __init__(self, broker: "NetworkBroker", target: TargetRef, addresses: tuple[str, ...], timeout_s: float, request_limit: int) -> None:
         self._broker, self._target, self._addresses, self._timeout = broker, target, addresses, timeout_s
         self._remaining = request_limit
+        self._attempt_sequence = 0
+
+    def _begin_attempt(self):
+        ledger, action_id = self._broker.ledger, self._broker.action_id
+        self._attempt_sequence += 1
+        attempt_id = hashlib.sha256(
+            f"{action_id or '-'}\0{self._target.target_id}\0{self._attempt_sequence}".encode("utf-8")
+        ).hexdigest()[:32]
+        started_ns = time.monotonic_ns()
+        deadline_ns = started_ns + int(self._timeout * 1_000_000_000)
+        if ledger is not None and action_id is not None:
+            ledger.begin_attempt(action_id, attempt_id, started_ns=started_ns, deadline_ns=deadline_ns)
+        if time.monotonic_ns() >= deadline_ns:
+            self._finish_attempt(attempt_id if ledger is not None and action_id is not None else None, "blocked")
+            self._broker._stop("network deadline reached before dispatch")
+            raise PolicyError("network deadline reached before dispatch")
+        return (attempt_id if ledger is not None and action_id is not None else None), deadline_ns
+
+    @staticmethod
+    def _remaining_timeout(deadline_ns: int) -> float:
+        remaining = (deadline_ns - time.monotonic_ns()) / 1_000_000_000
+        if remaining <= 0:
+            raise PolicyError("network deadline reached before dispatch")
+        return remaining
+
+    def _record_request(self, attempt_id: str | None, size: int) -> None:
+        if attempt_id is not None:
+            self._broker.ledger.record_attempt_event(
+                self._broker.action_id, attempt_id, "completed-request",
+                tcp_connects=1, protocol_requests=1, tx_bytes=size,
+            )
+
+    def _record_response(self, attempt_id: str | None, size: int) -> None:
+        if attempt_id is not None and size:
+            self._broker.ledger.record_attempt_event(
+                self._broker.action_id, attempt_id, "response", rx_bytes=size,
+            )
+
+    def _finish_attempt(self, attempt_id: str | None, state: str) -> None:
+        if attempt_id is not None:
+            self._broker.ledger.finish_attempt(
+                self._broker.action_id, attempt_id, state=state, ended_ns=time.monotonic_ns(),
+            )
 
     def request(self, request: TargetRequest) -> TargetResponse:
         if request.method not in {"GET", "HEAD"}: raise PolicyError("HTTP method is not admitted")
@@ -69,14 +112,28 @@ class _Transport:
         maximum = min(max(0, request.max_bytes), self._broker.response_limit)
         authority = ("[" + self._target.host + "]") if ":" in self._target.host else self._target.host
         headers = {"Host": authority + ":" + str(self._target.port), "Accept": "application/json, text/plain, */*", "Connection": "close"}
-        started = time.monotonic()
+        wire = ("\r\n".join([request.method + " " + request.path + " HTTP/1.1",
+                              *[key + ": " + value for key, value in headers.items()], "", ""])).encode("ascii")
+        attempt_id, deadline_ns = self._begin_attempt()
         try:
             # One attempt only. A connection failure after a possible request is
             # uncertain and cannot trigger an automatic second target attempt.
-            output = self._broker._isolated_http(self._addresses[0], self._target, request.method, request.path, headers, maximum, self._timeout)
+            output = self._broker._isolated_http(
+                self._addresses[0], self._target, request.method, request.path, headers,
+                maximum, self._remaining_timeout(deadline_ns),
+            )
         except (OSError, ValueError, subprocess.SubprocessError, PolicyError) as exc:
+            self._finish_attempt(attempt_id, "uncertain")
             self._broker._stop("network transport failure")
             raise PolicyError("target transport failed") from exc
+        try:
+            self._record_request(attempt_id, len(wire))
+            self._record_response(attempt_id, len(output.body))
+            self._finish_attempt(attempt_id, "complete")
+        except PolicyError as exc:
+            self._finish_attempt(attempt_id, "uncertain")
+            self._broker._stop("network accounting failure")
+            raise PolicyError("target transport accounting failed") from exc
         self._broker._event("network_response", {"target": self._target.target_id, "address": output.address, "status": output.status,
                                                    "bytes": len(output.body), "truncated": output.truncated})
         if output.status in {423, 429} or output.status >= 500:
@@ -95,9 +152,20 @@ class _Transport:
             raise PolicyError("response capture base path is invalid")
         self._broker._rate(self._target.target_id)
         self._remaining -= 1
+        authority = ("[" + self._target.host + "]") if ":" in self._target.host else self._target.host
+        wire = ("GET " + path + " HTTP/1.1\r\nHost: " + authority + ":" + str(self._target.port)
+                + "\r\nConnection: close\r\n\r\n").encode("ascii")
+        attempt_id, deadline_ns = self._begin_attempt()
         try:
-            return self._broker._isolated_response(self._addresses[0], self._target, self._timeout)
+            response = self._broker._isolated_response(
+                self._addresses[0], self._target, self._remaining_timeout(deadline_ns),
+            )
+            self._record_request(attempt_id, len(wire))
+            self._record_response(attempt_id, len(response))
+            self._finish_attempt(attempt_id, "complete")
+            return response
         except (OSError, ValueError, subprocess.SubprocessError, PolicyError) as exc:
+            self._finish_attempt(attempt_id, "uncertain")
             self._broker._stop("response capture transport failure")
             raise PolicyError("response capture transport failed") from exc
 
@@ -273,6 +341,8 @@ class NetworkBroker:
             raise PolicyError("target does not exactly match policy")
         if target.scheme not in {"http", "https"} or target.port not in range(1, 65536):
             raise PolicyError("target is not typed HTTP")
+        if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or not 0 < timeout_s <= 3600:
+            raise PolicyError("invalid module network deadline")
         parsed = urlsplit(target.canonical_url)
         if parsed.scheme != target.scheme or parsed.hostname != target.host or (parsed.port or (443 if target.scheme == "https" else 80)) != target.port or parsed.username or parsed.password:
             raise PolicyError("invalid canonical target")

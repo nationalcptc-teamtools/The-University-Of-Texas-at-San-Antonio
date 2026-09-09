@@ -70,11 +70,14 @@ def test_partial_wire_bytes_survive_worker_failure_and_no_retry(case):
         network = NetworkBroker(policy, audit=audit)
         network.action_id = "synthetic-action"
         if case == "stop":
-            class StopLedger:
-                def stopped(self): return any(item[0] == "stdout" for item in audit.chunks)
-                def stop(self, _): pass
-                def rate_gate(self, *_): pass
-            network.ledger = StopLedger()
+                class StopLedger:
+                    def stopped(self): return any(item[0] == "stdout" for item in audit.chunks)
+                    def stop(self, _): pass
+                    def rate_gate(self, *_): pass
+                    def begin_attempt(self, *_args, **_kwargs): pass
+                    def record_attempt_event(self, *_args, **_kwargs): return True
+                    def finish_attempt(self, *_args, **kwargs): return kwargs
+                network.ledger = StopLedger()
         transport = network.target_transport(target, timeout_s=.4, request_limit=1)
         with pytest.raises(PolicyError):
             transport.capture_response()

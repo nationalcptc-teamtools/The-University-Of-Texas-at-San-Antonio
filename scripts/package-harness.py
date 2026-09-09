@@ -93,6 +93,28 @@ def verify_wheel(wheel, contents, version):
         raise ValueError("runtime wheel differs from reviewed file allowlist")
 
 
+def verify_installed_scanner_catalog(path):
+    """Extract the pure-Python wheel and load its packaged scanner catalog."""
+    with tempfile.TemporaryDirectory(prefix="cptc-wheel-smoke-") as temporary:
+        root = Path(temporary)
+        with zipfile.ZipFile(path) as wheel:
+            wheel.extractall(root)
+        code = (
+            "import sys; "
+            f"sys.path.insert(0, {str(root)!r}); "
+            "from cptc_harness.scanner_catalog import PROFILE_IDS, load_catalog; "
+            "assert tuple(p.profile_id for p in load_catalog()) == PROFILE_IDS"
+        )
+        completed = subprocess.run(
+            [sys.executable, "-I", "-c", code],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=20,
+        )
+        if completed.returncode:
+            raise ValueError("installed wheel cannot load its reviewed scanner catalog")
+
+
 def tar_bytes(entries, epoch):
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w", format=tarfile.GNU_FORMAT) as archive:
@@ -135,6 +157,7 @@ def build(directory, epoch, contents, version):
         if path.suffix == ".whl":
             with zipfile.ZipFile(path) as wheel:
                 verify_wheel(wheel, contents, version)
+            verify_installed_scanner_catalog(path)
             result[path.name] = path.read_bytes()
         elif path.name.endswith(".tar.gz"):
             result[path.name] = normalize_source(path, epoch, contents, version)

@@ -1,0 +1,32 @@
+{
+  "profile_id": "network.msf_http_version",
+  "family": "msf",
+  "upstream_id": "auxiliary/scanner/http/http_version",
+  "runner_id": "design.msf.http-version-v1",
+  "tier": "observation",
+  "mode": "design_only",
+  "protocol": "http",
+  "port": 80,
+  "budget": {
+    "tcp_connects": 1,
+    "udp_datagrams": 0,
+    "protocol_requests": 1,
+    "tx_bytes": 4096,
+    "rx_bytes": 16384,
+    "timeout_s": 10.0,
+    "cpu_s": 10.0,
+    "output_bytes": 16384,
+    "process_limit": 1,
+    "auth_attempts": 0
+  },
+  "source": {
+    "repository": "https://github.com/rapid7/metasploit-framework",
+    "path": "modules/auxiliary/scanner/http/http_version.rb",
+    "revision": "package:metasploit-6.5.0-1.1",
+    "sha256": "6e926772126818f13ff6dd1e687097d01200192731126aa267ec0d9d20da1e4f",
+    "license": "BSD-3-Clause",
+    "redistributable": false
+  },
+  "allowed_options": [],
+  "effects": ["network_observation", "no_authentication", "no_retry", "no_fallback"]
+}

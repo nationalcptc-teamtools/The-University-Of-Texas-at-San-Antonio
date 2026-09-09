@@ -30,6 +30,8 @@ class _SyntheticNetwork:
         self.events = []
         self.rates = 0
         self.stops = []
+        self.action_id = "native-nmap"
+        self.ledger = _AttemptLedger()
 
     def _event(self, kind, data):
         self.events.append((kind, data))
@@ -41,6 +43,22 @@ class _SyntheticNetwork:
         self.stops.append(reason)
 
 
+class _AttemptLedger:
+    def __init__(self):
+        self.calls = []
+
+    def begin_attempt(self, request_id, attempt_id, **timing):
+        self.calls.append(("begin", request_id, attempt_id, timing))
+
+    def record_attempt_event(self, request_id, attempt_id, event_id, **usage):
+        self.calls.append(("event", request_id, attempt_id, event_id, usage))
+        return True
+
+    def finish_attempt(self, request_id, attempt_id, **receipt):
+        self.calls.append(("finish", request_id, attempt_id, receipt))
+        return receipt
+
+
 class _Transport:
     def __init__(self, address):
         self._addresses = (address,)
@@ -48,7 +66,8 @@ class _Transport:
 
 def _spec():
     return ModuleSpec("network.nmap_inventory", "1", "network", "bounded", (),
-                      Bounds(timeout_s=30.0, request_limit=1, output_bytes=131072, process_limit=1),
+                      Bounds(timeout_s=30.0, request_limit=1, output_bytes=131072, process_limit=1,
+                             tcp_connects=1),
                       {"type": "object", "properties": {}, "required": ()},
                       {"type": "object", "properties": {}, "required": ()})
 
@@ -176,6 +195,9 @@ def test_native_bridge_reports_real_open_listener_once(admitted_native, listener
     assert observation["facts"]["ports"][0]["state"] == "open"
     assert done.wait(1) and len(accepted) == 1
     assert network.rates == 1
+    assert [call[0] for call in network.ledger.calls] == ["begin", "event", "finish"]
+    assert network.ledger.calls[1][4] == {"tcp_connects": 1}
+    assert network.ledger.calls[2][3]["state"] == "complete"
     assert {item[0] for item in captured} == {"stdout", "stderr"}
     assert all(item[2] == "client_confidential_human_only" for item in captured)
 
@@ -291,6 +313,8 @@ def test_timeout_after_parent_probe_stops_the_network(admitted_native, listener,
     result = NmapCollector().collect(replace(_context(port, capture=capture), network=network))
 
     assert result.status == "uncertain" and network.stops
+    assert network.ledger.calls[-1][0] == "finish"
+    assert network.ledger.calls[-1][3]["state"] == "uncertain"
     assert network.rates == 1 and done.wait(1) and len(accepted) == 1
     assert result.evidence and any(raw == b"partial" for _stream, raw, _class in captured)
     assert any(kind == "native_nmap_process_completed" for kind, _data in network.events)

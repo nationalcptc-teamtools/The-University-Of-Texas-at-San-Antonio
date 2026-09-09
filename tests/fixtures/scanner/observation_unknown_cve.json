@@ -1,0 +1,10 @@
+[
+  {
+    "target_id": "dell-synth-smb",
+    "address": "192.0.2.20",
+    "port": 445,
+    "service": "microsoft-ds",
+    "scheme": null,
+    "cves": ["CVE-2099-9999"]
+  }
+]

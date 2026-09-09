@@ -161,11 +161,41 @@ class NmapCollector:
         parent = child = None
         seccomp_fd = None
         dispatched = False
+        attempt_id = None
+        attempt_finished = False
         evidence = ()
         captured = None
         cancelled = False
         completion_reason = None
         cleanup_failed = False
+        ledger = getattr(network, "ledger", None)
+        action_id = getattr(network, "action_id", None)
+
+        def begin_attempt():
+            nonlocal attempt_id
+            if ledger is None or action_id is None:
+                return
+            candidate = hashlib.sha256(
+                f"{action_id}\0nmap-connect-one-v1\0{target.target_id}".encode("utf-8")
+            ).hexdigest()[:32]
+            started_ns = time.monotonic_ns()
+            ledger.begin_attempt(
+                action_id, candidate, started_ns=started_ns,
+                deadline_ns=started_ns + int(_PROCESS_DEADLINE_S * 1_000_000_000),
+            )
+            attempt_id = candidate
+
+        def finish_attempt(state):
+            nonlocal attempt_finished, cleanup_failed
+            if attempt_id is None or attempt_finished:
+                return
+            try:
+                ledger.finish_attempt(action_id, attempt_id, state=state, ended_ns=time.monotonic_ns())
+                attempt_finished = True
+            except Exception:
+                cleanup_failed = True
+                network._stop("native Nmap transport accounting failed")
+
         def cleanup():
             nonlocal cleanup_failed
             try:
@@ -175,6 +205,7 @@ class NmapCollector:
                 # Latch before any subsequent cleanup/audit operation can fail.
                 network._stop("native Nmap containment termination failed")
         try:
+            begin_attempt()
             parent, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
             parent.setblocking(False)
             # bubblewrap deliberately closes non-standard inherited descriptors.
@@ -205,7 +236,9 @@ class NmapCollector:
             child = None
             network._event("native_nmap_process_started", {"pid": process.pid, "target": target.target_id})
             captured = _StreamCapture(context, network)
-            stdout, stderr, observed_state, evidence = self._run(context, process, parent, target, address, captured)
+            stdout, stderr, observed_state, evidence = self._run(
+                context, process, parent, target, address, captured, attempt_id,
+            )
             if process.returncode != 0:
                 raise _BridgeFailure("scanner exited unsuccessfully", evidence)
             source = SourceRef("native-nmap", hashlib.sha256(stdout).hexdigest(), tool="nmap")
@@ -219,6 +252,7 @@ class NmapCollector:
                 "target": target.target_id, "address": address, "port": target.port,
                 "state": observed_state, "exit_code": process.returncode,
             })
+            finish_attempt("complete")
             return batch_result(batch, evidence)
         except _BridgeStopped as exc:
             cancelled = True
@@ -226,18 +260,22 @@ class NmapCollector:
             cleanup()
             retained = tuple(exc.evidence) or evidence
             if exc.probe_seen:
+                finish_attempt("uncertain")
                 network._stop("native Nmap stopped after parent probe")
                 return OperationResult("uncertain", evidence=retained,
                                        reason="native Nmap stopped after parent probe; human review required")
+            finish_attempt("stopped")
             return OperationResult("stopped", evidence=retained, reason="operator stop requested")
         except (OSError, PolicyError, _BridgeFailure, subprocess.SubprocessError) as exc:
             cancelled = True
             completion_reason = str(exc)
             cleanup()
             if dispatched:
+                finish_attempt("uncertain")
                 network._stop("native Nmap bridge outcome uncertain")
                 return OperationResult("uncertain", evidence=tuple(getattr(exc, "evidence", ())) or evidence,
                                        reason="native Nmap bridge outcome uncertain; human review required")
+            finish_attempt("blocked")
             return OperationResult("blocked", reason="native Nmap bridge could not start")
         finally:
             if seccomp_fd is not None:
@@ -255,6 +293,8 @@ class NmapCollector:
                     "stderr_bytes": len(captured.buffers["stderr"]) if captured is not None else 0,
                 })
                 _close_streams(process)
+            if not attempt_finished:
+                finish_attempt("uncertain" if dispatched else "blocked")
             if cleanup_failed:
                 return OperationResult("uncertain", evidence=tuple(captured.evidence) if captured else evidence,
                                        reason="native Nmap containment termination failed; human review required")
@@ -266,7 +306,9 @@ class NmapCollector:
             raise PolicyError("native bridge requires a brokered target")
         bounds = context.spec.bounds
         if (bounds.request_limit != 1 or bounds.output_bytes != _OUTPUT_CAP or
-                bounds.process_limit != 1 or bounds.timeout_s != _DEADLINE_S):
+                bounds.process_limit != 1 or bounds.timeout_s != _DEADLINE_S or
+                bounds.tcp_connects != 1 or bounds.udp_datagrams != 0 or
+                bounds.protocol_requests != 0 or bounds.tx_bytes != 0 or bounds.rx_bytes != 0):
             raise PolicyError("native bridge requires fixed one-probe bounds")
         policy_target = next((item for item in context.policy.targets if item.target.target_id == target.target_id), None)
         if policy_target is None or policy_target.target != target:
@@ -315,7 +357,7 @@ class NmapCollector:
         ]
 
     def _run(self, context: ExecutionContext, process: subprocess.Popen[bytes], parent: socket.socket,
-             target, address: str, captured: _StreamCapture) -> tuple[bytes, bytes, str, tuple]:
+             target, address: str, captured: _StreamCapture, attempt_id: str | None) -> tuple[bytes, bytes, str, tuple]:
         if process.stdout is None or process.stderr is None:
             raise _BridgeFailure("scanner output pipes are unavailable")
         selector = selectors.DefaultSelector()
@@ -342,7 +384,9 @@ class NmapCollector:
                             raise _BridgeFailure("native bridge request is malformed", captured.evidence)
                         if observed_state is not None:
                             raise _BridgeFailure("scanner requested more than one TCP connect")
-                        observed_state = self._parent_connect(context, parent, request, target, address, deadline)
+                        observed_state = self._parent_connect(
+                            context, parent, request, target, address, deadline, attempt_id,
+                        )
                     else:
                         data = os.read(key.fileobj.fileno(), 65536)
                         if not data:
@@ -406,7 +450,7 @@ class NmapCollector:
 
     @staticmethod
     def _parent_connect(context: ExecutionContext, parent: socket.socket, packet: bytes, target, address: str,
-                        deadline: float) -> str:
+                        deadline: float, attempt_id: str | None) -> str:
         if len(packet) != _REQUEST.size:
             raise _BridgeFailure("native bridge request is malformed")
         magic, version, family, port, reserved, packed_address = _REQUEST.unpack(packet)
@@ -430,6 +474,12 @@ class NmapCollector:
         sock = socket.socket(family, socket.SOCK_STREAM)
         try:
             sock.setblocking(False)
+            ledger = getattr(network, "ledger", None)
+            action_id = getattr(network, "action_id", None)
+            if ledger is not None and action_id is not None and attempt_id is not None:
+                ledger.record_attempt_event(
+                    action_id, attempt_id, "tcp-connect", tcp_connects=1,
+                )
             if family == socket.AF_INET6:
                 error_number = sock.connect_ex((address, target.port, 0, 0))
             else:

@@ -45,18 +45,19 @@ are incomplete. READINESS.md is the current release gate summary.
 ## Verification so far
 
 - Historical pre-split 34-test web operator suite: passed before removal; it is preserved in Git history and the separate local human-tool archive, not in alpha 0.1.0a5.
-- Final full suite: 532 passed, 17 subtests passed in 103.98 seconds, including
-  missing active and queued reservation recovery regressions. Independent final
-  wave/accounting review passed 51 focused tests and reported no remaining
-  material blocker in that reviewed surface.
-- Python 3.11 deterministic suite: 197 passed. This installed interpreter lacks
-  `os.memfd_create`; full isolated 3.11 runtime acceptance is not established.
+- Final full synthetic suite: 757 passed with complete capture, no collection
+  problems, and no unexpected reports. It includes active and queued
+  reservation recovery, scanner-contract, relay, mapping, and transport
+  accounting regressions.
+- Python 3.11 deterministic suite: 757 passed. The full synthetic suite now
+  passes in both the system Python and pinned Python 3.11 environment.
 - Corrected RPM comparator matched installed librpm for 196 synthetic pairs.
 - Fixed token baseline: 40,752 versus 4,644 input tokens (88.6% reduction), zero
   model calls, 43,398 stdout bytes retained and local audit verified.
-- Packaging boundary suite: 11 passed; explicit input lists reject unreviewed
-  evidence and nested test/answer files before distribution. Human-kit links and
-  reviewed passive scanner resources are included.
+- Packaging boundary suite: 13 passed. Explicit input lists reject unreviewed
+  evidence and nested test/answer files before distribution. The package gate
+  built identical artifacts twice and loaded the code-anchored scanner catalog
+  from an extracted wheel layout. Human tooling remains excluded.
 - Source secret scan: 257 source files, no findings at that checkpoint; final
   source/package scan and reproducibility receipts accompany the private build.
 - Independent reviews found and corrected stop-log, disclosure, advisory identity,
@@ -65,7 +66,19 @@ are incomplete. READINESS.md is the current release gate summary.
 
 ## Remaining implementation gates
 
-Complete actual protocol request/byte/deadline accounting; credential grants and actual isolated authenticated collection; complete paged
+The development continuation added first-class transport reservations and
+durable attempt receipts, conservative crash recovery, immutable scanner plan
+semantics, deterministic multi-service candidate mapping, atomic handover
+transport ceilings, and loopback-only HTTP, SMB2 negotiate, and NBSTAT
+validators. The exact Nmap request fixtures use one sealed compound receipt,
+record cumulative TCP and UDP resources, and cannot resume after a terminal
+result. Structured MS17-010 and unmapped-CVE cards remain manual-only. The
+catalog admits no live scanner profile. Existing bounded HTTP
+receipts reconstruct application-layer request and body sizes; they do not
+measure complete headers, TLS, or wire bytes.
+
+Complete the parent-owned connected relay and actual wire accounting;
+credential grants and actual isolated authenticated collection; complete paged
 collector receipts and richer all-platform inventories; advisory feed
 normalization/runtime integration; remaining finite web/database/AD checks;
 manual cards/retest completeness; quarantine/export and failure corpus review;
@@ -96,10 +109,10 @@ restricted to sanitized handoff notes, with no history sync/import for this task
 
 ## Ownership and next safe action
 
-Main owns contracts/migrations/integration. Named Luna planner produces each
-bounded delegation brief; Terra owns enforcement/transport; named Luna
-implementer owns detector/collector packages; Luna reviewer is independent.
-At most two writers, disjoint files. Source/public/synthetic data only. No
-silent model substitution, global settings changes, or push. Continue with
-final review/packaging, then the outstanding credentialed transport and richer
-collector packages once their independent acceptance evidence is available.
+Main owns contracts, migrations, integration, and admission. For this
+continuation the user explicitly authorized Daybreak for scanner architecture
+and independent security review; Astra owns the separate Harbinger and Merlin
+interface redesign. Source and synthetic data only. No live profile is admitted
+by a builder claim. Continue with the outstanding connected relay,
+credential-bound collectors, packet-accounting evidence, and lab validation
+before enabling any exact scanner runner.

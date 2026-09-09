@@ -98,9 +98,28 @@ class Bounds:
     model_calls: int = 0
     actions: int = 0
     auth_posts: int = 0
+    # Append transport counters so the original positional constructor remains
+    # compatible with stored integrations and third-party callers.
+    tcp_connects: int = 0
+    udp_datagrams: int = 0
+    protocol_requests: int = 0
+    tx_bytes: int = 0
+    rx_bytes: int = 0
 
 
-RESOURCE_COUNTERS = ("request_limit", "output_bytes", "process_limit", "model_calls", "actions", "auth_posts")
+RESOURCE_COUNTERS = (
+    "request_limit",
+    "tcp_connects",
+    "udp_datagrams",
+    "protocol_requests",
+    "tx_bytes",
+    "rx_bytes",
+    "output_bytes",
+    "process_limit",
+    "model_calls",
+    "actions",
+    "auth_posts",
+)
 
 
 @dataclass(frozen=True)
