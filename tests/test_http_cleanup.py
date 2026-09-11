@@ -35,7 +35,7 @@ def test_second_memfd_failure_closes_connected_socket_and_first_fd(monkeypatch):
     monkeypatch.setattr("cptc_harness.network.memfd_create", memfd)
     def close(fd):
         closed.append(fd); real_close(fd)
-    monkeypatch.setattr("cptc_harness.network.os.close", close)
+    monkeypatch.setattr("cptc_harness.network._close_http_memfd", close)
 
     with pytest.raises(OSError):
         broker._isolated_http("127.0.0.1", TARGET, "GET", "/", {"Host": "x"}, 32, 1)
@@ -53,7 +53,7 @@ def test_launch_failure_closes_all_setup_resources(monkeypatch):
     monkeypatch.setattr("cptc_harness.network.subprocess.Popen", lambda *_args, **_kw: (_ for _ in ()).throw(OSError("launch failed")))
     def close(fd):
         closed.append(fd); real_close(fd)
-    monkeypatch.setattr("cptc_harness.network.os.close", close)
+    monkeypatch.setattr("cptc_harness.network._close_http_memfd", close)
 
     with pytest.raises(OSError):
         broker._isolated_http("127.0.0.1", TARGET, "GET", "/", {"Host": "x"}, 32, 1)
@@ -68,11 +68,12 @@ def test_cleanup_faults_close_pipes_and_latch_network_stop(monkeypatch, failure)
     sock = Socket()
     closed, timeouts = [], []
     real_close = os.close
+    monkeypatch.setattr("cptc_harness.network.verified_executable", lambda path: path)
     monkeypatch.setattr("cptc_harness.network.socket.create_connection", lambda *a, **kw: sock)
     def close(fd):
         closed.append(fd)
         real_close(fd)
-    monkeypatch.setattr("cptc_harness.network.os.close", close)
+    monkeypatch.setattr("cptc_harness.network._close_http_memfd", close)
     class Process:
         pid = 123456789
         returncode = None

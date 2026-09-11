@@ -5,22 +5,50 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .contracts import (Approval, AuditEvent, ExecutionContext, OperationRequest,
-                        OperationResult, PolicyError, canonical_json, digest, validate_schema)
+                        OperationResult, PolicyError, _issue_profile_action,
+                        canonical_json, digest, validate_schema)
 from .audit_control import required_emit, required_release
+
+
+_UNSET = object()
 
 
 class Broker:
     def __init__(self, policy: Any, registry: Any, ledger: Any, audit: Any, *,
-                 network: Any | None = None, tools: Any | None = None, clock: Any | None = None, result_sink=None) -> None:
+                 network: Any | None = None, tools: Any | None = None, clock: Any | None = None,
+                 result_sink=None, profile_wire_broker: Any | None = None,
+                 profile_channel_provider: Any = _UNSET) -> None:
+        if profile_channel_provider is not _UNSET:
+            raise PolicyError(
+                "profile_channel_provider was removed; use the isolated profile wire broker"
+            )
+        if profile_wire_broker is not None:
+            from .profile_runtime.broker_ipc import PortcastBrokerClient
+
+            if (
+                not isinstance(profile_wire_broker, PortcastBrokerClient)
+                or getattr(profile_wire_broker, "_ledger", None) is not ledger
+            ):
+                raise PolicyError("trusted PortCast profile wire broker is unavailable")
         self.policy, self.registry, self.ledger, self.audit = policy, registry, ledger, audit
         self.network, self.tools, self.clock = network, tools, clock
         self.result_sink = result_sink
+        self._profile_wire_broker = profile_wire_broker
 
     def execute(self, request: OperationRequest, *, actor: str, handler: Any | None = None,
                 input_bytes: bytes = b"", source: Any | None = None, _wave_claim=None) -> OperationResult:
         """Validate, reserve, audit intent, then invoke only the registry dispatch path."""
         reserved = False
         dispatched = False
+        output_reserved = False
+        profile_receipts = []
+
+        def release_output() -> None:
+            nonlocal output_reserved
+            if output_reserved:
+                required_release(self.audit, self.ledger, request.request_id)
+                output_reserved = False
+
         try:
             self._identity(request, actor)
             if request.source == "model" and (input_bytes or source is not None):
@@ -50,7 +78,54 @@ class Broker:
                       "actions": int(getattr(self.policy, "model_actions", 0))}
             if target_policy is not None: limits["request_limit"] = int(target_policy.request_limit)
             if target_policy is not None: limits["auth_posts"] = int(target_policy.auth_attempts)
-            if _wave_claim is None:
+            profile_runtime = spec.tool_id == "portcast-http-identity-v1"
+            profile_action = None
+            profile_dispatch = None
+            if profile_runtime and _wave_claim is not None:
+                raise PolicyError("profile runtime does not accept a pre-reserved wave claim")
+            if profile_runtime and self._profile_wire_broker is None:
+                raise PolicyError("trusted PortCast profile wire broker is unavailable")
+            if profile_runtime:
+                from .profile_runtime.catalog import load_profile, require_live_admission
+
+                sealed_profile = require_live_admission(
+                    load_profile(request.args["profile_id"])
+                )
+                if (
+                    sealed_profile.module_id != spec.module_id
+                    or sealed_profile.target_id != request.target.target_id
+                ):
+                    raise PolicyError("profile runtime catalog binding differs")
+                # Encryption capacity is durable before the broker issues the
+                # process-local authority that can reserve or open a channel.
+                self.audit.reserve_output(request.request_id, spec.bounds.output_bytes)
+                output_reserved = True
+                profile_action = _issue_profile_action(
+                    action_id=request.request_id,
+                    wave_id=request.workflow_id,
+                    workspace_id=request.workspace_id,
+                    target_id=request.target.target_id,
+                    profile_id=request.args["profile_id"],
+                    runtime_pinset_sha256=sealed_profile.runtime_pinset_sha256,
+                    bounds=spec.bounds,
+                    limits=tuple(sorted(limits.items())),
+                    budget_limits=tuple(getattr(self.policy, "budget_limits", ())),
+                )
+
+                def profile_dispatch(action, capture):
+                    from .profile_runtime.executor import dispatch_profile
+
+                    receipt = dispatch_profile(
+                        action,
+                        self._profile_wire_broker,
+                        self.ledger,
+                        capture,
+                        self.audit.record_profile_wire_receipt,
+                        self.ledger.stopped,
+                    )
+                    profile_receipts.append(receipt)
+                    return receipt
+            elif _wave_claim is None:
                 reservation = self.ledger.reserve(request.request_id, spec.bounds, workspace_id=request.workspace_id,
                                     target_id=(f"{request.target.scheme}://{request.target.host}:{request.target.port}" if request.target else None),
                                     auth_realm=target_policy.auth_realm if target_policy else "",
@@ -59,25 +134,30 @@ class Broker:
             else:
                 from .campaign import activate_reserved_request
                 reservation = activate_reserved_request(self, request, _wave_claim)
-            reserved = True
-            self.audit.reserve_output(request.request_id, spec.bounds.output_bytes)
+            reserved = not profile_runtime
+            if not profile_runtime:
+                self.audit.reserve_output(request.request_id, spec.bounds.output_bytes)
+                output_reserved = True
             required_emit(self.audit, self.ledger, AuditEvent("operation_intent", request.request_id,
                 {"module": spec.module_id, "version": spec.version, "target": request.target.target_id if request.target else None,
                  "source_sha256": spec.source_hash, "args_hash": digest(request.args), "validated_args": request.args,
                  "bounds": spec.bounds.__dict__, "actor": actor, "workflow_id": request.workflow_id,
                  "approval_id": request.approval_id, "parent_action_id": request.parent_action_id,
-                 "remaining_budgets": reservation.remaining}))
+                 "remaining_budgets": {} if profile_runtime else reservation.remaining}))
             if self.ledger.stopped(): raise PolicyError("operator stop")
             if self.network is not None:
                 self.network.action_id = request.request_id
             transport = self.network.target_transport(request.target, self.policy.scope, timeout_s=spec.bounds.timeout_s,
-                request_limit=spec.bounds.request_limit) if request.target and self.network else None
+                request_limit=spec.bounds.request_limit) if request.target and self.network and not profile_runtime else None
             context = ExecutionContext(request, spec, self.policy, transport=transport, tools=self.tools,
                 capture=lambda stream, data, classification: self.audit.capture(request.request_id, stream, data, classification),
-                stopped=self.ledger.stopped, input_bytes=input_bytes, source=source, network=self.network)
+                stopped=self.ledger.stopped, input_bytes=input_bytes, source=source, network=self.network,
+                profile_action=profile_action, profile_dispatch=profile_dispatch)
             # Registry dispatch is the only normal invocation. A supplied handler cannot replace it.
             dispatched = True
             result = self.registry.dispatch(context)
+            if profile_receipts:
+                reserved = True
             self._audit_ready()
             if not isinstance(result, OperationResult): raise PolicyError("registered module returned an invalid result")
             if result.status not in {"complete", "failed", "blocked", "stopped", "uncertain"}:
@@ -85,26 +165,40 @@ class Broker:
             validate_schema(result.facts, spec.output_schema)
             if self.ledger.stopped() and result.status == "complete":
                 result = OperationResult("stopped", result.facts, result.evidence, self.ledger.stop_reason(), result.usage)
-            self.ledger.finish(request.request_id, result.usage, state=result.status)
+            if not profile_runtime:
+                self.ledger.finish(request.request_id, result.usage, state=result.status)
             required_emit(self.audit, self.ledger, AuditEvent("operation_result", request.request_id,
                 {"status": result.status, "reason": result.reason, "usage": result.usage,
                  "evidence": [e.evidence_id for e in result.evidence]}))
-            required_release(self.audit, self.ledger, request.request_id)
+            release_output()
             return self._record(request, result)
         except PolicyError as exc:
             if dispatched:
+                if reserved and not self.ledger.stopped():
+                    self.ledger.finish(request.request_id, state="uncertain")
                 self.ledger.stop("operation outcome uncertain after dispatch")
-                self.ledger.finish(request.request_id, state="uncertain")
                 required_emit(self.audit, self.ledger, AuditEvent("operation_uncertain", request.request_id, {"reason": "policy or collection failure after dispatch"}))
+                try:
+                    release_output()
+                except PolicyError:
+                    return self._record(request, OperationResult("uncertain", reason="audit output release failed; human review required"))
                 return self._record(request, OperationResult("uncertain", reason="operation outcome uncertain; human review required"))
             if reserved:
                 self.ledger.finish(request.request_id, state="stopped" if self.ledger.stopped() else "blocked")
+            try:
+                release_output()
+            except PolicyError:
+                return self._record(request, OperationResult("uncertain", reason="audit output release failed; human review required"))
             required_emit(self.audit, self.ledger, AuditEvent("operation_denied", request.request_id, {"reason": str(exc)}))
             return self._record(request, OperationResult("stopped" if self.ledger.stopped() else "blocked", reason=str(exc)))
         except Exception:
             self.ledger.stop("audit, storage, or execution outcome uncertain")
             if reserved:
                 self.ledger.finish(request.request_id, state="uncertain")
+            try:
+                release_output()
+            except PolicyError:
+                return self._record(request, OperationResult("uncertain", reason="audit output release failed; human review required"))
             required_emit(self.audit, self.ledger, AuditEvent("operation_uncertain", request.request_id, {"reason": "registered operation failed"}))
             return self._record(request, OperationResult("uncertain", reason="registered operation failed"))
 

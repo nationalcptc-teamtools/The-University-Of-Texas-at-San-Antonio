@@ -73,7 +73,9 @@ def _safe(value: Any) -> Any:
 class AuditWriter:
     def __init__(self, root: str | Path, policy: Any, *, age_binary: str | Path | None = None,
                  age_recipient: str | None = None, clock: Any | None = None,
-                 encrypted_volume_verified: bool = False, evidence_cap: int = 131072) -> None:
+                 encrypted_volume_verified: bool = False, evidence_cap: int = 131072,
+                 profile_worker_sha256: str | None = None,
+                 compatible_profile_workers: tuple[str, ...] = ()) -> None:
         self.root = private_directory(Path(root), create=True)
         self.policy = policy
         self.clock = clock
@@ -86,6 +88,8 @@ class AuditWriter:
         self._session_id = uuid.uuid4().hex
         self._capture_totals = {}
         self._output_limits = {}
+        self._profile_worker_sha256 = profile_worker_sha256
+        self._compatible_profile_workers = tuple(compatible_profile_workers)
         try:
             self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
             if self.root.is_symlink() or (self.root.stat().st_mode & 0o077): raise PolicyError("audit root permissions are unsafe")
@@ -232,22 +236,65 @@ class AuditWriter:
         if type(maximum) is not int or maximum < 0 or maximum > self.evidence_cap:
             raise PolicyError("invalid action output allowance")
         path = self.root / (".reserve-" + hashlib.sha256(request_id.encode()).hexdigest())
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        fd = None
+        created = False
         try:
+            fd = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+            )
+            created = True
+            self._checkpoint("output_marker_created")
             self._fsync_dir(self.root)
+            self._checkpoint("output_directory_synced")
             os.posix_fallocate(fd, 0, maximum * 2 + 262144)
+            self._checkpoint("output_allocated")
             os.fsync(fd)
-        except OSError:
-            self._fail("output reservation failed")
-            raise PolicyError("insufficient durable space for complete action capture") from None
-        finally:
+            self._checkpoint("output_file_synced")
+            self.emit(
+                AuditEvent("output_reserved", request_id, {"output_bytes": maximum})
+            )
+            self._checkpoint("output_reserved_emitted")
             os.close(fd)
+            fd = None
+        except Exception:
+            self._fail("output reservation failed")
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                fd = None
+            self._output_limits.pop(request_id, None)
+            if created:
+                try:
+                    path.unlink(missing_ok=True)
+                    self._fsync_dir(self.root)
+                except OSError:
+                    self._fail("output reservation rollback requires manual reconciliation")
+            raise PolicyError(
+                "output reservation failed; insufficient durable space for complete action capture"
+            ) from None
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    self._fail(
+                        "output reservation rollback requires manual reconciliation"
+                    )
         self._output_limits[request_id] = maximum
-        self.emit(AuditEvent("output_reserved", request_id, {"output_bytes": maximum}))
 
     def release_output(self, request_id: str):
-        (self.root / (".reserve-" + hashlib.sha256(request_id.encode()).hexdigest())).unlink(missing_ok=True)
-        self._fsync_dir(self.root)
+        self._output_limits.pop(request_id, None)
+        path = self.root / (".reserve-" + hashlib.sha256(request_id.encode()).hexdigest())
+        try:
+            path.unlink(missing_ok=True)
+            self._fsync_dir(self.root)
+        except OSError:
+            self._fail("output reservation release requires manual reconciliation")
+            raise PolicyError("output reservation release requires manual reconciliation") from None
 
     def capture(self, request_id: str, stream: str, data: bytes, classification: str) -> EvidenceRef:
         if self._failed or self._closed:
@@ -397,6 +444,204 @@ class AuditWriter:
         if intents != set(receipts) or expected_actions - set(receipts):
             raise PolicyError("unfinished result intent requires operator review")
         return receipts
+
+    def record_profile_wire_receipt(self, receipt):
+        """Durably append one strict metadata-only profile wire receipt."""
+
+        from .profile_runtime.receipts import (
+            ProfileWireReceipt,
+            validate_persisted_profile_wire_receipt,
+        )
+
+        value = receipt.as_dict() if isinstance(receipt, ProfileWireReceipt) else receipt
+        if not isinstance(self._profile_worker_sha256, str):
+            raise PolicyError("trusted current profile worker pin is unavailable")
+        validated = validate_persisted_profile_wire_receipt(
+            value, expected_worker_sha256=self._profile_worker_sha256
+        )
+        if validated.action_id in self.profile_wire_receipts():
+            raise PolicyError("profile wire receipt action is already recorded")
+        encoded = canonical_json(validated.as_dict())
+        return self.emit(
+            AuditEvent(
+                "profile_wire_receipt",
+                validated.action_id,
+                {
+                    "receipt": validated.as_dict(),
+                    "receipt_sha256": hashlib.sha256(encoded).hexdigest(),
+                },
+            )
+        )
+
+    def profile_wire_receipts(self):
+        """Return integrity-verified receipt metadata keyed by action ID."""
+
+        from .profile_runtime.receipts import validate_persisted_profile_wire_receipt
+
+        if not self.verify().valid or not self.ready():
+            raise PolicyError("invalid audit cannot supply profile wire receipts")
+        receipts = {}
+        evidence = {}
+        paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
+        for path in paths:
+            for line in read_private(path, 128 * 1024 * 1024).splitlines():
+                event = json.loads(line)
+                if event.get("kind") == "evidence_capture":
+                    action = event.get("action_id")
+                    data = event.get("data")
+                    reference = data.get("evidence") if isinstance(data, dict) else None
+                    if (
+                        isinstance(action, str)
+                        and isinstance(reference, dict)
+                        and set(reference)
+                        == {
+                            "evidence_id",
+                            "target_id",
+                            "check_id",
+                            "classification",
+                            "artifact_relpath",
+                            "sha256",
+                            "bytes",
+                        }
+                    ):
+                        evidence[(action, reference.get("evidence_id"))] = reference
+                    continue
+                if event.get("kind") != "profile_wire_receipt":
+                    continue
+                action = event.get("action_id")
+                data = event.get("data")
+                if (
+                    not isinstance(action, str)
+                    or not isinstance(data, dict)
+                    or set(data) != {"receipt", "receipt_sha256"}
+                    or action in receipts
+                    or len(receipts) >= 2048
+                ):
+                    raise PolicyError("invalid or duplicate profile wire receipt")
+                presented_worker = (
+                    data["receipt"].get("worker_sha256")
+                    if isinstance(data["receipt"], dict)
+                    else None
+                )
+                trusted_worker = next(
+                    (
+                        candidate
+                        for candidate in self._compatible_profile_workers
+                        if candidate == presented_worker
+                    ),
+                    None,
+                )
+                if trusted_worker is None:
+                    raise PolicyError("profile wire receipt worker is not release-compatible")
+                receipt = validate_persisted_profile_wire_receipt(
+                    data["receipt"], expected_worker_sha256=trusted_worker
+                )
+                if (
+                    receipt.action_id != action
+                    or not isinstance(data["receipt_sha256"], str)
+                    or hashlib.sha256(canonical_json(receipt.as_dict())).hexdigest()
+                    != data["receipt_sha256"]
+                ):
+                    raise PolicyError("profile wire receipt binding differs")
+                if receipt.encrypted_artifact_id != "none":
+                    reference = evidence.get((action, receipt.encrypted_artifact_id))
+                    if (
+                        not isinstance(reference, dict)
+                        or reference.get("check_id") != "raw"
+                        or reference.get("classification")
+                        != "client_confidential_human_only"
+                        or reference.get("sha256") != receipt.evidence_sha256
+                        or reference.get("bytes") != receipt.evidence_bytes
+                    ):
+                        raise PolicyError("profile wire receipt lacks matching encrypted evidence")
+                receipts[action] = receipt.as_dict()
+        return receipts
+
+    def record_profile_cleanup_receipt(self, action_id, status):
+        """Record whether the lab transport closed after one profile action."""
+
+        if (
+            not isinstance(action_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", action_id) is None
+            or type(status) is not str
+            or status not in {"passed", "failed"}
+        ):
+            raise PolicyError("profile cleanup receipt fields differ")
+        if action_id not in self.profile_wire_receipts():
+            raise PolicyError("profile cleanup receipt lacks a wire receipt")
+        if action_id in self.profile_cleanup_receipts():
+            raise PolicyError("profile cleanup receipt is already recorded")
+        return self.emit(
+            AuditEvent(
+                "profile_cleanup_receipt",
+                action_id,
+                {
+                    "all_resources_closed": status == "passed",
+                    "automatic_retry": False,
+                    "status": status,
+                },
+            )
+        )
+
+    def profile_cleanup_receipts(self):
+        """Return strict cleanup receipts linked to durable wire receipts."""
+
+        if not self.verify().valid or not self.ready():
+            raise PolicyError("invalid audit cannot supply profile cleanup receipts")
+        wire_actions = set(self.profile_wire_receipts())
+        receipts = {}
+        paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
+        for path in paths:
+            for line in read_private(path, 128 * 1024 * 1024).splitlines():
+                event = json.loads(line)
+                if event.get("kind") != "profile_cleanup_receipt":
+                    continue
+                action = event.get("action_id")
+                data = event.get("data")
+                if (
+                    action not in wire_actions
+                    or action in receipts
+                    or len(receipts) >= 2048
+                    or not isinstance(data, dict)
+                    or set(data)
+                    != {"all_resources_closed", "automatic_retry", "status"}
+                    or type(data["all_resources_closed"]) is not bool
+                    or data["automatic_retry"] is not False
+                    or type(data["status"]) is not str
+                    or data["status"] not in {"passed", "failed"}
+                    or data["all_resources_closed"] != (data["status"] == "passed")
+                ):
+                    raise PolicyError("invalid or duplicate profile cleanup receipt")
+                receipts[action] = dict(data)
+        return receipts
+
+    def profile_action_history(self, action_id: str):
+        """Return durable admission-history kinds for one fixed profile action."""
+
+        if (
+            not isinstance(action_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", action_id) is None
+            or not self.verify().valid
+            or not self.ready()
+        ):
+            raise PolicyError("verified profile action history is unavailable")
+        admitted = {
+            "profile_release_verified",
+            "output_reserved",
+            "operation_intent",
+        }
+        kinds = []
+        paths = [
+            directory / "audit.jsonl"
+            for directory in sorted(self.segments_root.iterdir())
+        ] + [self.path]
+        for path in paths:
+            for line in read_private(path, 128 * 1024 * 1024).splitlines():
+                event = json.loads(line)
+                kind = event.get("kind")
+                if event.get("action_id") == action_id and kind in admitted:
+                    kinds.append(kind)
+        return tuple(kinds)
 
     def publication_receipts(self):
         if not self.verify().valid or not self.ready():

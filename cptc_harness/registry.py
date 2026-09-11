@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .collectors import (Collector, ManualOnlyCollector, ToolCollector,
                          UnsupportedScannerCollector, WebCollector)
+from .collectors.bounded import PortcastIdentityCollector
 from .contracts import (ExecutionContext, ModuleSpec, OperationResult,
                         Bounds, PolicyError, validate_schema)
 from .parsers import (parse_linux_output, parse_network_output, parse_nmap_xml,
@@ -82,6 +83,13 @@ _WEB_SESSION_FACTS = _schema({"status": {"type": "integer", "minimum": 100, "max
                               "truncated": {"type": "boolean"}})
 _WEB_CAPTURE_FACTS = _schema({**dict(_WEB_HEADER_FACTS["properties"]),
                               "cookie_header_present": {"type": "boolean"}, "session_ref_present": {"type": "boolean"}})
+_COMPONENT_FACTS = _schema({
+    "component_id": {"type": "string", "maxLength": 128},
+    "ecosystem": {"type": "string", "maxLength": 64},
+    "product": {"type": "string", "maxLength": 128},
+    "version": {"type": "string", "maxLength": 128},
+    "provenance": {"type": "string", "enum": ("banner",)},
+})
 _PASSIVE_FACTS = _schema({"scanner": {"type": "string", "enum": ("nuclei", "zap")},
                          "rule_id": {"type": "string", "maxLength": 64},
                          "severity": {"type": "string", "enum": ("info", "low", "medium", "high", "critical")},
@@ -110,6 +118,10 @@ _HOST_FACTS = _schema({
     "non_admin_write": {"type": "boolean"}, "inherited": {"type": "boolean"},
     "ace_count": {"type": "integer", "minimum": 0, "maximum": 256},
     "signing_required": {"type": "boolean"}, "channel_binding_required": {"type": "boolean"},
+    "realtime_protection_enabled": {"type": "boolean"},
+    "on_access_protection_enabled": {"type": "boolean"},
+    "ioav_protection_enabled": {"type": "boolean"},
+    "behavior_monitoring_enabled": {"type": "boolean"},
     "accessible": {"type": "boolean"}, "verified": {"type": "boolean"},
 })
 _EXPLOIT_FACTS = _schema({"human_result": {"type": "string", "maxLength": 32},
@@ -127,7 +139,7 @@ _CODE_HASH = hashlib.sha256(b"".join(str(path.relative_to(_CODE_ROOT)).encode() 
 
 def _spec(module_id: str, track: str, mode: str, description: str, *, tool_id: str | None = None,
           effects: tuple[str, ...] = (), output_schema: dict[str, Any] | None = None,
-          bounds: Bounds | None = None) -> ModuleSpec:
+          bounds: Bounds | None = None, input_schema: dict[str, Any] | None = None) -> ModuleSpec:
     profile_hash = hashlib.sha256((module_id + "|1.0.0|" + track + "|" + mode + "|" + description + "|" + (tool_id or "") + "|" + _CODE_HASH).encode()).hexdigest()
     return ModuleSpec(module_id=module_id, version="1.0.0", track=track, mode=mode, effects=effects,
                       bounds=bounds or Bounds(
@@ -137,7 +149,8 @@ def _spec(module_id: str, track: str, mode: str, description: str, *, tool_id: s
                           tx_bytes=4096 if mode == "bounded" else 0,
                           rx_bytes=131072 if mode == "bounded" else 0,
                           output_bytes=131072, process_limit=1),
-                      input_schema=_schema(), output_schema=_freeze(output_schema or _batch_schema(_NETWORK_FACTS)),
+                      input_schema=_freeze(input_schema or _schema()),
+                      output_schema=_freeze(output_schema or _batch_schema(_NETWORK_FACTS)),
                       tool_id=tool_id, source_hash=profile_hash,
                       description=description)
 
@@ -162,6 +175,28 @@ _SPECS = (
           effects=("http_request", "human_only_capture"), output_schema=_batch_schema(_WEB_SESSION_FACTS, source=False)),
     _spec("web.response_capture", "web", "bounded", "Operator-only complete encrypted response for offline passive analysis; one exact approved GET.",
           effects=("operator_only", "http_request", "human_only_capture"), output_schema=_batch_schema(_WEB_HEADER_FACTS, source=False)),
+    _spec(
+        "web.portcast_identity", "web", "bounded",
+        "Candidate-only Jellyfin identity observation for one exact PortCast endpoint.",
+        tool_id="portcast-http-identity-v1",
+        effects=("network_observation", "no_authentication", "no_retry", "no_fallback",
+                 "no_redirect", "no_request_body", "no_body_reflection"),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "profile_id": {
+                    "type": "string",
+                    "enum": ("web.http_jellyfin_public_identity",),
+                    "maxLength": 128,
+                },
+            },
+            "required": ("profile_id",),
+        },
+        output_schema=_batch_schema(_COMPONENT_FACTS),
+        bounds=Bounds(timeout_s=10.0, request_limit=1, tcp_connects=1,
+                      protocol_requests=1, tx_bytes=256, rx_bytes=8192,
+                      output_bytes=16384, process_limit=1),
+    ),
     _spec("web.nuclei", "web", "bounded", "Pinned Nuclei profile; unsupported without reviewed containment.",
           tool_id="nuclei-cptc-reviewed-v1", effects=("network_observation",)),
     _spec("web.zap", "web", "bounded", "Pinned ZAP workflow; unsupported without reviewed containment.",
@@ -191,6 +226,7 @@ _HANDLERS: dict[str, Collector] = {
     "web.headers": WebCollector("web_headers"),
     "web.session": WebCollector("web_session"),
     "web.response_capture": ResponseCaptureCollector(),
+    "web.portcast_identity": PortcastIdentityCollector(),
     "web.nuclei": UnsupportedScannerCollector("Nuclei"),
     "web.zap": UnsupportedScannerCollector("ZAP"),
     "linux.output_import": linux_import(),
@@ -225,9 +261,13 @@ def _validate_result(result: OperationResult) -> None:
         "capabilities", "risky_capability", "reviewed", "sudo_access_observed", "evidence_ref", "sid", "domain_sid",
         "domain_name", "owner_sid", "non_admin_write", "inherited", "ace_count", "signing_required",
         "channel_binding_required", "accessible", "verified",
+        "realtime_protection_enabled", "on_access_protection_enabled",
+        "ioav_protection_enabled", "behavior_monitoring_enabled",
         "human_result", "evidence_attached", "evidence_ref_present", "finding_id", "severity",
         "evidence_state", "retest_state", "coverage_state", "duplicate", "reviewed", "evidence_ref",
         "scanner", "rule_id", "confidence", "matches",
+        "component_id", "ecosystem", "release", "architecture", "distribution",
+        "os_build", "patch_ids",
     }
     for item in observations:
         if not isinstance(item, dict) or set(item) - {"track", "target", "check_id", "state", "facts", "source_sha256"}:

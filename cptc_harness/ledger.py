@@ -116,6 +116,16 @@ class Ledger:
         row = self._db.execute("SELECT reason FROM stops WHERE engagement=?", (self.engagement_id,)).fetchone()
         return row[0] if row else None
 
+    def reservation_state(self, request_id: str) -> str | None:
+        """Return the durable state for one exact action without mutating it."""
+
+        _safe_id(request_id, 128)
+        row = self._db.execute(
+            "SELECT state FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+            (self.engagement_id, self.device_id, request_id),
+        ).fetchone()
+        return row[0] if row is not None else None
+
     def record_control_reconciled(self, correlation_id: str, received_at: str, received_monotonic_ns: int) -> bool:
         """Record a central-writer acknowledgement for a durable stop receipt."""
         _safe_id(correlation_id, 64)
@@ -468,6 +478,68 @@ class Ledger:
                      for k, limit in ceiling.items() if k in _COUNTERS}
         return Reservation(request_id, bounds, remaining)
 
+    def reserve_attempt(
+        self,
+        request_id: str,
+        bounds: Bounds,
+        attempt_id: str,
+        *,
+        started_ns: int,
+        deadline_ns: int,
+        workspace_id: str = "",
+        target_id: str | None = None,
+        auth_realm: str = "",
+        workflow_id: str = "default",
+        limits: dict[str, int] | None = None,
+        budget_limits=(),
+    ) -> Reservation:
+        """Atomically spend all bounds and persist the first wire attempt.
+
+        No connected channel may be exposed before this transaction commits.
+        A failure while inserting the attempt rolls back its reservation,
+        scoped charges, and assignment together.
+        """
+
+        self._validate_attempt_timing(
+            request_id, attempt_id, started_ns=started_ns, deadline_ns=deadline_ns
+        )
+        self._assert_mutable()
+        with self._tx():
+            ceiling = self._reserve_locked(
+                request_id,
+                bounds,
+                workspace_id=workspace_id,
+                target_id=target_id,
+                auth_realm=auth_realm,
+                workflow_id=workflow_id,
+                limits=limits,
+                budget_limits=budget_limits,
+                state="running",
+                enforce_inflight=True,
+            )
+            self._begin_attempt_locked(
+                request_id,
+                attempt_id,
+                started_ns=started_ns,
+                deadline_ns=deadline_ns,
+            )
+        remaining = {
+            key: max(
+                0,
+                int(
+                    limit
+                    - (
+                        self.usage(target_id=target_id)
+                        if key in _TARGET_SCOPED_COUNTERS and target_id
+                        else self.usage(workflow_id)
+                    ).get(key, 0)
+                ),
+            )
+            for key, limit in ceiling.items()
+            if key in _COUNTERS
+        }
+        return Reservation(request_id, bounds, remaining)
+
     def _reserve_locked(self, request_id: str, bounds: Bounds, *, workspace_id: str,
                         target_id: str | None, auth_realm: str, workflow_id: str,
                         limits: dict[str, int] | None, budget_limits, state: str,
@@ -582,6 +654,8 @@ class Ledger:
                 raise PolicyError("terminal reservation receipt is immutable")
             if row[0] not in {"running", "dispatching"}:
                 raise PolicyError("reservation is not active")
+            if state in {"complete", "finished"} and self.stopped():
+                raise PolicyError("stopped engagement cannot report successful completion")
             self._db.execute("UPDATE reservations SET state=?, usage=? WHERE engagement=? AND device=? AND request_id=?",
                              (state, json.dumps(usage, sort_keys=True), self.engagement_id, self.device_id, request_id))
 
@@ -603,34 +677,75 @@ class Ledger:
 
     def begin_attempt(self, request_id: str, attempt_id: str, *, started_ns: int, deadline_ns: int) -> None:
         """Persist one network-attempt intent before a worker can emit traffic."""
-        _safe_id(request_id, 128); _safe_id(attempt_id, 128)
-        if (type(started_ns) is not int or type(deadline_ns) is not int or started_ns < 0
-                or deadline_ns <= started_ns):
-            raise PolicyError("invalid transport attempt timing")
+        self._validate_attempt_timing(
+            request_id, attempt_id, started_ns=started_ns, deadline_ns=deadline_ns
+        )
         self._assert_mutable()
         with self._tx():
             self._assert_mutable()
-            if self.stopped():
-                raise PolicyError("engagement is stopped")
-            row = self._db.execute(
-                "SELECT state FROM reservations WHERE engagement=? AND device=? AND request_id=?",
-                (self.engagement_id, self.device_id, request_id),
-            ).fetchone()
-            if row is None or row[0] not in {"running", "dispatching"}:
-                raise PolicyError("transport attempt requires an active reservation")
-            if self._db.execute(
-                "SELECT 1 FROM reservation_attempts WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?",
-                (self.engagement_id, self.device_id, request_id, attempt_id),
-            ).fetchone():
-                raise PolicyError("transport attempt id was already used")
-            self._db.execute(
-                """INSERT INTO reservation_attempts(
-                    engagement,device,request_id,attempt_id,tcp_connects,udp_datagrams,
-                    request_count,request_bytes,response_bytes,elapsed_ms,deadline_ns,
-                    started_ns,deadline_exceeded,state)
-                   VALUES (?,?,?,?,0,0,0,0,0,0,?,?,0,'running')""",
-                (self.engagement_id, self.device_id, request_id, attempt_id, deadline_ns, started_ns),
+            self._begin_attempt_locked(
+                request_id,
+                attempt_id,
+                started_ns=started_ns,
+                deadline_ns=deadline_ns,
             )
+
+    @staticmethod
+    def _validate_attempt_timing(
+        request_id: str,
+        attempt_id: str,
+        *,
+        started_ns: int,
+        deadline_ns: int,
+    ) -> None:
+        _safe_id(request_id, 128)
+        _safe_id(attempt_id, 128)
+        if (
+            type(started_ns) is not int
+            or type(deadline_ns) is not int
+            or started_ns < 0
+            or deadline_ns <= started_ns
+        ):
+            raise PolicyError("invalid transport attempt timing")
+
+    def _begin_attempt_locked(
+        self,
+        request_id: str,
+        attempt_id: str,
+        *,
+        started_ns: int,
+        deadline_ns: int,
+    ) -> None:
+        """Insert an attempt while the caller holds ``BEGIN IMMEDIATE``."""
+
+        if self.stopped():
+            raise PolicyError("engagement is stopped")
+        row = self._db.execute(
+            "SELECT state FROM reservations WHERE engagement=? AND device=? AND request_id=?",
+            (self.engagement_id, self.device_id, request_id),
+        ).fetchone()
+        if row is None or row[0] not in {"running", "dispatching"}:
+            raise PolicyError("transport attempt requires an active reservation")
+        if self._db.execute(
+            "SELECT 1 FROM reservation_attempts WHERE engagement=? AND device=? AND request_id=? AND attempt_id=?",
+            (self.engagement_id, self.device_id, request_id, attempt_id),
+        ).fetchone():
+            raise PolicyError("transport attempt id was already used")
+        self._db.execute(
+            """INSERT INTO reservation_attempts(
+                engagement,device,request_id,attempt_id,tcp_connects,udp_datagrams,
+                request_count,request_bytes,response_bytes,elapsed_ms,deadline_ns,
+                started_ns,deadline_exceeded,state)
+               VALUES (?,?,?,?,0,0,0,0,0,0,?,?,0,'running')""",
+            (
+                self.engagement_id,
+                self.device_id,
+                request_id,
+                attempt_id,
+                deadline_ns,
+                started_ns,
+            ),
+        )
 
     def record_attempt_event(self, request_id: str, attempt_id: str, event_id: str, **raw_values) -> bool:
         """Append one idempotent measured event and preserve any overrun."""
@@ -741,10 +856,12 @@ class Ledger:
                 if receipt["state"] == state:
                     return receipt
                 raise PolicyError("terminal transport receipt is immutable")
+            if state == "complete" and self.stopped():
+                raise PolicyError("stopped engagement cannot report successful completion")
             started_ns, deadline_ns = int(row[1]), int(row[2])
             if ended_ns < started_ns:
                 raise PolicyError("transport monotonic time moved backwards")
-            exceeded = ended_ns > deadline_ns
+            exceeded = ended_ns >= deadline_ns
             final_state = "uncertain" if exceeded and state == "complete" else state
             totals = self._refresh_attempt_totals_locked(request_id, attempt_id)
             self._db.execute(

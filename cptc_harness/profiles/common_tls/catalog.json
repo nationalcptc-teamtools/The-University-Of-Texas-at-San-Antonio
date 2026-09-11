@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "profile_server_names": {
+    "shorepass.tls_certificate.v1": "probe-a.rooms.allports.tours",
+    "penny.tls_certificate.v1": "penny.allports.tours"
+  },
+  "tls_versions": ["TLSv1.2", "TLSv1.3"],
+  "cipher_names": [
+    "TLS_AES_128_GCM_SHA256",
+    "TLS_AES_256_GCM_SHA384",
+    "TLS_CHACHA20_POLY1305_SHA256",
+    "ECDHE_ECDSA_AES128_GCM_SHA256",
+    "ECDHE_ECDSA_AES256_GCM_SHA384",
+    "ECDHE_RSA_AES128_GCM_SHA256",
+    "ECDHE_RSA_AES256_GCM_SHA384",
+    "ECDHE-RSA-AES128-GCM-SHA256",
+    "ECDHE-RSA-AES256-GCM-SHA384",
+    "ECDHE-RSA-AES128-SHA",
+    "ECDHE-RSA-AES256-SHA",
+    "DHE-RSA-AES128-GCM-SHA256",
+    "DHE-RSA-AES256-GCM-SHA384",
+    "AES128-GCM-SHA256",
+    "AES256-GCM-SHA384"
+  ],
+  "maximum_san_names": 8
+}

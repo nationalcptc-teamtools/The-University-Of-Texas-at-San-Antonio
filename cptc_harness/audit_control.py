@@ -12,7 +12,13 @@ from .contracts import AuditEvent, PolicyError
 from .policy import identifier
 from .storage import atomic_write, private_directory, read_private
 
-_REASON_CODES = frozenset({"operator_request", "suspected_lockout", "health_degradation", "audit_failure"})
+_REASON_CODES = frozenset({
+    "operator_request",
+    "suspected_lockout",
+    "health_degradation",
+    "audit_failure",
+    "transport_uncertainty",
+})
 _INTERFACES = frozenset({"cli", "human", "tui", "mcp", "internal"})
 _MAX_PENDING = 128
 

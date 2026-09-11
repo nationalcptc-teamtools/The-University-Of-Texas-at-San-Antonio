@@ -1,0 +1,52 @@
+[Unit]
+Description=CPTC Harness canonical PortCast one-shot authority
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=_cptc-portcast
+Group=cptc-harness
+UMask=0077
+RuntimeDirectory=cptc-harness
+RuntimeDirectoryMode=0750
+LoadCredentialEncrypted=cptc11-dell:/etc/cptc-harness/credentials/cptc11-dell.cred
+LoadCredentialEncrypted=cptc11-kali:/etc/cptc-harness/credentials/cptc11-kali.cred
+RootDirectory=/usr/lib/cptc-harness/portcast-live-v1
+MountAPIVFS=yes
+ExecStart=/app/deployment/portcast-bootstrap
+UnsetEnvironment=LD_AUDIT LD_LIBRARY_PATH LD_PRELOAD PYTHONHOME PYTHONPATH PYTHONSTARTUP PYTHONUSERBASE GODEBUG GOENV GOTRACEBACK
+Restart=no
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+ProtectSystem=strict
+ProtectHome=yes
+ProtectHostname=no
+ProtectKernelTunables=no
+ProtectKernelModules=yes
+ProtectKernelLogs=no
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=all
+RemoveIPC=yes
+BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256
+BindPaths=/run/cptc-harness
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/deployment.lock
+BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime
+RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK
+IPAddressDeny=any
+IPAddressAllow=100.85.84.30/32
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictNamespaces=mnt ipc net pid user uts
+RestrictSUIDSGID=no
+SystemCallArchitectures=native
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target

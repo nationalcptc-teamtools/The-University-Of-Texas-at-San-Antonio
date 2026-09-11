@@ -172,7 +172,7 @@ def test_seal_requires_stop_and_no_running_reservation_and_freezes_source(tmp_pa
     ledger.stop("first stop")
     with pytest.raises(PolicyError):
         ledger.seal_for_handover("destination", "a" * 64)
-    ledger.finish("running", state="complete")
+    ledger.finish("running", state="stopped")
     seal_id = ledger.seal_for_handover("destination", "a" * 64)
     assert seal_id
     ledger.stop("second stop")

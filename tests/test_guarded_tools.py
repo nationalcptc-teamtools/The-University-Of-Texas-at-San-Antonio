@@ -99,6 +99,40 @@ def test_windows_import_and_host_aggregation_preserve_scope_and_dedup():
     assert merged.observations[0].source == source
 
 
+def test_windows_defender_import_requires_complete_typed_health_state():
+    scope = ScopeSpec(allowed_cidrs=SCOPE.allowed_cidrs, allowed_hosts=("ad.example.test",))
+    document = {
+        "schema": "cptc.windows_ad.inventory.v1",
+        "target": "ad.example.test",
+        "controls": {"network_access": False, "sudo_used": False, "service_changes": False},
+        "records": [{
+            "kind": "defender",
+            "realtime_protection_enabled": False,
+            "on_access_protection_enabled": False,
+            "ioav_protection_enabled": False,
+            "behavior_monitoring_enabled": False,
+            "provenance": "os_inventory",
+        }],
+    }
+    result = parse_windows_ad_output(json.dumps(document).encode(), "windows", scope)
+    assert not result.issues
+    assert len(result.observations) == 1
+    observation = result.observations[0]
+    assert observation.check_id == "windows_defender_protection"
+    assert observation.facts == {
+        "realtime_protection_enabled": False,
+        "on_access_protection_enabled": False,
+        "ioav_protection_enabled": False,
+        "behavior_monitoring_enabled": False,
+        "provenance": "os_inventory",
+    }
+
+    del document["records"][0]["behavior_monitoring_enabled"]
+    incomplete = parse_windows_ad_output(json.dumps(document).encode(), "windows", scope)
+    assert not incomplete.observations
+    assert any(item.code == "invalid_defender_state" for item in incomplete.issues)
+
+
 def test_registry_blocks_manual_scanners_and_unknown_arguments():
     registry = build_registry()
     assert registry.dispatch(_context("exploitation.zerologon")).status == "blocked"

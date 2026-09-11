@@ -1,0 +1,846 @@
+{
+  "archives": [
+    {
+      "attestation": {
+        "artifact_sha256": "cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10",
+        "bytes": 1921,
+        "go_version": "go1.27.0",
+        "kind": "sigsum-proof-v2",
+        "module": "filippo.io/age",
+        "module_version": "v1.3.2",
+        "path": "age-v1.3.2-linux-amd64.tar.gz.proof",
+        "policy": "sigsum-generic-2025-1",
+        "sha256": "98402fa59b4e433426156b4a7e74a32e44902e0434c61158f7de18ffc84f1f97",
+        "signer_keys_path": "docs/harness/portcast-vendor-inputs/files/age/sigsum-key.pub",
+        "signer_keys_sha256": "ca60c0504ac65cc43ef180a34579ce6ed8f909b9136afef0ca42c88280f42cdc",
+        "source_revision": "b74dce4cdbe35b5e5f66c06d9612b72f89028758",
+        "vcs_modified": false,
+        "vcs_time": "2026-08-29T17:40:19Z",
+        "verification_doc_path": "docs/harness/portcast-vendor-inputs/files/age/SIGSUM.md",
+        "verification_doc_sha256": "08ce1309d237f1bff07872d3e776463867a4badb0c642e290b2122d3e6576339",
+        "verification_result": "passed",
+        "verified_at": "2026-09-10T22:46:19Z",
+        "verifier_binary_sha256": "033d1d77a6a4e58a62f730c00749feb730ef3003a329e1041873bcb019232580",
+        "verifier_module": "sigsum.org/sigsum-go/cmd/sigsum-verify",
+        "verifier_version": "v0.13.1"
+      },
+      "bytes": 19405817,
+      "component": "age",
+      "kind": "release-tar",
+      "members": {
+        "vendor/portcast-rootfs-runtime/bin/age": "age/age"
+      },
+      "origin": "https://github.com/FiloSottile/age/releases/tag/v1.3.2",
+      "package": null,
+      "path": "age-v1.3.2-linux-amd64.tar.gz",
+      "sha256": "cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10",
+      "signature": null
+    },
+    {
+      "attestation": null,
+      "bytes": 471530,
+      "component": "Arch runtime package: brotli",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libbrotlicommon.so.1": "usr/lib/libbrotlicommon.so.1.2.0",
+        "vendor/portcast-rootfs-runtime/lib/libbrotlidec.so.1": "usr/lib/libbrotlidec.so.1.2.0",
+        "vendor/portcast-rootfs-runtime/lib/libbrotlienc.so.1": "usr/lib/libbrotlienc.so.1.2.0"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "brotli",
+        "version": "1.2.0-1.1"
+      },
+      "path": "packages/brotli-1.2.0-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "124443e4dcbb94983e11c457f629ed5dcb5060d110fb619535c11201e5c94051",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/brotli-1.2.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "b711b921d6b579309b1af4f0c088fe682b232571ae5972e68b797ad2628d85d9",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 60309,
+      "component": "Arch runtime package: bzip2",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libbz2.so.1.0": "usr/lib/libbz2.so.1.0.8"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64",
+        "name": "bzip2",
+        "version": "1.0.8-6.1"
+      },
+      "path": "packages/bzip2-1.0.8-6.1-x86_64.pkg.tar.zst",
+      "sha256": "70205c60f44762848930a627e6c580e94edb2a7580d60270b913698e3a9d8111",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/bzip2-1.0.8-6.1-x86_64.pkg.tar.zst.sig",
+        "sha256": "e6a578d8aee02d27b6939af115376ac59272332f96e39b6716f53626a6e54c7d",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 148137,
+      "component": "Arch runtime package: expat",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libexpat.so.1": "usr/lib/libexpat.so.1.12.4"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "expat",
+        "version": "2.8.4-1.1"
+      },
+      "path": "packages/expat-2.8.4-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "b5b152660488d0d4ac937be82dcafe808b58571c041fb272e2ec934c6fd82a6d",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/expat-2.8.4-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "0b83ca7a2a0e664d31a3d88d896b343e203a74ad0b12a352de4ac7e9ec322cb6",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 10881502,
+      "component": "Arch runtime package: glibc",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/ld-linux-x86-64.so.2": "usr/lib/ld-linux-x86-64.so.2",
+        "vendor/portcast-rootfs-runtime/lib/libc.so.6": "usr/lib/libc.so.6",
+        "vendor/portcast-rootfs-runtime/lib/libm.so.6": "usr/lib/libm.so.6"
+      },
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "x86_64",
+        "name": "glibc",
+        "version": "2.44+r24+g16be1518495f-1"
+      },
+      "path": "packages/glibc-2.44+r24+g16be1518495f-1-x86_64.pkg.tar.zst",
+      "sha256": "5db2283f5b46b6114d06b4bc71fcf8ede5f1a04fcccb4d307048fcdc4e501d93",
+      "signature": {
+        "bytes": 215,
+        "path": "packages/glibc-2.44+r24+g16be1518495f-1-x86_64.pkg.tar.zst.sig",
+        "sha256": "846880e009cb01f046ef4ab8dde2eb9a4ab60c8a54c7bc47f578c7916c1b0877",
+        "signer_fingerprint": "05C7775A9E8B977407FE08E69D4C5AA15426DA0A",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 857676,
+      "component": "Arch runtime package: libcap",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libcap.so.2": "usr/lib/libcap.so.2.78",
+        "vendor/portcast-rootfs-runtime/share/licenses/libcap/License": "usr/share/licenses/libcap/License"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "libcap",
+        "version": "2.78-1.1"
+      },
+      "path": "packages/libcap-2.78-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "ae693abdfc1b97e70c760589664cc75e03f6faadba2503b5257dfeb068e0dd92",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/libcap-2.78-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "1a69524b8ba1ba2248006d1204a3cc613b8ad527121953ee863fe2da2248315d",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 58617,
+      "component": "Arch runtime package: libffi",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libffi.so.8": "usr/lib/libffi.so.8.5.0"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "libffi",
+        "version": "3.8.0-1.1"
+      },
+      "path": "packages/libffi-3.8.0-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "bde1158f05e78560bcdf88e22ad659aebae4004727f6a26086d15f481646468d",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/libffi-3.8.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "3b395d608c17c9dc59ab997eae139ef397cac9c2a5c1921c4fa76beb450b2049",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 81949,
+      "component": "Arch runtime package: libgcc",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libgcc_s.so.1": "usr/lib/libgcc_s.so.1"
+      },
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "x86_64",
+        "name": "libgcc",
+        "version": "16.2.1+r23+gd564253eb6c8-1"
+      },
+      "path": "packages/libgcc-16.2.1+r23+gd564253eb6c8-1-x86_64.pkg.tar.zst",
+      "sha256": "7367dad49fc3229bde804816d412ab77306d433b1f92e4126b8b3ba3502c67d6",
+      "signature": {
+        "bytes": 215,
+        "path": "packages/libgcc-16.2.1+r23+gd564253eb6c8-1-x86_64.pkg.tar.zst.sig",
+        "sha256": "46cc24a39bec852df9b2047c57c47947b6bf15ecb1b11dcbe2740c308d04efba",
+        "signer_fingerprint": "05C7775A9E8B977407FE08E69D4C5AA15426DA0A",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 283209,
+      "component": "Arch runtime package: libsodium",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libsodium.so.26": "usr/lib/libsodium.so.26.4.0"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "libsodium",
+        "version": "1.0.22-1.1"
+      },
+      "path": "packages/libsodium-1.0.22-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "76402ca7fd28652ff441d1b9192b8f0c0bbaf834173c825b12b523ae19f37300",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/libsodium-1.0.22-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "9ce0582554959715439e57e7d432e7f75194dd711258cb8c28a00fb61ad840f4",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 62774,
+      "component": "Arch runtime package: libyaml",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libyaml-0.so.2": "usr/lib/libyaml-0.so.2.0.9"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64",
+        "name": "libyaml",
+        "version": "0.2.5-3.1"
+      },
+      "path": "packages/libyaml-0.2.5-3.1-x86_64.pkg.tar.zst",
+      "sha256": "fafd58e4cc71921fc05de7c5c001b6e241ded66304552611fc02fe781d70f317",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/libyaml-0.2.5-3.1-x86_64.pkg.tar.zst.sig",
+        "sha256": "1cdc2bc8c641ab9dc778c7e42ac443cc16a401a7b770777759567720aa0e8f4c",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 117847,
+      "component": "Arch runtime package: mpdecimal",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libmpdec.so.4": "usr/lib/libmpdec.so.4.0.1"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "mpdecimal",
+        "version": "4.0.1-3.1"
+      },
+      "path": "packages/mpdecimal-4.0.1-3.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "e1657b55f9a56e9556ace774bef73908a092ed5e12e54e678d5042ca1c1bfbca",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/mpdecimal-4.0.1-3.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "20f8b3dc9121ec3d570fdcd10bc5daece11bcf42e919a70f17aa49c7151f5bd7",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 6163320,
+      "component": "Arch runtime package: openssl",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libcrypto.so.3": "usr/lib/libcrypto.so.3",
+        "vendor/portcast-rootfs-runtime/lib/libssl.so.3": "usr/lib/libssl.so.3"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "openssl",
+        "version": "3.6.4-1.1"
+      },
+      "path": "packages/openssl-3.6.4-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "5b830d6f56c9beeef4fa1602b6eafc14182353905c63dea572e5ae322bcdd539",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/openssl-3.6.4-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "885099ca75ffb0908b96323d052956618f9c9bc0306eb26d366c3c6aa689bd73",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 2414064,
+      "component": "Arch runtime package: sqlite",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "sqlite",
+        "version": "3.53.4-1"
+      },
+      "path": "packages/sqlite-3.53.4-1-x86_64_v3.pkg.tar.zst",
+      "sha256": "c5907d2b37cd4f93f2e7831581c6df759a44cbcbb0af246a86c8871c03f65990",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/sqlite-3.53.4-1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "710c7280798b1962667480cb85f71005e2cdd088bb1e0afdd0373820ee6af3f2",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 604090,
+      "component": "Arch runtime package: util-linux-libs",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libuuid.so.1": "usr/lib/libuuid.so.1.3.0",
+        "vendor/portcast-rootfs-runtime/share/licenses/util-linux-libs/COPYING.BSD-2-Clause": "usr/share/licenses/util-linux-libs/COPYING.BSD-2-Clause",
+        "vendor/portcast-rootfs-runtime/share/licenses/util-linux-libs/COPYING.BSD-3-Clause": "usr/share/licenses/util-linux-libs/COPYING.BSD-3-Clause",
+        "vendor/portcast-rootfs-runtime/share/licenses/util-linux-libs/COPYING.BSD-4-Clause-UC": "usr/share/licenses/util-linux-libs/COPYING.BSD-4-Clause-UC",
+        "vendor/portcast-rootfs-runtime/share/licenses/util-linux-libs/COPYING.ISC": "usr/share/licenses/util-linux-libs/COPYING.ISC",
+        "vendor/portcast-rootfs-runtime/share/licenses/util-linux-libs/util-linux-BSD-2-Clause.txt": "usr/share/licenses/util-linux-libs/util-linux-BSD-2-Clause.txt"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "util-linux-libs",
+        "version": "2.42.3-1.1"
+      },
+      "path": "packages/util-linux-libs-2.42.3-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "66c84f6beecf9da0953b5f4e93babf226057bdbf1ebf414ff4a4b07084cf48b2",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/util-linux-libs-2.42.3-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "d7e100f9cb6ce01072923f03d7e9f9e19e4e819a2e4822737310950ed8926f6a",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 767986,
+      "component": "Arch runtime package: xz",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/liblzma.so.5": "usr/lib/liblzma.so.5.8.3",
+        "vendor/portcast-rootfs-runtime/share/licenses/xz/COPYING": "usr/share/doc/xz/COPYING"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "xz",
+        "version": "5.8.3-1"
+      },
+      "path": "packages/xz-5.8.3-1-x86_64_v3.pkg.tar.zst",
+      "sha256": "e675df69df51185665055c05b131bb55998acd350d311b1597c3aedc6295d849",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/xz-5.8.3-1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "93aebb8a45c8af1bdf0ea3ff7a81df9c8d98055f185f9d1d92d21c2e3c5128be",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 138217,
+      "component": "Arch runtime package: zlib-ng-compat",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libz.so.1": "usr/lib/libz.so.1.3.1.zlib-ng"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "zlib-ng-compat",
+        "version": "2.3.3-2"
+      },
+      "path": "packages/zlib-ng-compat-2.3.3-2-x86_64_v3.pkg.tar.zst",
+      "sha256": "91707231c0caf57c5fc62f934e9ab8ce3b1c5c12c4f4be12ffc594983b710219",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/zlib-ng-compat-2.3.3-2-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "ee6e80c3a6555775676add63fb2cd7236638b34f08ab80880f3340815291d1b1",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 522875,
+      "component": "Arch runtime package: zstd",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libzstd.so.1": "usr/lib/libzstd.so.1.5.7",
+        "vendor/portcast-rootfs-runtime/share/licenses/zstd/LICENSE": "usr/share/licenses/zstd/LICENSE"
+      },
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "x86_64",
+        "name": "zstd",
+        "version": "1.5.7-2"
+      },
+      "path": "packages/zstd-1.5.7-2-x86_64.pkg.tar.zst",
+      "sha256": "7088eb799005899e24874e2d1af4ef73df1ff9a97ee74179245c64c9c4b0fa3c",
+      "signature": {
+        "bytes": 310,
+        "path": "packages/zstd-1.5.7-2-x86_64.pkg.tar.zst.sig",
+        "sha256": "13d3d276da930e474529dc1468722fad1817a322bffaf9162bb1e19d774d8fab",
+        "signer_fingerprint": "5B7E3FB71B7F10329A1C03AB771DF6627EDF681F",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 207068,
+      "component": "bcrypt",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "python-bcrypt",
+        "version": "5.0.0-2.1"
+      },
+      "path": "packages/python-bcrypt-5.0.0-2.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "d1df58d2fb31e03fd639a8e1d830dd5ef8294304075ca974fefb01c0804ff767",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/python-bcrypt-5.0.0-2.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "ecdc9fd01b31d8a6088b15871b695670ff9af5803909521f5c6a997fe1d06583",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 45423,
+      "component": "bubblewrap",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "bubblewrap",
+        "version": "0.12.0-1.1"
+      },
+      "path": "packages/bubblewrap-0.12.0-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "b68821c30191db0bb3ce573db2498a84a49de27b5ec61030199ea3556fd8f62d",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/bubblewrap-0.12.0-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "0a19da3c32309fe0dfd10f9af823477681e994d020b5d7ab8c869410ed01c78e",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 322795,
+      "component": "cffi",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "python-cffi",
+        "version": "2.1.1-1.1"
+      },
+      "path": "packages/python-cffi-2.1.1-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "6a614b32ac057bc5474249f45e09d82487c8c022e87b1c85a4a21fb88f28116c",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/python-cffi-2.1.1-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "f525516e19dfd66278191168a721ae061f4ce6250c8a85582393bd741a7c9546",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 14648126,
+      "component": "CPython",
+      "kind": "arch-package",
+      "members": {
+        "vendor/portcast-rootfs-runtime/lib/libpython3.14.so.1.0": "usr/lib/libpython3.14.so.1.0"
+      },
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "python",
+        "version": "3.14.7-2"
+      },
+      "path": "packages/python-3.14.7-2-x86_64_v3.pkg.tar.zst",
+      "sha256": "0e9a5d3e712ce85578a6eb452c74b0df898c2bb71b780a2b42f432a617e98043",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/python-3.14.7-2-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "ea8df5a34e077bc9c589b59429e4fa6a215c4cc0a697ad274eed5f2701eaaf3b",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 1530176,
+      "component": "cryptography",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "python-cryptography",
+        "version": "50.0.1-1.1"
+      },
+      "path": "packages/python-cryptography-50.0.1-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "ccb53d97a34e7116ad81f637ab1e17ba003d074041d6019cbf7145ddfbb9e28b",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/python-cryptography-50.0.1-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "ad8abba02df75ea8f04c094c66929e0faaa8056a79243bdaa45bfba897afe57a",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 15430,
+      "component": "fluidity-sm",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "any",
+        "name": "python-fluidity",
+        "version": "0.2.1-8"
+      },
+      "path": "packages/python-fluidity-0.2.1-8-any.pkg.tar.zst",
+      "sha256": "6a5d40b10b614c249ac8dbe068fc0ea5ff176562e340742d89802d093491baaa",
+      "signature": {
+        "bytes": 566,
+        "path": "packages/python-fluidity-0.2.1-8-any.pkg.tar.zst.sig",
+        "sha256": "173d0d27e5d66ee54701433f31fcb13ac52d43d8cdf30097c496871e7f92fcb0",
+        "signer_fingerprint": "B5971F2C5C10A9A08C60030F786C63F330D7CB92",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 197815,
+      "component": "invoke",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "any",
+        "name": "python-invoke",
+        "version": "3.0.3-1"
+      },
+      "path": "packages/python-invoke-3.0.3-1-any.pkg.tar.zst",
+      "sha256": "884672292d65be2439c02c72515ed957086ad99cfe79e0af2e9af2aa6d926d21",
+      "signature": {
+        "bytes": 119,
+        "path": "packages/python-invoke-3.0.3-1-any.pkg.tar.zst.sig",
+        "sha256": "32fa05336de12e3bcb98929361fd3c867b2856a9d9a7b9317bd17f01b9488705",
+        "signer_fingerprint": "EB3D764FF5D87E0818A3E0E5F05E8C12131AEB5E",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 11779,
+      "component": "lexicon",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "any",
+        "name": "python-lexicon",
+        "version": "3.0.0-2"
+      },
+      "path": "packages/python-lexicon-3.0.0-2-any.pkg.tar.zst",
+      "sha256": "d5ff793e5c1b71cd32600ea19a35c8660dea07d37c5611f4e92af78244fd49fa",
+      "signature": {
+        "bytes": 310,
+        "path": "packages/python-lexicon-3.0.0-2-any.pkg.tar.zst.sig",
+        "sha256": "1d20ce9445aec783340e57584f8af7621e2591f4249b40d823c72671077472f6",
+        "signer_fingerprint": "1519D5ABA65BF6FC2B73C7567A4E76095D8A52E4",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 347269,
+      "component": "paramiko",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "any",
+        "name": "python-paramiko",
+        "version": "5.0.0-1"
+      },
+      "path": "packages/python-paramiko-5.0.0-1-any.pkg.tar.zst",
+      "sha256": "3008c1a71bc9999b78a9e57826f9ad58e760956f8ff5373e5ccbe5dd8b35f8d9",
+      "signature": {
+        "bytes": 566,
+        "path": "packages/python-paramiko-5.0.0-1-any.pkg.tar.zst.sig",
+        "sha256": "6884c04ae015a8e57093dcb083d33477396a6f296774f26afee3bb6575c0821c",
+        "signer_fingerprint": "B5971F2C5C10A9A08C60030F786C63F330D7CB92",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 114648,
+      "component": "pycparser",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://archive.archlinux.org/packages/",
+      "package": {
+        "architecture": "any",
+        "name": "python-pycparser",
+        "version": "3.00-1"
+      },
+      "path": "packages/python-pycparser-3.00-1-any.pkg.tar.zst",
+      "sha256": "425162e4fa72eb8c2deee584055df6e585f4602aa5d39736427718d2d424fe39",
+      "signature": {
+        "bytes": 566,
+        "path": "packages/python-pycparser-3.00-1-any.pkg.tar.zst.sig",
+        "sha256": "283741118b711672904b753b6169f69b2a09c77121a2a3354703b302c00aaec6",
+        "signer_fingerprint": "B5971F2C5C10A9A08C60030F786C63F330D7CB92",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 133693,
+      "component": "PyNaCl",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "python-pynacl",
+        "version": "1.6.2-1.1"
+      },
+      "path": "packages/python-pynacl-1.6.2-1.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "71d3564b95d227c6786ff6034cd998da6dd7841e8932b3226d4556e6b7bde61f",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/python-pynacl-1.6.2-1.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "4f2abd1c2e17a3799a2c883d01fb753b95566556662f5085c98e8580a97d42f0",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    },
+    {
+      "attestation": null,
+      "bytes": 208572,
+      "component": "PyYAML",
+      "kind": "arch-package",
+      "members": {},
+      "origin": "https://cachyos.org/",
+      "package": {
+        "architecture": "x86_64_v3",
+        "name": "python-yaml",
+        "version": "6.0.3-2.1"
+      },
+      "path": "packages/python-yaml-6.0.3-2.1-x86_64_v3.pkg.tar.zst",
+      "sha256": "6d024b3bb28fa15ecae25abca2cd37423a31af1c1adb697ab7ee2caac60e98d3",
+      "signature": {
+        "bytes": 438,
+        "path": "packages/python-yaml-6.0.3-2.1-x86_64_v3.pkg.tar.zst.sig",
+        "sha256": "6828885ac66cd5114123f5747b7df04ea6468255c3ce7af950347ffd4edc4ce8",
+        "signer_fingerprint": "882DCFE48E2051D48E2562ABF3B607488DB35A47",
+        "verified_at": "2026-09-10T22:20:00Z"
+      }
+    }
+  ],
+  "generated_outputs": [
+    {
+      "generator": "canonical_corresponding_source_v1",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/CORRESPONDING-SOURCE.json",
+      "sha256": "48cf675cdea8c65028456ab457d2ed3a8120434f16fda01ffb9a16b6775b224c"
+    }
+  ],
+  "inventory": {
+    "path": "docs/harness/THIRD-PARTY-INVENTORY.json",
+    "sha256": "81380f3a0b829726a5918de40b4a41260001368702d966727f2164f96a2e64e3"
+  },
+  "review": {
+    "scope": "Exact current PortCast runtime only; different bytes require a new review and reseal.",
+    "signature_policy": "Detached Arch package signatures and the age Sigsum proof were validated without network access; this manifest pins their bytes, identities, policies, and review receipts.",
+    "verified_at": "2026-09-10T22:46:19Z",
+    "verified_by": "CPTC private release provenance review"
+  },
+  "runtime_locks": {
+    "cptc_harness/resources/portcast-cpython-runtime-v1.json": "1cbd1948c3e88449aa25682679584060d91864187951eb58db659a812d0f476a",
+    "cptc_harness/resources/portcast-python-runtime-v1.json": "7d62f74e159b1de534fa9ce3b7d36ca2f5724e09966778c5510d757d50ff2053"
+  },
+  "schema_version": 1,
+  "selected_permissive_licenses": {
+    "libcap": {
+      "license": "BSD-3-Clause",
+      "source_revision": "a1fef85d27d0ee12729a64d1c9b2183c6007e56a"
+    },
+    "util-linux-libs": {
+      "license": "BSD-3-Clause AND LicenseRef-PublicDomain",
+      "source_revision": "6f20a5defcf9066d4d2af372424a1576bd3d495d"
+    },
+    "xz": {
+      "license": "0BSD",
+      "source_revision": "4b73f2ec19a99ef465282fbce633e8deb33691b3"
+    },
+    "zstd": {
+      "license": "BSD-3-Clause AND MIT",
+      "source_revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99"
+    }
+  },
+  "source_files": [
+    {
+      "component": "age",
+      "method": "verbatim",
+      "origin": "https://github.com/FiloSottile/age/blob/b74dce4cdbe35b5e5f66c06d9612b72f89028758/LICENSE",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/age/LICENSE",
+      "path": "docs/harness/portcast-vendor-inputs/files/age/LICENSE",
+      "revision": "b74dce4cdbe35b5e5f66c06d9612b72f89028758",
+      "sha256": "c5d65279d02955c0fc2294ae417c3add650d228f4f5c82bd6d531fc26c89cd96",
+      "source_member": "LICENSE"
+    },
+    {
+      "component": "bubblewrap",
+      "method": "verbatim",
+      "origin": "https://github.com/containers/bubblewrap/blob/2a76602a8c71f36c1527cf9fc3417d9149822e0c/COPYING",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/bubblewrap/COPYING",
+      "path": "docs/harness/portcast-vendor-inputs/files/bubblewrap/COPYING",
+      "revision": "2a76602a8c71f36c1527cf9fc3417d9149822e0c",
+      "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+      "source_member": "COPYING"
+    },
+    {
+      "component": "Arch runtime package: glibc",
+      "method": "verbatim",
+      "origin": "https://forge.sourceware.org/glibc/glibc-mirror/src/commit/16be1518495f1fa05481b0182c4e4c24927c62df/COPYING.LESSERv2",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/glibc/COPYING",
+      "path": "docs/harness/portcast-vendor-inputs/files/glibc/COPYING",
+      "revision": "16be1518495f1fa05481b0182c4e4c24927c62df",
+      "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+      "source_member": "COPYING.LESSERv2"
+    },
+    {
+      "component": "Go toolchain runtime",
+      "method": "verbatim",
+      "origin": "https://go.googlesource.com/go/+/862c888e612ac346c7c4d99c9392bdfd265f33b0/LICENSE",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/go/LICENSE",
+      "path": "docs/harness/portcast-vendor-inputs/files/go/LICENSE",
+      "revision": "862c888e612ac346c7c4d99c9392bdfd265f33b0",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad",
+      "source_member": "LICENSE"
+    },
+    {
+      "component": "Arch runtime package: libcap",
+      "method": "reviewed-notice",
+      "origin": "https://kernel.googlesource.com/pub/scm/libs/libcap/libcap.git/+/a1fef85d27d0ee12729a64d1c9b2183c6007e56a",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/libcap/COPYRIGHT-NOTICES",
+      "path": "docs/harness/portcast-vendor-inputs/files/libcap/COPYRIGHT-NOTICES",
+      "revision": "a1fef85d27d0ee12729a64d1c9b2183c6007e56a",
+      "sha256": "099e1bab681c2b4d3e80cf2f3db0db97c6aceaf9375dbd5271e00aa938080e75",
+      "source_member": null
+    },
+    {
+      "component": "Arch runtime package: libgcc",
+      "method": "verbatim",
+      "origin": "https://forge.sourceware.org/gcc/gcc/src/commit/d564253eb6c859e266d3cae18e82fb4db9a88316/COPYING3",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/libgcc/COPYING3",
+      "path": "docs/harness/portcast-vendor-inputs/files/libgcc/COPYING3",
+      "revision": "d564253eb6c859e266d3cae18e82fb4db9a88316",
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+      "source_member": "COPYING3"
+    },
+    {
+      "component": "Arch runtime package: util-linux-libs",
+      "method": "reviewed-notice",
+      "origin": "https://github.com/util-linux/util-linux/commit/6f20a5defcf9066d4d2af372424a1576bd3d495d",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/util-linux-libs/COPYRIGHT-NOTICES",
+      "path": "docs/harness/portcast-vendor-inputs/files/util-linux-libs/COPYRIGHT-NOTICES",
+      "revision": "6f20a5defcf9066d4d2af372424a1576bd3d495d",
+      "sha256": "22a56f34838829752757ec2267b23d024a7e022bdb64dbcd0a033a5e5f086aa5",
+      "source_member": null
+    },
+    {
+      "component": "Arch runtime package: util-linux-libs",
+      "method": "reviewed-source-license-map",
+      "origin": "https://github.com/util-linux/util-linux/commit/6f20a5defcf9066d4d2af372424a1576bd3d495d",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/util-linux-libs/SOURCE-LICENSE-MAP",
+      "path": "docs/harness/portcast-vendor-inputs/files/util-linux-libs/SOURCE-LICENSE-MAP",
+      "revision": "6f20a5defcf9066d4d2af372424a1576bd3d495d",
+      "sha256": "f8fbef5bd1d26147ff14b52601b83f4aa9e545f4bf35549154772f34d5d88160",
+      "source_member": null
+    },
+    {
+      "component": "Arch runtime package: zstd",
+      "method": "reviewed-notice",
+      "origin": "https://github.com/facebook/zstd/commit/f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+      "output": "vendor/portcast-rootfs-runtime/share/licenses/zstd/NOTICE",
+      "path": "docs/harness/portcast-vendor-inputs/files/zstd/NOTICE",
+      "revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+      "sha256": "1a34c69a1008b901e9c9dcd0a4d44e4b6e4c73965089c9cf39b2dd7a228e6b6d",
+      "source_member": null
+    }
+  ],
+  "transformations": [
+    {
+      "archive_member": "usr/lib/libsqlite3.so.3.53.4",
+      "component": "Arch runtime package: sqlite",
+      "input_sha256": "2035e9746f06022310b8c36646b936f012effb8f4f42b81c62ae4443e0a7f733",
+      "output": "vendor/portcast-rootfs-runtime/lib/libsqlite3.so.0",
+      "output_sha256": "ff56e43fb681d01df9d373947387705d7ee006c238c4973bf090d901b7004294",
+      "tool": {
+        "path": "/usr/bin/patchelf",
+        "version": "patchelf 0.19.1"
+      }
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "realtime_protection_enabled": true,
+  "on_access_protection_enabled": true,
+  "ioav_protection_enabled": true
+}

@@ -23,6 +23,9 @@ from .integrity import verified_executable
 from .response_capture import RAW_RESPONSE_WORKER
 
 
+_close_http_memfd = os.close
+
+
 class _PinnedHTTPConnection(http.client.HTTPConnection):
     def __init__(self, address: str, host: str, port: int, timeout: float):
         super().__init__(host, port, timeout=timeout); self._address = address
@@ -196,8 +199,8 @@ class NetworkBroker:
             remaining = deadline - time.monotonic()
             if remaining <= 0: raise OSError("network deadline exceeded")
             sock = socket.create_connection((address, target.port), timeout=min(remaining, 5)); cleanup.callback(sock.close); sock.setblocking(True)
-            reqfd = memfd_create("cptc-http-request", flags=MFD_CLOEXEC | MFD_ALLOW_SEALING); cleanup.callback(os.close, reqfd); write_all(reqfd, request); os.lseek(reqfd, 0, os.SEEK_SET); seal_readonly(reqfd)
-            codefd = memfd_create("cptc-http-worker", flags=MFD_CLOEXEC | MFD_ALLOW_SEALING); cleanup.callback(os.close, codefd); write_all(codefd, script); os.lseek(codefd, 0, os.SEEK_SET); seal_readonly(codefd)
+            reqfd = memfd_create("cptc-http-request", flags=MFD_CLOEXEC | MFD_ALLOW_SEALING); cleanup.callback(_close_http_memfd, reqfd); write_all(reqfd, request); os.lseek(reqfd, 0, os.SEEK_SET); seal_readonly(reqfd)
+            codefd = memfd_create("cptc-http-worker", flags=MFD_CLOEXEC | MFD_ALLOW_SEALING); cleanup.callback(_close_http_memfd, codefd); write_all(codefd, script); os.lseek(codefd, 0, os.SEEK_SET); seal_readonly(codefd)
             command = [launcher, "--unshare-all", "--cap-drop", "ALL", "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--proc", "/proc", "--dev", "/dev", "--die-with-parent", "--new-session", "--clearenv", "--dir", "/tmp", "--dir", "/etc", "--dir", "/etc/ca-certificates", "--dir", "/etc/ca-certificates/extracted", "--ro-bind", "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "/etc/ca-certificates/extracted/tls-ca-bundle.pem", "--ro-bind-data", str(reqfd), "/request.json", "--ro-bind-data", str(codefd), "/worker.py", "--", interpreter, "-I", "/worker.py"]
             self._event("process_intent", {"worker": "bounded-http-v1", "source_sha256": hashlib.sha256(script).hexdigest(), "command": command, "cwd": "/", "environment": {}, "address": address, "port": target.port, "method": method, "path": path, "timeout_s": timeout, "output_bytes": maximum})
             try:

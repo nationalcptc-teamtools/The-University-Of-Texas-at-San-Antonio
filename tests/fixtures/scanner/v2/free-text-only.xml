@@ -1,0 +1,1 @@
+<nmaprun><host><status state="up"/><address addr="192.0.2.20" addrtype="ipv4"/><ports><port protocol="tcp" portid="445"><state state="open"/><service name="microsoft-ds"/></port></ports><hostscript><script id="smb2-security-mode" output="3.1.1: Message signing enabled but not required"/></hostscript></host></nmaprun>

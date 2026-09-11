@@ -1,0 +1,45 @@
+[Unit]
+Description=PortCast v1 privileged synthetic acceptance (%i)
+ConditionPathExists=/usr/lib/cptc-harness/portcast-live-v1/app/deployment/portcast-bootstrap
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=_cptc-portcast
+Group=cptc-harness
+RootDirectory=/usr/lib/cptc-harness/portcast-live-v1
+MountAPIVFS=yes
+ExecStart=/app/deployment/portcast-bootstrap --acceptance-audit %i
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+PrivateDevices=yes
+DevicePolicy=closed
+PrivateNetwork=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectHostname=no
+ProtectKernelTunables=no
+ProtectKernelModules=yes
+ProtectKernelLogs=no
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectProc=invisible
+ProcSubset=all
+RemoveIPC=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictSUIDSGID=no
+RestrictRealtime=yes
+RestrictNamespaces=mnt ipc net pid user uts
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+IPAddressDeny=any
+BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/deployment.lock
+BindPaths=/var/lib/cptc-harness/portcast-live-v1/systemd-acceptance/%i/worker:/acceptance
+BindPaths=/var/lib/cptc-harness/portcast-live-v1/systemd-acceptance/%i/worker/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/audit
+UMask=0077
+TimeoutStartSec=45
+Restart=no

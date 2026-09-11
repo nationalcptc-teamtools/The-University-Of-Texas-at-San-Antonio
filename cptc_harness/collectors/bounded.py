@@ -4,10 +4,18 @@ from __future__ import annotations
 from typing import Callable
 import hashlib
 
-from ..contracts import (ExecutionContext, OperationResult, TargetRequest,
+from ..contracts import (ExecutionContext, OperationResult, PolicyError, TargetRequest,
                          ToolRequest, canonical_json)
 from ..parsers import parse_network_output
 from .base import Collector, batch_result, blocked, stopped, tool_result
+from ..portcast_identity import (
+    PORTCAST_CANONICAL_URL,
+    PORTCAST_PROFILE_ID,
+    get_portcast_profile,
+    parse_portcast_identity_body,
+)
+from ..profile_runtime.contracts import Http11RequestV1, ProfileContractError
+from ..profile_runtime.worker import parse_http11_response
 
 
 def _capture(context: ExecutionContext, stream: str, payload: bytes, classification: str):
@@ -112,6 +120,109 @@ class UnsupportedScannerCollector:
 
     def collect(self, context: ExecutionContext) -> OperationResult:
         return blocked(f"unsupported containment for {self.scanner}; manual review required")
+
+
+class PortcastIdentityCollector:
+    """Execute one sealed candidate and retain only its typed identity."""
+
+    def collect(self, context: ExecutionContext) -> OperationResult:
+        if context.stopped():
+            return stopped()
+        profile = get_portcast_profile(PORTCAST_PROFILE_ID)
+        operation = profile.operation
+        target = context.request.target
+        if (target is None or target.canonical_url != PORTCAST_CANONICAL_URL
+                or not isinstance(operation, Http11RequestV1)
+                or target.host != operation.address
+                or target.port != operation.port
+                or target.base_path != operation.path
+                or target.scheme != "http"):
+            return blocked("PortCast target differs from the reviewed candidate profile")
+        if (context.profile_action is None or context.profile_dispatch is None
+                or context.capture is None):
+            return blocked("trusted PortCast profile dispatcher is unavailable")
+
+        captured_raw: list[bytes] = []
+        evidence = []
+
+        def encrypted_capture(raw: bytes):
+            reference = context.capture(
+                "raw", raw, "client_confidential_human_only"
+            )
+            if reference is None:
+                raise PolicyError("encrypted PortCast capture failed")
+            # The audit call has returned only after the encrypted artifact is
+            # durable. Retain raw bytes in memory solely for the strict parser.
+            evidence.append(reference)
+            captured_raw.append(raw)
+            return reference
+
+        try:
+            receipt = context.profile_dispatch(context.profile_action, encrypted_capture)
+        except PolicyError:
+            return blocked("PortCast profile dispatch was denied before connection")
+        usage = {
+            "request_limit": receipt.counters.protocol_requests,
+            "tcp_connects": receipt.counters.tcp_connects,
+            "udp_datagrams": receipt.counters.udp_datagrams,
+            "protocol_requests": receipt.counters.protocol_requests,
+            "tx_bytes": receipt.counters.tx_bytes,
+            "rx_bytes": receipt.counters.rx_bytes,
+        }
+        if receipt.outcome != "complete":
+            status = "stopped" if receipt.outcome == "cancelled" else "uncertain"
+            return OperationResult(
+                status=status,
+                evidence=tuple(evidence),
+                reason="PortCast profile transport did not complete",
+                usage=usage,
+            )
+        try:
+            if len(captured_raw) != 1:
+                raise PolicyError("PortCast raw capture is unavailable")
+            parsed = parse_http11_response(
+                captured_raw[0], method=operation.method,
+                maximum_body_bytes=profile.budget.rx_bytes,
+            )
+            if (parsed.status_code != 200
+                    or parsed.content_type not in {
+                        "application/json", "application/json; charset=utf-8"
+                    }
+                    or parsed.content_encoding != "identity"):
+                raise PolicyError("PortCast HTTP response metadata differs")
+            identity = parse_portcast_identity_body(
+                parsed.body, action_id=context.request.request_id
+            )
+        except (PolicyError, ProfileContractError):
+            return OperationResult(
+                status="failed",
+                evidence=tuple(evidence),
+                reason="PortCast identity response did not match the reviewed parser",
+                usage=usage,
+            )
+        finally:
+            captured_raw.clear()
+        facts = {
+            "component_id": identity.component_id,
+            "ecosystem": identity.ecosystem,
+            "product": identity.product,
+            "version": identity.version,
+            "provenance": identity.provenance,
+        }
+        observation = {
+            "track": "web",
+            "target": target.canonical_url,
+            "check_id": "portcast_public_identity",
+            "state": "candidate",
+            "facts": facts,
+            "source_sha256": receipt.evidence_sha256,
+        }
+        return OperationResult(
+            status="complete",
+            facts={"observations": [observation], "issues": [], "duplicates": 0},
+            evidence=tuple(evidence),
+            usage=usage,
+        )
 
 
 class ManualOnlyCollector:

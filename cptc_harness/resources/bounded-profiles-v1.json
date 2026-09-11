@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "catalog_sha256": "d37bc4a0ba5368e02306f52cce5927d5a5db6e7dee90dda0cc0ee3d243e66113",
+  "profiles": [
+    {
+      "profile_id": "web.http_jellyfin_public_identity",
+      "module_id": "web.portcast_identity",
+      "target_id": "cptc11-prod-portcast",
+      "admission": "live_admitted",
+      "runtime_pinset_sha256": "9bcaeaa02a0c9f52b1b32c4259a35043b9dd0caec55f6fec150ec6f5a722df16",
+      "operation": {
+        "kind": "http11_request_v1",
+        "address": "10.0.1.30",
+        "port": 8096,
+        "tls": false,
+        "server_name": null,
+        "certificate_sha256": null,
+        "method": "GET",
+        "path": "/System/Info/Public",
+        "headers": [
+          [
+            "Accept",
+            "application/json"
+          ],
+          [
+            "Connection",
+            "close"
+          ],
+          [
+            "Host",
+            "10.0.1.30:8096"
+          ]
+        ]
+      },
+      "budget": {
+        "tcp_connects": 1,
+        "udp_datagrams": 0,
+        "tls_handshakes": 0,
+        "protocol_requests": 1,
+        "tx_bytes": 256,
+        "rx_bytes": 8192,
+        "capture_bytes": 8192,
+        "timeout_s": 10.0,
+        "cpu_s": 5.0,
+        "process_limit": 1,
+        "auth_attempts": 0
+      },
+      "parser_id": "portcast.public_identity.v1",
+      "runtime_options": [],
+      "limitations": [
+        "version_match_is_not_vulnerability_confirmation",
+        "one_shot_relay_capability_required"
+      ]
+    }
+  ]
+}

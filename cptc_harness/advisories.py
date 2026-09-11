@@ -6,7 +6,7 @@ Version matches are candidates only and do not confirm a vulnerability.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 import hashlib
 import json
@@ -14,6 +14,7 @@ import re
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
 from urllib.parse import urlsplit
+import weakref
 
 from .assessment_contracts import ComponentIdentity
 
@@ -37,6 +38,31 @@ _RECORD_KEYS = frozenset({
     "required_patch_ids", "superseding_patch_ids",
 })
 _COMPARATORS = frozenset({"debian", "rpm", "semver", "windows_build"})
+_VALIDATED_CATALOG_TOKEN = object()
+_VALIDATED_CATALOG_SNAPSHOTS: dict[int, tuple[weakref.ReferenceType[Any], str]] = {}
+JELLYFIN_CVE_IDS = (
+    "CVE-2026-35031", "CVE-2026-35032", "CVE-2026-35033",
+    "CVE-2026-48793", "CVE-2026-49220", "CVE-2026-49246",
+    "CVE-2026-49247",
+)
+_JELLYFIN_SOURCE_URLS = MappingProxyType({
+    "CVE-2026-35031": "https://github.com/jellyfin/jellyfin/security/advisories/GHSA-j2hf-x4q5-47j3",
+    "CVE-2026-35032": "https://github.com/jellyfin/jellyfin/security/advisories/GHSA-8fw7-f233-ffr8",
+    "CVE-2026-35033": "https://github.com/jellyfin/jellyfin/security/advisories/GHSA-jh22-fw8w-2v9x",
+    "CVE-2026-48793": "https://github.com/jellyfin/jellyfin/security/advisories/GHSA-wwwm-px48-fpvq",
+    "CVE-2026-49220": "https://github.com/jellyfin/jellyfin/security/advisories/GHSA-fv79-gmhx-xh2v",
+    "CVE-2026-49246": "https://github.com/jellyfin/jellyfin/security/advisories/GHSA-f47c-m7gr-q92j",
+    "CVE-2026-49247": "https://github.com/jellyfin/jellyfin/security/advisories/GHSA-jg92-mrxq-vv75",
+})
+JELLYFIN_MANUAL_PREREQUISITES = MappingProxyType({
+    "CVE-2026-35031": ("authenticated_user_with_subtitle_management",),
+    "CVE-2026-35032": ("authenticated_user_with_live_tv_management",),
+    "CVE-2026-35033": ("authenticated_access_and_valid_media_item_identifier",),
+    "CVE-2026-48793": ("attacker_controlled_subtitle_filename_and_media_playback",),
+    "CVE-2026-49220": ("authenticated_user_management_context",),
+    "CVE-2026-49246": ("crafted_mkv_filename_and_media_playback",),
+    "CVE-2026-49247": ("authenticated_client_log_upload",),
+})
 
 
 def _text(value: Any, *, empty: bool = False, limit: int = MAX_TEXT) -> str:
@@ -124,6 +150,7 @@ _PRODUCT_ALIASES = MappingProxyType({
     "apache http server": "apache_http_server", "apache httpd": "apache_http_server",
     "httpd": "apache_http_server", "apache2": "apache_http_server",
     "samba": "samba", "samba server": "samba",
+    "jellyfin server": "jellyfin_server", "jellyfin_server": "jellyfin_server",
     "windows server 2016": "windows_server_2016", "windows_server_2016": "windows_server_2016",
     "windows server 2019": "windows_server_2019", "windows_server_2019": "windows_server_2019",
     "windows server 2022": "windows_server_2022", "windows_server_2022": "windows_server_2022",
@@ -173,11 +200,69 @@ class AdvisoryCatalog:
     release_sha256: str
     records: tuple[AdvisoryRecord, ...]
     catalog_sha256: str
+    _validation_token: object = field(default=None, init=False, repr=False, compare=False)
 
     @property
     def publisher_authenticated(self) -> bool:
         """Always false: a local catalog hash does not authenticate a publisher."""
         return False
+
+
+def _catalog_snapshot_sha256(
+    schema: str, release_sha256: str, records: tuple[AdvisoryRecord, ...],
+) -> str:
+    if type(records) is not tuple or any(type(item) is not AdvisoryRecord for item in records):
+        raise TypeError("invalid advisory catalog records")
+    return hashlib.sha256(_canonical_json({
+        "schema": schema,
+        "release_sha256": release_sha256,
+        "records": [asdict(item) for item in records],
+    })).hexdigest()
+
+
+def _remove_catalog_snapshot(
+    identity: int, reference: weakref.ReferenceType[Any],
+) -> None:
+    current = _VALIDATED_CATALOG_SNAPSHOTS.get(identity)
+    if current is not None and current[0] is reference:
+        _VALIDATED_CATALOG_SNAPSHOTS.pop(identity, None)
+
+
+def _bind_catalog_snapshot(catalog: AdvisoryCatalog, snapshot_sha256: str) -> None:
+    identity = id(catalog)
+    reference = weakref.ref(
+        catalog,
+        lambda expired, identity=identity: _remove_catalog_snapshot(identity, expired),
+    )
+    _VALIDATED_CATALOG_SNAPSHOTS[identity] = (reference, snapshot_sha256)
+
+
+def catalog_is_validated(value: Any) -> bool:
+    """Return true only for an immutable catalog produced by ``load_catalog``."""
+    if (not isinstance(value, AdvisoryCatalog)
+            or value._validation_token is not _VALIDATED_CATALOG_TOKEN
+            or value.schema != SCHEMA
+            or type(value.records) is not tuple
+            or len(value.records) > MAX_RECORDS):
+        return False
+    bound = _VALIDATED_CATALOG_SNAPSHOTS.get(id(value))
+    if bound is None or bound[0]() is not value:
+        return False
+    try:
+        _hash(value.release_sha256, name="release checksum")
+        _hash(value.catalog_sha256, name="catalog checksum")
+        reparsed = tuple(
+            _record(asdict(item)) for item in value.records
+            if type(item) is AdvisoryRecord
+        )
+        snapshot_sha256 = _catalog_snapshot_sha256(
+            value.schema, value.release_sha256, value.records,
+        )
+    except (TypeError, ValueError):
+        return False
+    return (len(reparsed) == len(value.records)
+            and reparsed == value.records
+            and value.catalog_sha256 == snapshot_sha256 == bound[1])
 
 
 @dataclass(frozen=True)
@@ -218,6 +303,11 @@ def _record(value: Any) -> AdvisoryRecord:
         raise ValueError("invalid advisory acquisition time") from None
     ecosystem = _alias(_text(value["ecosystem"], limit=64), _ECOSYSTEM_ALIASES, name="ecosystem")
     product = _alias(_text(value["product"], limit=128), _PRODUCT_ALIASES, name="product")
+    if (product == "jellyfin_server"
+            and (publisher != "Jellyfin"
+                 or cve_ids != (advisory_id,)
+                 or _JELLYFIN_SOURCE_URLS.get(advisory_id) != source_url)):
+        raise ValueError("Jellyfin advisory identity is not a reviewed official record")
     distribution = _alias(_text(value["distribution"], empty=True, limit=64), _DIST_ALIASES,
                            name="distribution", empty=True)
     comparator = _text(value["comparator"], limit=32)
@@ -264,7 +354,13 @@ def load_catalog(raw: Any, *, expected_sha256: str, release_sha256: str) -> Advi
     if not isinstance(records, list) or len(records) > MAX_RECORDS:
         raise ValueError("invalid advisory catalog records")
     parsed = tuple(_record(item) for item in records)
-    return AdvisoryCatalog(SCHEMA, release_sha256, parsed, hashlib.sha256(payload).hexdigest())
+    snapshot_sha256 = _catalog_snapshot_sha256(SCHEMA, release_sha256, parsed)
+    catalog = AdvisoryCatalog(
+        SCHEMA, release_sha256, parsed, snapshot_sha256,
+    )
+    object.__setattr__(catalog, "_validation_token", _VALIDATED_CATALOG_TOKEN)
+    _bind_catalog_snapshot(catalog, snapshot_sha256)
+    return catalog
 
 
 def _parse_version(value: Any, comparator: str) -> Any:
@@ -465,6 +561,11 @@ def _applicability(component: ComponentIdentity, record: AdvisoryRecord) -> tupl
     elif component.provenance not in {"package_database", "os_inventory", "operator_reviewed"}:
         limitations.add("provenance_unverified")
         return "unknown", limitations
+    if record.product == "jellyfin_server":
+        if record.advisory_id not in JELLYFIN_MANUAL_PREREQUISITES:
+            limitations.add("unreviewed_jellyfin_advisory")
+            return "unknown", limitations
+        limitations.add("manual_prerequisite_review_required")
     if record.required_patch_ids or record.superseding_patch_ids:
         patches = {patch.upper() for patch in component.patch_ids}
         if patches & (set(record.required_patch_ids) | set(record.superseding_patch_ids)):
@@ -521,8 +622,8 @@ def _match_group(component: ComponentIdentity, records: list[AdvisoryRecord]) ->
 
 def match_components(components: Iterable[ComponentIdentity], catalog: AdvisoryCatalog) -> tuple[AdvisoryMatch, ...]:
     """Match components against the immutable catalog without external calls."""
-    if not isinstance(catalog, AdvisoryCatalog):
-        raise TypeError("catalog must be an AdvisoryCatalog")
+    if not catalog_is_validated(catalog):
+        raise TypeError("catalog must be returned by load_catalog")
     grouped: dict[str, list[AdvisoryRecord]] = {}
     for item in catalog.records:
         grouped.setdefault(item.advisory_id, []).append(item)
@@ -546,5 +647,6 @@ def match_components(components: Iterable[ComponentIdentity], catalog: AdvisoryC
     return tuple(sorted(matches, key=lambda item: (item.component_id, item.advisory_id)))
 
 
-__all__ = ["AdvisoryCatalog", "AdvisoryMatch", "AdvisoryRecord", "MAX_RECORDS",
-           "SCHEMA", "load_catalog", "match_components"]
+__all__ = ["AdvisoryCatalog", "AdvisoryMatch", "AdvisoryRecord",
+           "JELLYFIN_CVE_IDS", "JELLYFIN_MANUAL_PREREQUISITES", "MAX_RECORDS",
+           "SCHEMA", "catalog_is_validated", "load_catalog", "match_components"]

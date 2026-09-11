@@ -12,7 +12,19 @@ import sqlite3
 import subprocess
 import threading
 import pytest
-from cptc_harness.contracts import PolicyError, PolicySnapshot, ScopeSpec, canonical_json, digest
+from cptc_harness.contracts import (
+    ClockState,
+    OperationRequest,
+    PolicyError,
+    PolicySnapshot,
+    ScopeSpec,
+    TargetPolicy,
+    TargetRef,
+    canonical_json,
+    digest,
+)
+from cptc_harness.integrity import VerifiedRelease
+from cptc_harness.profile_runtime.catalog import load_profile
 from cptc_harness.exports import prepare_export, encrypted_export
 from cptc_harness.policy import parse_policy, save_policy
 from cptc_harness.providers import (ChatAdapter, DisclosureGate, DisclosureItem, ExcerptApproval,
@@ -176,3 +188,103 @@ def test_runtime_offline_import_and_confidential_coverage(private, age_identity)
         assert runtime.audit.verify().valid
     finally:
         runtime.audit.close()
+
+
+def test_runtime_persists_profile_wire_receipt_through_isolated_audit_service(
+    private, age_identity
+):
+    age, _identity, recipient = age_identity
+    target = TargetRef(
+        "cptc11-prod-portcast",
+        "http://10.0.1.30:8096/System/Info/Public",
+        "http",
+        "10.0.1.30",
+        8096,
+        "/System/Info/Public",
+    )
+    now = datetime.now(timezone.utc)
+    policy = PolicySnapshot(
+        "portcast-synthetic",
+        "v1",
+        "workspace",
+        "device",
+        "operator",
+        ScopeSpec(("10.0.1.30/32",)),
+        targets=(
+            TargetPolicy(
+                target,
+                True,
+                "reviewed-synthetic-portcast",
+                "workspace",
+                "",
+                ("web.portcast_identity",),
+                request_limit=1,
+            ),
+        ),
+        window_start=(now - timedelta(minutes=1)).isoformat(),
+        window_end=(now + timedelta(minutes=5)).isoformat(),
+        sow_reference="synthetic-sow",
+        roe_reference="synthetic-roe",
+        model_calls=0,
+        model_actions=0,
+    )
+    source = private / "portcast-policy.json"
+    save_policy(source, policy)
+    root = private / "portcast-runtime"
+    initialize(root, source, recipient=recipient, age_binary=age)
+    body = b'{"ProductName":"Jellyfin Server","Version":"10.10.7"}'
+    raw = (
+        b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+        b"Content-Encoding: identity\r\n"
+        + f"Content-Length: {len(body)}\r\n".encode("ascii")
+        + b"Connection: close\r\n\r\n"
+        + body
+    )
+
+    profile = load_profile("web.http_jellyfin_public_identity")
+    worker_sha256 = hashlib.sha256(
+        (ROOT / "cptc_harness/profile_runtime/worker.py").read_bytes()
+    ).hexdigest()
+    release = VerifiedRelease(
+        "portcast-live-v1",
+        "3" * 64,
+        {},
+        {profile.profile_id: worker_sha256},
+        {profile.profile_id: (worker_sha256,)},
+    )
+    runtime = Runtime(
+        root,
+        ledger_root=private / "portcast-ledger",
+        verified_release=release,
+    )
+    from tests.profile_runtime.test_portcast_broker import SyntheticWireBroker
+
+    runtime.attach_profile_wire_broker(SyntheticWireBroker(runtime.ledger, raw, []))
+    runtime.broker.clock = ClockState(True, 0, "synthetic")
+    request = OperationRequest(
+        "portcast-action",
+        "workspace",
+        "device",
+        "operator",
+        "web.portcast_identity",
+        target,
+        {"profile_id": profile.profile_id},
+        "operator",
+        None,
+        "v1",
+        "portcast-wave",
+    )
+    result = runtime.broker.execute(request, actor="operator")
+    assert result.status == "complete"
+    receipts = runtime.audit.profile_wire_receipts()
+    assert receipts["portcast-action"]["outcome"] == "complete"
+    assert receipts["portcast-action"]["evidence_bytes"] == len(raw)
+    runtime.close()
+
+    reopened = Runtime(
+        root,
+        ledger_root=private / "portcast-ledger",
+        verified_release=release,
+    )
+    assert reopened.audit.profile_wire_receipts() == receipts
+    reopened.close()

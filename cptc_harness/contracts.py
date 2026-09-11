@@ -6,6 +6,8 @@ from typing import Any, Callable, Literal, Mapping, Protocol
 import hashlib
 import json
 import math
+import re
+from weakref import ref
 
 CONTRACT_VERSION = 1
 JSONValue = Any
@@ -168,6 +170,124 @@ class OperationRequest:
     policy_revision: str
     workflow_id: str = "default"
     parent_action_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True, weakref_slot=True)
+class ProfileAction:
+    """Broker-issued, process-local authority for one sealed profile action."""
+
+    action_id: str
+    wave_id: str
+    workspace_id: str
+    target_id: str
+    profile_id: str
+    runtime_pinset_sha256: str
+    bounds: Bounds
+    limits: tuple[tuple[str, int], ...]
+    budget_limits: tuple[BudgetLimit, ...]
+
+
+_PROFILE_ACTION_SEALS: dict[int, tuple[Any, str]] = {}
+
+
+def _profile_action_digest(action: ProfileAction) -> str:
+    return digest({
+        "action_id": action.action_id,
+        "wave_id": action.wave_id,
+        "workspace_id": action.workspace_id,
+        "target_id": action.target_id,
+        "profile_id": action.profile_id,
+        "runtime_pinset_sha256": action.runtime_pinset_sha256,
+        "bounds": action.bounds,
+        "limits": action.limits,
+        "budget_limits": action.budget_limits,
+    })
+
+
+def _issue_profile_action(
+    *,
+    action_id: str,
+    wave_id: str,
+    workspace_id: str,
+    target_id: str,
+    profile_id: str,
+    runtime_pinset_sha256: str,
+    bounds: Bounds,
+    limits: tuple[tuple[str, int], ...],
+    budget_limits: tuple[BudgetLimit, ...],
+) -> ProfileAction:
+    """Issue an internal action only after the broker reserves encrypted output."""
+
+    identifiers = (action_id, wave_id, workspace_id, target_id, profile_id)
+    if any(
+        type(value) is not str
+        or not 1 <= len(value) <= 128
+        or any(ord(char) < 32 or ord(char) == 127 for char in value)
+        for value in identifiers
+    ):
+        raise PolicyError("invalid sealed profile action identity")
+    if (
+        type(runtime_pinset_sha256) is not str
+        or re.fullmatch(r"[0-9a-f]{64}", runtime_pinset_sha256) is None
+    ):
+        raise PolicyError("invalid sealed profile runtime identity")
+    if not isinstance(bounds, Bounds):
+        raise PolicyError("invalid sealed profile action bounds")
+    if (
+        type(limits) is not tuple
+        or any(
+            type(item) is not tuple
+            or len(item) != 2
+            or item[0] not in RESOURCE_COUNTERS
+            or type(item[1]) is not int
+            or item[1] < 0
+            for item in limits
+        )
+        or len({item[0] for item in limits}) != len(limits)
+    ):
+        raise PolicyError("invalid sealed profile action limits")
+    if type(budget_limits) is not tuple or any(
+        not isinstance(item, BudgetLimit) for item in budget_limits
+    ):
+        raise PolicyError("invalid sealed profile action budgets")
+    action = ProfileAction(
+        action_id,
+        wave_id,
+        workspace_id,
+        target_id,
+        profile_id,
+        runtime_pinset_sha256,
+        bounds,
+        limits,
+        budget_limits,
+    )
+    identity = id(action)
+
+    def discard(reference: Any, *, identity: int = identity) -> None:
+        current = _PROFILE_ACTION_SEALS.get(identity)
+        if current is not None and current[0] is reference:
+            _PROFILE_ACTION_SEALS.pop(identity, None)
+
+    reference = ref(action, discard)
+    _PROFILE_ACTION_SEALS[identity] = (reference, _profile_action_digest(action))
+    return action
+
+
+def _validate_profile_action(value: Any) -> ProfileAction:
+    if not isinstance(value, ProfileAction):
+        raise PolicyError("profile action is not sealed")
+    try:
+        seal = _PROFILE_ACTION_SEALS.get(id(value))
+        valid = (
+            seal is not None
+            and seal[0]() is value
+            and seal[1] == _profile_action_digest(value)
+        )
+    except (AttributeError, TypeError, ValueError):
+        valid = False
+    if not valid:
+        raise PolicyError("profile action is not sealed")
+    return value
 
 
 @dataclass(frozen=True)
@@ -355,6 +475,10 @@ class ExecutionContext:
     input_bytes: bytes = b""
     # Trusted, process-local capability. Never populated from model JSON.
     network: Any | None = None
+    # Broker-issued sealed profile action and dispatcher. Model JSON cannot
+    # construct either capability or select a channel destination.
+    profile_action: ProfileAction | None = None
+    profile_dispatch: Callable[[ProfileAction, Callable[[bytes], str]], Any] | None = None
 
 
 @dataclass(frozen=True)

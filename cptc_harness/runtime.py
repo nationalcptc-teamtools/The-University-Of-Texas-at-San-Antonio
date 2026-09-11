@@ -20,6 +20,9 @@ from .publication import Publications
 from .audit_control import reconcile_stop_intents
 
 
+_UNSET = object()
+
+
 def device_root():
     # Deliberately outside disposable workspace. No AI override or reset endpoint.
     return Path.home() / ".local" / "state" / "cptc-harness"
@@ -48,7 +51,14 @@ def initialize(root: Path, policy_path: Path, *, recipient: str, age_binary: Pat
 
 
 class Runtime:
-    def __init__(self, root: Path, *, ledger_root: Path | None = None):
+    def __init__(self, root: Path, *, ledger_root: Path | None = None,
+                 profile_wire_broker=None, verified_release=None,
+                 profile_channel_provider=_UNSET):
+        if profile_channel_provider is not _UNSET:
+            raise PolicyError(
+                "profile_channel_provider was removed; use the isolated profile wire broker"
+            )
+        self._profile_wire_broker = profile_wire_broker
         self.root = private_directory(root)
         self.policy = load_policy(self.root / "policy.json")
         config = json.loads(read_private(self.root / "runtime.json"))
@@ -58,7 +68,13 @@ class Runtime:
             raise PolicyError("age executable differs from initialized deployment pin")
         self.ledger_root = private_directory((ledger_root or device_root()) / self.policy.engagement_id, create=True)
         self.ledger = Ledger(self.ledger_root, self.policy.engagement_id, self.policy.device_id, policy_revision=self.policy.revision)
-        self.audit = AuditService(self.root / "audit", self.policy, age_binary=config["age_binary"], age_recipient=config["age_recipient"])
+        self.audit = AuditService(
+            self.root / "audit",
+            self.policy,
+            age_binary=config["age_binary"],
+            age_recipient=config["age_recipient"],
+            verified_release=verified_release,
+        )
         self.clock = self.audit.clock
         try:
             # Pending stop controls predate this writer.  Replay their fixed,
@@ -82,7 +98,11 @@ class Runtime:
             raise
         self.registry = build_registry()
         self.network = NetworkBroker(self.policy, audit=self.audit, ledger=self.ledger)
-        self.broker = Broker(self.policy, self.registry, self.ledger, self.audit, network=self.network, clock=self.clock, result_sink=self._record_result)
+        self.broker = Broker(
+            self.policy, self.registry, self.ledger, self.audit,
+            network=self.network, clock=self.clock, result_sink=self._record_result,
+            profile_wire_broker=profile_wire_broker,
+        )
         from .campaign import AssessmentCampaign
         self.campaign = AssessmentCampaign(self.broker)
         self.workflows = Workflows(self.ledger_root / "workflows", self.broker)
@@ -121,9 +141,40 @@ class Runtime:
             try:
                 self.ledger.stop("operator control reconciliation failed")
             finally:
-                self.audit.close()
+                try:
+                    self._close_profile_wire_broker()
+                finally:
+                    self.audit.close()
             raise PolicyError("operator stop reconciliation failed; workspace remains stopped") from None
-        self.audit.close()
+        try:
+            self._close_profile_wire_broker()
+        finally:
+            self.audit.close()
+
+    def attach_profile_wire_broker(self, broker) -> None:
+        from .profile_runtime.broker_ipc import PortcastBrokerClient
+
+        if (
+            self._profile_wire_broker is not None
+            or not isinstance(broker, PortcastBrokerClient)
+            or getattr(broker, "_ledger", None) is not self.ledger
+        ):
+            raise PolicyError("trusted PortCast profile wire broker is unavailable")
+        self._profile_wire_broker = broker
+        self.broker._profile_wire_broker = broker
+
+    def _close_profile_wire_broker(self) -> None:
+        provider = self._profile_wire_broker
+        self._profile_wire_broker = None
+        self.broker._profile_wire_broker = None
+        close = getattr(provider, "close", None)
+        if callable(close):
+            close()
+
+    def close_profile_wire_broker(self) -> None:
+        """Close and reap the isolated broker while Audit remains available."""
+
+        self._close_profile_wire_broker()
 
     def export_handover(self, recipient_device_id, recipient_key_fingerprint, signer, *, seal_id=None):
         if not self.audit.verify().valid:

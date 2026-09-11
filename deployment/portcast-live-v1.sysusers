@@ -1,0 +1,3 @@
+# Dedicated, dynamically allocated PortCast service identity.
+g cptc-harness -
+u _cptc-portcast -:cptc-harness "CPTC PortCast service" /nonexistent

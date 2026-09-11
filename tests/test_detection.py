@@ -1,12 +1,28 @@
 """Synthetic, offline tests for the finite CPTC detector."""
 from copy import deepcopy
+from dataclasses import asdict
+import hashlib
+import json
+from pathlib import Path
 
 import pytest
 
+from cptc_harness.advisories import AdvisoryCatalog, AdvisoryRecord, load_catalog
 from cptc_harness.detection import CATALOG, CATALOG_VERSION, classify_records
 
 
 HASH = "a" * 64
+PORTCAST_ADVISORIES = Path(__file__).parent / "fixtures" / "portcast" / "jellyfin-advisories.json"
+
+
+def portcast_catalog(payload=None):
+    if payload is None:
+        raw = PORTCAST_ADVISORIES.read_bytes()
+    else:
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return load_catalog(
+        raw, expected_sha256=hashlib.sha256(raw).hexdigest(), release_sha256="b" * 64,
+    )
 
 
 def record(observations, *, target="fixture-host", module="linux.output_import",
@@ -33,13 +49,14 @@ def detection(result, rule_id):
 
 
 def test_catalog_is_finite_and_immutable():
-    assert CATALOG_VERSION == 1
+    assert CATALOG_VERSION == 3
     assert {item["rule_id"] for item in CATALOG} == {
         "linux_world_writable_critical_path", "linux_writable_service_or_task",
         "linux_suid_inventory", "linux_capability_privilege", "windows_service_acl",
         "windows_task_acl", "windows_smb_signing", "windows_ldap_signing",
+        "windows_defender_disabled",
         "web_missing_security_headers", "apache_httpd_path_traversal",
-        "samba_shared_module_loading",
+        "samba_shared_module_loading", "jellyfin_version_advisory_candidates",
     }
     with pytest.raises(TypeError):
         CATALOG[0]["rule_id"] = "runtime-rule"
@@ -136,7 +153,47 @@ def test_windows_acl_and_signing_rows_keep_relationships_and_role():
     smb = detection(result, "windows_smb_signing")
     assert smb["disposition"] == "candidate" and smb["cve_ids"] == []
     assert "prerequisites_unverified" in smb["limitations"]
-    assert detection(result, "windows_ldap_signing")["attack_techniques"] == ["T1557.001"]
+    assert smb["attack_techniques"] == []
+    assert detection(result, "windows_ldap_signing")["attack_techniques"] == []
+
+
+def test_windows_defender_disabled_is_an_observed_configuration_without_a_cve():
+    fields = {
+        "realtime_protection_enabled": False,
+        "on_access_protection_enabled": False,
+        "ioav_protection_enabled": False,
+        "behavior_monitoring_enabled": False,
+        "provenance": "os_inventory",
+    }
+    result = classify_records([record([
+        observation("windows_defender_protection", fields, track="windows_ad"),
+    ], module="windows_ad.output_import", role="admin")])
+    row = detection(result, "windows_defender_disabled")
+    assert row["disposition"] == "observed_condition"
+    assert row["collection_complete"] is True
+    assert row["cve_ids"] == []
+    assert row["cwe_ids"] == ["CWE-693"]
+    assert row["attack_techniques"] == ["T1562.001"]
+
+
+def test_windows_defender_enabled_is_negative_and_partial_state_is_unknown():
+    enabled = {
+        "realtime_protection_enabled": True,
+        "on_access_protection_enabled": True,
+        "ioav_protection_enabled": True,
+        "behavior_monitoring_enabled": True,
+        "provenance": "os_inventory",
+    }
+    result = classify_records([record([
+        observation("windows_defender_protection", enabled, track="windows_ad"),
+    ], module="windows_ad.output_import", role="admin")])
+    assert detection(result, "windows_defender_disabled")["disposition"] == "not_observed"
+
+    enabled.pop("behavior_monitoring_enabled")
+    partial = classify_records([record([
+        observation("windows_defender_protection", enabled, track="windows_ad"),
+    ], module="windows_ad.output_import", role="admin")])
+    assert detection(partial, "windows_defender_disabled")["disposition"] == "unknown"
 
 
 def test_web_headers_are_configuration_candidates_without_cves():
@@ -198,6 +255,129 @@ def test_version_matching_uses_exact_products_and_typed_network_ports():
     assert rows["port:445/tcp"]["rule_id"] == "samba_shared_module_loading"
     assert rows["port:443/tcp"]["disposition"] == "candidate"
     assert rows["port:445/tcp"]["disposition"] == "candidate"
+
+
+def test_portcast_identity_uses_validated_advisory_candidates_and_never_confirmation():
+    catalog = portcast_catalog()
+    result = classify_records([record([observation(
+        "component_identity",
+        {"component_id": "service:10.0.1.30:8096/jellyfin",
+         "ecosystem": "semver", "product": "Jellyfin Server",
+         "version": "10.10.7", "provenance": "banner"},
+        target="http://10.0.1.30:8096/System/Info/Public", track="web",
+    )], target="http://10.0.1.30:8096/System/Info/Public", module="web.portcast_identity")],
+        advisory_catalog=catalog)
+    row = detection(result, "jellyfin_version_advisory_candidates")
+    assert row["disposition"] == "candidate"
+    assert row["collection_complete"] is False
+    assert row["cve_ids"] == sorted(
+        cve for item in catalog.records if item.state == "active" for cve in item.cve_ids
+    )
+    assert row["limitations"] == [
+        "backport_unverified", "configuration_unverified",
+        "manual_prerequisite_review_required", "version_only",
+    ]
+
+
+def test_other_jellyfin_version_is_unknown_without_guessed_cves():
+    catalog = portcast_catalog()
+    result = classify_records([record([observation(
+        "component_identity",
+        {"ecosystem": "semver", "product": "Jellyfin Server",
+         "version": "10.11.10", "provenance": "banner"},
+        track="web",
+    )], module="web.portcast_identity")], advisory_catalog=catalog)
+    row = detection(result, "jellyfin_version_advisory_candidates")
+    assert row["disposition"] == "unknown"
+    assert row["cve_ids"] == []
+
+
+def test_portcast_detection_honors_removed_and_withdrawn_catalog_entries():
+    payload = json.loads(PORTCAST_ADVISORIES.read_text())
+    removed = payload["records"].pop(0)["advisory_id"]
+    payload["records"][0]["state"] = "withdrawn"
+    withdrawn = payload["records"][0]["advisory_id"]
+    catalog = portcast_catalog(payload)
+    result = classify_records([record([observation(
+        "component_identity",
+        {"component_id": "service:10.0.1.30:8096/jellyfin",
+         "ecosystem": "semver", "product": "Jellyfin Server",
+         "version": "10.10.7", "provenance": "banner"},
+        target="http://10.0.1.30:8096/System/Info/Public", track="web",
+    )], target="http://10.0.1.30:8096/System/Info/Public", module="web.portcast_identity")],
+        advisory_catalog=catalog)
+    row = detection(result, "jellyfin_version_advisory_candidates")
+    assert row["disposition"] == "candidate"
+    assert removed not in row["cve_ids"]
+    assert withdrawn not in row["cve_ids"]
+    assert row["cve_ids"] == sorted(
+        cve for item in catalog.records if item.state == "active" for cve in item.cve_ids
+    )
+    assert "withdrawn_advisory" in row["limitations"]
+
+
+def test_portcast_detection_without_validated_catalog_fails_closed():
+    result = classify_records([record([observation(
+        "component_identity",
+        {"ecosystem": "semver", "product": "Jellyfin Server",
+         "version": "10.10.7", "provenance": "banner"},
+        track="web",
+    )], module="web.portcast_identity")])
+    row = detection(result, "jellyfin_version_advisory_candidates")
+    assert row["disposition"] == "unknown"
+    assert row["cve_ids"] == []
+    assert "advisory_catalog_required" in row["limitations"]
+    with pytest.raises(TypeError, match="load_catalog"):
+        classify_records([], advisory_catalog={})
+
+
+def test_directly_constructed_advisory_catalog_cannot_inject_candidates():
+    forged = AdvisoryCatalog(
+        "cptc.advisories.v1", "not-a-release-hash",
+        (AdvisoryRecord(
+            "CVE-2099-99999", ("CVE-2099-99999",), "active", "forged-publisher",
+            "https://attacker.invalid/forged", "not-a-source-hash",
+            "2026-09-09T00:00:00Z", "semver", "jellyfin_server", "", "semver",
+            "0.0.0", "99.0.0",
+        ),),
+        "not-a-catalog-hash",
+    )
+    records = [record([observation(
+        "component_identity",
+        {"ecosystem": "semver", "product": "Jellyfin Server",
+         "version": "10.10.7", "provenance": "banner"},
+        track="web",
+    )], module="web.portcast_identity")]
+    with pytest.raises(TypeError, match="load_catalog"):
+        classify_records(records, advisory_catalog=forged)
+
+
+@pytest.mark.parametrize("mutation", ["subset", "reorder", "release", "catalog_hash"])
+def test_post_load_catalog_mutation_cannot_change_candidates(mutation):
+    catalog = portcast_catalog()
+    if mutation == "subset":
+        object.__setattr__(catalog, "records", catalog.records[1:])
+    elif mutation == "reorder":
+        object.__setattr__(catalog, "records", tuple(reversed(catalog.records)))
+    elif mutation == "release":
+        object.__setattr__(catalog, "release_sha256", "c" * 64)
+    else:
+        object.__setattr__(catalog, "catalog_sha256", "c" * 64)
+    with pytest.raises(TypeError, match="load_catalog"):
+        classify_records([], advisory_catalog=catalog)
+
+
+def test_external_snapshot_rejects_subset_with_recomputed_canonical_digest():
+    catalog = portcast_catalog()
+    object.__setattr__(catalog, "records", catalog.records[1:])
+    forged_digest = hashlib.sha256(json.dumps({
+        "schema": catalog.schema,
+        "release_sha256": catalog.release_sha256,
+        "records": [asdict(item) for item in catalog.records],
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    object.__setattr__(catalog, "catalog_sha256", forged_digest)
+    with pytest.raises(TypeError, match="load_catalog"):
+        classify_records([], advisory_catalog=catalog)
 
 
 def test_missing_or_unrelated_evidence_cannot_make_conclusive_result():

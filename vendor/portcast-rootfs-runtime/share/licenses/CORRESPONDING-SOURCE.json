@@ -1,0 +1,121 @@
+{
+  "arch_package_versions": {
+    "brotli": {
+      "license": "MIT",
+      "version": "1.2.0-1.1"
+    },
+    "bubblewrap": {
+      "license": "LGPL-2.1-or-later",
+      "version": "0.12.0-1.1"
+    },
+    "bzip2": {
+      "license": "BSD",
+      "version": "1.0.8-6.1"
+    },
+    "expat": {
+      "license": "MIT",
+      "version": "2.8.4-1.1"
+    },
+    "glibc": {
+      "license": "GPL-2.0-or-later  LGPL-2.1-or-later",
+      "version": "2.44+r24+g16be1518495f-1"
+    },
+    "libcap": {
+      "license": "BSD-3-Clause",
+      "version": "2.78-1.1"
+    },
+    "libffi": {
+      "license": "MIT",
+      "version": "3.8.0-1.1"
+    },
+    "libgcc": {
+      "license": "GPL-3.0-or-later WITH GCC-exception-3.1  GFDL-1.3-or-later",
+      "version": "16.2.1+r23+gd564253eb6c8-1"
+    },
+    "libsodium": {
+      "license": "custom:ISC",
+      "version": "1.0.22-1.1"
+    },
+    "libyaml": {
+      "license": "MIT",
+      "version": "0.2.5-3.1"
+    },
+    "mpdecimal": {
+      "license": "BSD-2-Clause",
+      "version": "4.0.1-3.1"
+    },
+    "openssl": {
+      "license": "Apache-2.0",
+      "version": "3.6.4-1.1"
+    },
+    "python": {
+      "license": "PSF-2.0",
+      "version": "3.14.7-2"
+    },
+    "sqlite": {
+      "license": "LicenseRef-Sqlite",
+      "version": "3.53.4-1"
+    },
+    "util-linux-libs": {
+      "license": "BSD-3-Clause AND LicenseRef-PublicDomain",
+      "version": "2.42.3-1.1"
+    },
+    "xz": {
+      "license": "0BSD",
+      "version": "5.8.3-1"
+    },
+    "zlib-ng-compat": {
+      "license": "Zlib",
+      "version": "2.3.3-2"
+    },
+    "zstd": {
+      "license": "BSD-3-Clause AND MIT",
+      "version": "1.5.7-2"
+    }
+  },
+  "notice": "Exact retained source bundles accompany each distributed copyleft component in the private source release.",
+  "selected_permissive_licenses": {
+    "libcap": {
+      "license": "BSD-3-Clause",
+      "source_revision": "a1fef85d27d0ee12729a64d1c9b2183c6007e56a"
+    },
+    "util-linux-libs": {
+      "license": "BSD-3-Clause AND LicenseRef-PublicDomain",
+      "source_revision": "6f20a5defcf9066d4d2af372424a1576bd3d495d"
+    },
+    "xz": {
+      "license": "0BSD",
+      "source_revision": "4b73f2ec19a99ef465282fbce633e8deb33691b3"
+    },
+    "zstd": {
+      "license": "BSD-3-Clause AND MIT",
+      "source_revision": "f8745da6ff1ad1e7bab384bd1f9d742439278e99"
+    }
+  },
+  "source_bundles": {
+    "Arch runtime package: glibc": {
+      "archive": "vendor/corresponding-source/glibc-2.44+r24+g16be1518495f-1-exact-source.tar.gz",
+      "metadata": "docs/harness/corresponding-source/glibc-2.44+r24+g16be1518495f-1.json",
+      "metadata_sha256": "85665d38df3c25134b94311e84bfe3a0bb5899238292cdbe9f9ffa2431c1702e",
+      "sha256": "d4a58036d5b4983492ab72b30714bf22ac3a45ba9f001190a77499ad1a5c3fb6"
+    },
+    "Arch runtime package: libgcc": {
+      "archive": "vendor/corresponding-source/libgcc-16.2.1+r23+gd564253eb6c8-1-exact-source.tar.gz",
+      "metadata": "docs/harness/corresponding-source/libgcc-16.2.1+r23+gd564253eb6c8-1.json",
+      "metadata_sha256": "a13c13f1c8444f5a316b13850fc31522ecd2849e8cd0593eb143374c99d8dffd",
+      "sha256": "6cc75f24c961125a956c83cf95d2c8619607ad36b5e50cca4fd6eca95c58fec2"
+    },
+    "bubblewrap": {
+      "archive": "vendor/corresponding-source/bubblewrap-0.12.0-1.1-exact-source.tar.gz",
+      "metadata": "docs/harness/corresponding-source/bubblewrap-0.12.0-1.1.json",
+      "metadata_sha256": "b06c880bda91da79c9a74fe378ba56dd483533a9cc55a3afd833bdcf00e77d99",
+      "sha256": "95413269f3b58459344b1165d6a434a1ee1b392dc391d7e8d2f3c5fcd1d9b94a"
+    },
+    "paramiko": {
+      "archive": "vendor/corresponding-source/python-paramiko-5.0.0-1-exact-source.tar.gz",
+      "metadata": "docs/harness/corresponding-source/python-paramiko-5.0.0-1.json",
+      "metadata_sha256": "9a258a0592c07af41964f62d4c7eebbc83fabf58181014222f63be185de2a834",
+      "sha256": "b57e313e8bc7e3a33437b148e5d7a052d74743308fa997de586a99c7609a9c99"
+    }
+  }
+}

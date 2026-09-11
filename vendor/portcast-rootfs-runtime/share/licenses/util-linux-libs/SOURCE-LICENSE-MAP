@@ -1,0 +1,36 @@
+util-linux libuuid 2.42.3 source-to-license map
+
+Reviewed upstream revision:
+6f20a5defcf9066d4d2af372424a1576bd3d495d
+https://github.com/util-linux/util-linux/commit/6f20a5defcf9066d4d2af372424a1576bd3d495d
+
+The upstream libuuid/COPYING file selects the Modified BSD License and points
+to Documentation/licenses/COPYING.BSD-3-Clause. The following sources listed
+by libuuid/meson.build use that BSD-3-Clause notice:
+
+libuuid/src/uuidP.h
+libuuid/src/clear.c
+libuuid/src/compare.c
+libuuid/src/copy.c
+libuuid/src/gen_uuid.c
+libuuid/src/isnull.c
+libuuid/src/pack.c
+libuuid/src/parse.c
+libuuid/src/uuidd.h
+libuuid/src/uuid_time.c
+libuuid/src/predefined.c
+libuuid/src/unpack.c
+libuuid/src/unparse.c
+lib/randutils.c
+
+The same build definition adds these public-domain helper sources:
+
+lib/md5.c
+lib/sha1.c
+
+Their matching headers, include/md5.h and include/sha1.h, state the same
+public-domain terms. include/list.h is named as a Meson source dependency but
+is not included by the libuuid compilation units. It is not part of this
+license selection.
+
+The retained BSD license text and copyright notices are in this directory.

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nmaprun scanner="nmap">
+  <host><status state="up"/><address addr="192.0.2.20" addrtype="ipv4"/>
+    <ports><port protocol="tcp" portid="445"><state state="open"/><service name="microsoft-ds"/>
+    </port></ports>
+    <hostscript>
+      <script id="smb2-security-mode" output="&#xa;  3.1.1: &#xa;    Message signing enabled and required">
+        <table key="3.1.1"><elem>Message signing enabled and required</elem></table>
+      </script>
+    </hostscript>
+  </host>
+  <runstats><finished exit="success"/><hosts up="1" down="0" total="1"/></runstats>
+</nmaprun>

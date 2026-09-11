@@ -1,0 +1,159 @@
+{
+  "version": 2,
+  "catalog_sha256": "83be9c7e1b3ff2bdd2c164b555f2ccb7614566489ee2cba77dcc574fef7a1fca",
+  "profiles": [
+    {
+      "profile_id": "network.nse_smb2_security_mode",
+      "family": "nse",
+      "upstream_id": "smb2-security-mode.nse",
+      "runner_id": "live.nmap.nse-smb2-security-mode-v2",
+      "tier": "observation",
+      "mode": "lab_candidate",
+      "protocol": "smb",
+      "port": 445,
+      "budget": {
+        "tcp_connects": 2,
+        "udp_datagrams": 1,
+        "protocol_requests": 2,
+        "tx_bytes": 4096,
+        "rx_bytes": 16384,
+        "timeout_s": 15.0,
+        "cpu_s": 10.0,
+        "output_bytes": 16384,
+        "process_limit": 1,
+        "auth_attempts": 0
+      },
+      "source": {
+        "repository": "https://github.com/nmap/nmap",
+        "path": "scripts/smb2-security-mode.nse",
+        "revision": "package:nmap-7.991-1.1",
+        "sha256": "184a49f77869088d10309ae5b4c37ffa7065b984436aae2aba77ba86d4d801ae",
+        "license": "LicenseRef-Nmap-Public-Source-License-Version-0.95",
+        "redistributable": false
+      },
+      "runtime_pins": {
+        "command_template_sha256": "cca77e21e818b4ca1b57f9dfa69a7bfa9de2cd8ee0d0e962311376e0093791a1",
+        "dependency_closure_sha256": "461563b2f17d501c1bbf0f05b86ff7494d0a2e177d43d92523d0d1b5410191fe",
+        "nbstat_request_sha256": "ceea3d122f7ab944367b4a65f6c6699471a3aee6163c145e0e804a1b10b80a64",
+        "nmap_version": "7.991",
+        "nmap_package_revision": "package:nmap-7.991-1.1",
+        "nmap_path": "/usr/bin/nmap",
+        "nmap_sha256": "ee8f517262c083b934de98844064c01d5b0cf6bdf9ffac39032187bf303303cc",
+        "parser_path": "cptc_harness/scanner_results.py",
+        "parser_sha256": "fe12bc1e0fdfbfff8414312855f8b2b9b70c70a0cd371cbdbfe8605c3371fda3",
+        "script_path": "/usr/share/nmap/scripts/smb2-security-mode.nse",
+        "script_sha256": "184a49f77869088d10309ae5b4c37ffa7065b984436aae2aba77ba86d4d801ae",
+        "smb2_request_sha256": "df36284962f3ca182e53bbbc6328f247e86de0e42eee51db97d553242ae9f78d"
+      },
+      "command_template": [
+        "/usr/bin/nmap", "-n", "-Pn", "-sT", "-p", "445", "--script",
+        "/usr/share/nmap/scripts/smb2-security-mode.nse", "-oX", "-", "--",
+        "{target_ipv4}"
+      ],
+      "dependency_manifest": [
+        {
+          "path": "/usr/lib/libbrotlicommon.so.1",
+          "sha256": "0a5a0d15264043c6cb99d3076501d4503bafde11eaea28f353e399b4ce6b2981"
+        },
+        {
+          "path": "/usr/lib/libbrotlidec.so.1",
+          "sha256": "f747ed8ca1a29c53744f6e2b12dbd70d78838682a5914505b173c1ad50db4ca9"
+        },
+        {
+          "path": "/usr/lib/libbrotlienc.so.1",
+          "sha256": "dd19bedf12100d84f6a490af2017a49c8a5dff098dd4f2d03dea501ffaf47d56"
+        },
+        {
+          "path": "/usr/lib/libc.so.6",
+          "sha256": "848dae1dfcff0fc864292b28b2d426b0093425002a856a55c3a2b8ed31e2ea40"
+        },
+        {
+          "path": "/usr/lib/libcrypto.so.3",
+          "sha256": "5ae0c61319c6bfa574e83994e9d0a48196cfd6a6bf37fe82d87627c7904c5d39"
+        },
+        {
+          "path": "/usr/lib/libdbus-1.so.3",
+          "sha256": "accec52359b9195508051d2b4eda61a39659432c80d3590e8023bf5136de6f6c"
+        },
+        {
+          "path": "/usr/lib/libgcc_s.so.1",
+          "sha256": "571745fb27883c763315fab54a536906064c1df6804d1a7884713dac259da68d"
+        },
+        {
+          "path": "/usr/lib/liblua5.4.so.5.4",
+          "sha256": "45487db7f5593a67930bb8dca89c8544a3823586632fa81ba128de8765d1c213"
+        },
+        {
+          "path": "/usr/lib/libm.so.6",
+          "sha256": "97a73e24e715f4069fd3b205bad7392307276bca14fa183381dfd9276b9573ca"
+        },
+        {
+          "path": "/usr/lib/libnl-3.so.200",
+          "sha256": "4e15dd2bd90dc9afd296f9fd5d848d72550abce1cd20e7e931de4279e008c93a"
+        },
+        {
+          "path": "/usr/lib/libnl-genl-3.so.200",
+          "sha256": "55b76dc6b3f950e5044997e0d52d5978043116bb228fb5eff13c520990325401"
+        },
+        {
+          "path": "/usr/lib/libpcap.so.1",
+          "sha256": "0fc61388d51afeafe19ea1cc3cb241a9a2a0b631c5b667788583f1f5ac4c3a99"
+        },
+        {
+          "path": "/usr/lib/libpcre2-8.so.0",
+          "sha256": "90c90e39f5fe8136c19d900ebd9608168d2537c573b2a3d3d9e151dc3b347e2b"
+        },
+        {
+          "path": "/usr/lib/libssh2.so.1",
+          "sha256": "542afac11b8e892122fbbe0f46ed182381d165b3876b2d5fc04f26c43ba531cb"
+        },
+        {
+          "path": "/usr/lib/libssl.so.3",
+          "sha256": "f1fbb3abbbe384aaba03a514f64db8c3a3d960d2fc8c0317652ea7ac32587fb7"
+        },
+        {
+          "path": "/usr/lib/libstdc++.so.6",
+          "sha256": "412e0fc561a10581aaff2d101206939a31fa12c696590d8d4a5ec3655953ffe0"
+        },
+        {
+          "path": "/usr/lib/libsystemd.so.0",
+          "sha256": "2e971237c56af98844a847344edeae0f59ae2e3437de84162b37f308f82c1615"
+        },
+        {
+          "path": "/usr/lib/libz.so.1",
+          "sha256": "63e814634983bfa53890b48cb56760ca38840fbcf91f66a51222eef85eaa08b7"
+        },
+        {
+          "path": "/usr/lib/libzstd.so.1",
+          "sha256": "f18105ff5aefdd6177cb99fd016f4822a676adf23706d4ddbdce632ed40882ca"
+        },
+        {
+          "path": "/usr/lib64/ld-linux-x86-64.so.2",
+          "sha256": "554893868f600bf7a7a619e58e80ac1588cc4e14f50b5826647f246c534dbd79"
+        },
+        {
+          "path": "/usr/share/nmap/nselib/smb.lua",
+          "sha256": "c65e703fe1936293802de0845db91a107c09d4b9d0cd400f886f1a102f6e98c0"
+        },
+        {
+          "path": "/usr/share/nmap/nselib/smb2.lua",
+          "sha256": "9202fd10fec48680f285cbfed1d8ff18fedbf31d7b38466cb407d76b39ecb743"
+        },
+        {
+          "path": "/usr/share/nmap/nselib/stdnse.lua",
+          "sha256": "68ebdd71cb3749f0d488943acc7720e80fe5e172ef568d7e593504da0bbbf594"
+        }
+      ],
+      "dependency_closure_sha256": "461563b2f17d501c1bbf0f05b86ff7494d0a2e177d43d92523d0d1b5410191fe",
+      "dependency_closure_complete": false,
+      "parser_id": "nmap.xml.smb2-security-mode-v2",
+      "allowed_options": [],
+      "effects": [
+        "network_observation",
+        "no_authentication",
+        "no_retry",
+        "no_fallback"
+      ]
+    }
+  ]
+}

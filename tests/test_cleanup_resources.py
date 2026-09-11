@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import io
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,6 +32,35 @@ class Process:
 
 def _audit_policy():
     return PolicySnapshot("synthetic", "r", "w", "d", "operator", ScopeSpec())
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    (
+        (b"bwrap: Can't read /proc/sys/kernel/overflowuid", "namespace_proc_subset_blocked"),
+        (b"bwrap: loopback: Failed to create NETLINK_ROUTE socket", "namespace_netlink_family_blocked"),
+        (b"bwrap: Can't mount proc on /proc: Operation not permitted", "namespace_proc_mount_blocked"),
+        (b"bwrap: Can't open source /usr: Function not implemented", "namespace_bind_source_blocked"),
+        (b"unrecognized trusted-child failure", "startup_child_exited"),
+    ),
+)
+def test_audit_startup_diagnostic_maps_to_fixed_code(raw, expected):
+    import cptc_harness.audit_service as service
+
+    process = SimpleNamespace(stderr=io.BytesIO(raw), poll=lambda: 1)
+    assert service._startup_failure_code(process) == expected
+
+
+def test_audit_startup_diagnostic_never_returns_raw_or_unbounded_output():
+    import cptc_harness.audit_service as service
+
+    process = SimpleNamespace(
+        stderr=io.BytesIO(b"secret-client-value" + b"x" * service._STARTUP_ERROR_LIMIT),
+        poll=lambda: 1,
+    )
+    result = service._startup_failure_code(process)
+    assert result == "startup_diagnostic_limit_exceeded"
+    assert "secret" not in result
 
 
 @pytest.mark.parametrize("failure", ["memfd", "write", "seek", "seal", "worker", "bwrap", "python", "launch", "initial_info"])

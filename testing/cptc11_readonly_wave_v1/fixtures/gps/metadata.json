@@ -1,0 +1,1 @@
+{"issuer":"https://synthetic.invalid/realms/gps","grant_types_supported":["authorization_code"],"id_token_signing_alg_values_supported":["RS256"]}

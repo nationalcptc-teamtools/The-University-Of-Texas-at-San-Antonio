@@ -1,8 +1,9 @@
 """Deterministic, finite detection for reviewed CPTC observations.
 
-This module consumes already captured records.  It has no transport, model,
-filesystem, or advisory lookup capability.  A detector result is a candidate
-or a check-level observation.  It never confirms exploitation or a CVE.
+This module consumes already captured records and an optional validated
+advisory catalog.  It has no transport, model, filesystem, or advisory lookup
+capability.  A detector result is a candidate or a check-level observation.
+It never confirms exploitation or a CVE.
 """
 from __future__ import annotations
 
@@ -11,8 +12,11 @@ import re
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping, Sequence
 
+from .advisories import AdvisoryCatalog, catalog_is_validated, match_components
+from .assessment_contracts import ComponentIdentity
 
-CATALOG_VERSION = 1
+
+CATALOG_VERSION = 3
 VERSION = 1
 CLASSIFICATION = "client_confidential"
 DEFAULT_ROLE = "unauthenticated"
@@ -51,10 +55,13 @@ CATALOG = tuple(_freeze(item) for item in (
      "attack_techniques": ("T1053.005",)},
     {"rule_id": "windows_smb_signing", "track": "windows_ad",
      "check_ids": ("windows_smb_policy",), "cwe_ids": (),
-     "attack_techniques": ("T1557.001",)},
+     "attack_techniques": ()},
     {"rule_id": "windows_ldap_signing", "track": "windows_ad",
      "check_ids": ("windows_ldap_policy",), "cwe_ids": (),
-     "attack_techniques": ("T1557.001",)},
+     "attack_techniques": ()},
+    {"rule_id": "windows_defender_disabled", "track": "windows_ad",
+     "check_ids": ("windows_defender_protection",), "cwe_ids": ("CWE-693",),
+     "attack_techniques": ("T1562.001",)},
     {"rule_id": "web_missing_security_headers", "track": "web",
      "check_ids": ("web_headers",), "cwe_ids": (), "attack_techniques": ()},
     {"rule_id": "apache_httpd_path_traversal", "track": "linux",
@@ -63,6 +70,9 @@ CATALOG = tuple(_freeze(item) for item in (
     {"rule_id": "samba_shared_module_loading", "track": "linux",
      "check_ids": ("linux_version", "package_version", "component_identity"),
      "cwe_ids": (), "attack_techniques": ()},
+    {"rule_id": "jellyfin_version_advisory_candidates", "track": "web",
+     "check_ids": ("component_identity",), "cwe_ids": (),
+     "attack_techniques": ()},
 ))
 RULE_CATALOG = CATALOG
 DETECTION_CATALOG = CATALOG
@@ -280,7 +290,8 @@ def _common(target: str, role: str, component_id: str, observation: Mapping[str,
 
 def _evaluate_observation(target: str, role: str, observation: Mapping[str, Any],
                           result: Mapping[str, Any], actions: set[str], source_ok: bool,
-                          evidence: set[str], component_id: str) -> list[_Outcome]:
+                          evidence: set[str], component_id: str,
+                          advisory_catalog: AdvisoryCatalog | None) -> list[_Outcome]:
     track = _text(observation.get("track"), 64)
     check_id = _text(observation.get("check_id"), 128)
     if not track or not check_id:
@@ -310,11 +321,12 @@ def _evaluate_observation(target: str, role: str, observation: Mapping[str, Any]
             port_id = _component_id(port_observation, port_facts, check_id, target)
             results.extend(_evaluate_versions(target, role, port_id, port_observation,
                                               port_facts, actions, source_ok, evidence,
-                                              failed, check_id))
+                                              failed, check_id, advisory_catalog))
         return results
-    if track == "linux" and check_id in {"linux_version", "package_version", "component_identity"}:
+    if ((track == "linux" and check_id in {"linux_version", "package_version", "component_identity"})
+            or (track == "web" and check_id == "component_identity")):
         return _evaluate_versions(target, role, component_id, observation, facts, actions, source_ok,
-                                  evidence, failed, check_id)
+                                  evidence, failed, check_id, advisory_catalog)
     if not rule_id or _RULES[rule_id]["track"] != track:
         return []
     if failed:
@@ -408,9 +420,25 @@ def _evaluate_observation(target: str, role: str, observation: Mapping[str, Any]
         weak = not facts["signing_required"] or (check_id == "windows_ldap_policy" and not facts["channel_binding_required"])
         out.disposition = "candidate" if weak else "not_observed"
         out.collection_complete = source_ok
-        out.attack_techniques.add("T1557.001")
         if weak:
             out.limitations.add("prerequisites_unverified")
+        return [out]
+    if check_id == "windows_defender_protection":
+        required = (
+            "realtime_protection_enabled", "on_access_protection_enabled",
+            "ioav_protection_enabled", "behavior_monitoring_enabled", "provenance",
+        )
+        out = _common(target, role, component_id, observation, rule_id, check_id, actions, evidence,
+                      source_ok, "unknown", complete=False, fields=required)
+        states = [facts.get(key) for key in required[:-1]]
+        provenance = _text(facts.get("provenance"), 64)
+        if any(type(value) is not bool for value in states) or provenance not in _TRUSTED_PROVENANCE:
+            out.limitations.add("protection_state_or_provenance_unverified")
+            return [_missing(out, *required)]
+        disabled = any(value is False for value in states)
+        _conclusion(out, "observed_condition" if disabled else "not_observed", source_ok)
+        out.cwe_ids.add("CWE-693")
+        out.attack_techniques.add("T1562.001")
         return [out]
     if check_id == "web_headers":
         status, present, redirect = facts.get("status"), facts.get("headers_present"), facts.get("redirect")
@@ -456,7 +484,7 @@ def _product(facts: Mapping[str, Any]) -> str | None:
 
 def _evaluate_versions(target: str, role: str, component_id: str, observation: Mapping[str, Any], facts: Mapping[str, Any],
                        actions: set[str], source_ok: bool, evidence: set[str], failed: str | None,
-                       check_id: str) -> list[_Outcome]:
+                       check_id: str, advisory_catalog: AdvisoryCatalog | None) -> list[_Outcome]:
     product = _product(facts)
     parsed = _parse_version(facts.get("version"))
     provenance = _text(facts.get("provenance"), 64)
@@ -464,6 +492,7 @@ def _evaluate_versions(target: str, role: str, component_id: str, observation: M
     product_alias = {
         "apache http server": "apache", "apache httpd": "apache", "httpd": "apache", "apache2": "apache",
         "samba": "samba", "samba server": "samba",
+        "jellyfin server": "jellyfin",
     }.get(product_key)
     if not product_alias or not parsed:
         return []
@@ -476,7 +505,7 @@ def _evaluate_versions(target: str, role: str, component_id: str, observation: M
             rules.append(("apache_httpd_path_traversal", True, {"CVE-2021-42013"}))
         else:
             rules.append(("apache_httpd_path_traversal", False, set()))
-    else:
+    elif product_alias == "samba":
         # Samba's official record states "since 3.5.0" and fixes the
         # branches at 4.4.14, 4.5.10, and 4.6.4.
         affected = version >= (3, 5, 0) and (
@@ -486,6 +515,51 @@ def _evaluate_versions(target: str, role: str, component_id: str, observation: M
             or ((version[0], version[1]) == (4, 6) and version[2] < 4)
         )
         rules.append(("samba_shared_module_loading", affected, {"CVE-2017-7494"} if affected else set()))
+    else:
+        out = _common(
+            target, role, component_id, observation,
+            "jellyfin_version_advisory_candidates", check_id, actions, evidence,
+            source_ok, "unknown", complete=False,
+            fields=("ecosystem", "product", "version", "provenance"),
+        )
+        out.collection_complete = False
+        out.limitations.update({"version_only", "configuration_unverified"})
+        if provenance not in _TRUSTED_PROVENANCE or suffix or provenance == "banner":
+            out.limitations.add("backport_unverified")
+        ecosystem = _text(facts.get("ecosystem"), 64)
+        if advisory_catalog is None:
+            out.limitations.add("advisory_catalog_required")
+        elif ecosystem != "semver":
+            out.limitations.add("component_identity_mismatch")
+        else:
+            component = ComponentIdentity(
+                component_id=component_id,
+                target_id=target,
+                ecosystem=ecosystem,
+                product=product or "",
+                version=_text(facts.get("version"), 128) or "",
+                provenance=provenance if provenance in {
+                    "banner", "package_database", "os_inventory", "operator_reviewed",
+                } else "unknown",
+            )
+            matches = tuple(
+                match for match in match_components((component,), advisory_catalog)
+                if match.state != "unsupported"
+            )
+            candidates = tuple(
+                match for match in matches if match.state == "affected_candidate"
+            )
+            for match in matches:
+                out.limitations.update(match.limitations)
+            for match in candidates:
+                out.cve_ids.update(match.cve_ids)
+            if candidates:
+                out.disposition = "candidate"
+            elif not matches:
+                out.limitations.add("advisory_catalog_no_match")
+        if failed:
+            out.disposition = failed
+        return [out]
     outcomes: list[_Outcome] = []
     for rule_id, affected, cves in rules:
         out = _common(target, role, component_id, observation, rule_id, check_id, actions, evidence,
@@ -515,6 +589,8 @@ def _module_rules(module_id: Any) -> tuple[str, ...]:
         return tuple(item["rule_id"] for item in CATALOG if item["track"] == "windows_ad")
     if value in {"web.headers", "web_headers"}:
         return ("web_missing_security_headers",)
+    if value == "web.portcast_identity":
+        return ("jellyfin_version_advisory_candidates",)
     if value in {"network.nmap_import", "network_inventory", "service_inventory"}:
         return ("apache_httpd_path_traversal", "samba_shared_module_loading")
     return ()
@@ -597,12 +673,15 @@ def _row(outcome: _Outcome) -> dict[str, Any]:
 
 
 def classify_records(records: Iterable[Mapping[str, Any]], *,
-                    expected_checks: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+                    expected_checks: Sequence[Mapping[str, Any]] = (),
+                    advisory_catalog: AdvisoryCatalog | None = None) -> dict[str, Any]:
     """Classify synthetic or operator-provided records deterministically.
 
     Only finite catalog rules are evaluated.  Invalid or unrelated records are
     ignored, and expected operator check assignments make absent checks visible
-    as ``not_tested``.  The function performs no network or model calls.
+    as ``not_tested``. Jellyfin CVE candidates require a catalog returned by
+    :func:`cptc_harness.advisories.load_catalog`. The function performs no
+    network or model calls.
     """
     if isinstance(records, (str, bytes, Mapping)):
         raise TypeError("records must be an iterable of record mappings")
@@ -610,6 +689,8 @@ def classify_records(records: Iterable[Mapping[str, Any]], *,
         record_iter = iter(records)
     except TypeError:
         raise TypeError("records must be an iterable of record mappings") from None
+    if advisory_catalog is not None and not catalog_is_validated(advisory_catalog):
+        raise TypeError("advisory_catalog must be returned by load_catalog")
     expected = _expected(expected_checks)
     outcomes: list[_Outcome] = []
     failed_keys: set[tuple[str, str, str]] = set()
@@ -636,7 +717,8 @@ def classify_records(records: Iterable[Mapping[str, Any]], *,
             component_id = _component_id(observation, _facts(observation),
                                          _text(observation.get("check_id"), 128) or "", target)
             evaluated = _evaluate_observation(target, role, observation, result, actions,
-                                              source_ok, evidence, component_id)
+                                              source_ok, evidence, component_id,
+                                              advisory_catalog)
             if not target_matches:
                 for outcome in evaluated:
                     outcome.disposition = "incomplete"

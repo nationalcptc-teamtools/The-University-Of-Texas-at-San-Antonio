@@ -1,0 +1,19 @@
+util-linux libuuid 2.42.3 copyright notices
+
+License: BSD-3-Clause for libuuid, with public-domain helper code.
+The retained license texts are in this directory.
+Source revision: 6f20a5defcf9066d4d2af372424a1576bd3d495d
+Source: https://github.com/util-linux/util-linux/commit/6f20a5defcf9066d4d2af372424a1576bd3d495d
+
+Copyright notices preserved from the library and compiled helper sources:
+
+Copyright (C) 1996, 1997 Theodore Ts'o.
+Copyright (C) 1996, 1997, 1998 Theodore Ts'o.
+Copyright (C) 1996, 1997, 1998, 1999 Theodore Ts'o.
+Copyright (C) 1998, 1999 Theodore Ts'o.
+Copyright (C) 2007 Theodore Ts'o.
+Copyright (C) 2011-2017 Kareil Zak <kzak@redhat.com>
+Copyright (C) 2014 Karel Zak <kzak@redhat.com>
+Copyright (C) 2017 Philip Prindeville
+Copyright 1999 Andreas Dilger (adilger@enel.ucalgary.ca)
+Copyright 2010 Lennart Poettering

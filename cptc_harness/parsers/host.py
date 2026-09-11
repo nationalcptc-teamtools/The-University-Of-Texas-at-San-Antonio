@@ -29,7 +29,8 @@ _ALLOWED_RECORD_KEYS = {"kind", "type", "facts", "target", "uid", "euid", "gid",
                         "provenance", "writable_basis", "privileged",
                         "sudo_access_observed", "evidence_ref", "sid", "domain_sid", "domain_name", "owner_sid",
                         "non_admin_write", "inherited", "ace_count", "signing_required", "channel_binding_required",
-                        "accessible", "verified"}
+                        "accessible", "verified", "realtime_protection_enabled", "on_access_protection_enabled",
+                        "ioav_protection_enabled", "behavior_monitoring_enabled"}
 
 
 def _str(value: object, maximum: int = 128) -> str | None:
@@ -129,7 +130,7 @@ def _record(record: dict[str, Any], target: str, source: SourceRef, windows: boo
     value = record.get("facts") if nested else record
     if not kind or not isinstance(value, dict):
         return None, "invalid_record"
-    if windows and any(key in value for key in ("provenance", "writable_basis", "privileged")):
+    if windows and kind != "defender" and any(key in value for key in ("provenance", "writable_basis", "privileged")):
         return None, "unknown_record_field"
     if nested and set(record) - {"kind", "type", "facts", "target"}:
         return None, "unknown_record_field"
@@ -224,6 +225,17 @@ def _record(record: dict[str, Any], target: str, source: SourceRef, windows: boo
             facts["channel_binding_required"] = channel
         check = "windows_smb_policy" if kind == "smb" else "windows_ldap_policy"
         return Observation("windows_ad", target, check, "observed", facts, source), None
+    if windows and kind == "defender":
+        fields = (
+            "realtime_protection_enabled", "on_access_protection_enabled",
+            "ioav_protection_enabled", "behavior_monitoring_enabled",
+        )
+        states = {key: _bool(value.get(key)) for key in fields}
+        provenance = _enum(value.get("provenance"), PROVENANCE_VALUES)
+        if any(state is None for state in states.values()) or provenance is None:
+            return None, "invalid_defender_state"
+        return Observation("windows_ad", target, "windows_defender_protection", "observed",
+                           states | {"provenance": provenance}, source), None
     if windows and kind == "controlled_account":
         reviewed, accessible, verified = (_bool(value.get(key)) for key in ("reviewed", "accessible", "verified"))
         evidence = _ref(value.get("evidence_ref"))

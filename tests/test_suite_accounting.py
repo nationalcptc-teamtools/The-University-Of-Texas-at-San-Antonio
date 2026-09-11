@@ -27,7 +27,7 @@ def test_complete_suite_reports_exact_cases_and_subtests():
     assert result["software_passed"] and result["totals"] == {"passed": 1} and result["subtests"] == 1
 
 
-@pytest.mark.parametrize("change", ["missing_collection", "missing_completion", "missing_teardown", "duplicate_call", "skip", "xfail", "failure", "unexpected", "empty", "duplicate_collection", "exit_failure", "collection_failure"])
+@pytest.mark.parametrize("change", ["missing_collection", "missing_completion", "missing_teardown", "duplicate_call", "skip", "expected_failure", "failure", "unexpected", "empty", "duplicate_collection", "exit_failure", "collection_failure"])
 def test_false_success_is_rejected(change):
     data = events();code = 0
     if change == "missing_collection":data.pop(0)
@@ -35,7 +35,7 @@ def test_false_success_is_rejected(change):
     elif change == "missing_teardown":data.pop(3)
     elif change == "duplicate_call":data.insert(2, deepcopy(data[2]))
     elif change == "skip":data[2]["outcome"] = "skipped"
-    elif change == "xfail":data[2]["xfail"] = True
+    elif change == "expected_failure":data[2]["xfail"] = True
     elif change == "failure":data[2]["outcome"] = "failed"
     elif change == "unexpected":data[2]["nodeid"] = "other::case"
     elif change == "empty":data[0]["nodeids"] = []

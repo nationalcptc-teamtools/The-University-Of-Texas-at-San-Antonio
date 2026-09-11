@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "grant_types": [
+    "authorization_code",
+    "implicit",
+    "refresh_token",
+    "password",
+    "client_credentials",
+    "urn:ietf:params:oauth:grant-type:device_code",
+    "urn:openid:params:grant-type:ciba"
+  ],
+  "signing_algorithms": [
+    "RS256",
+    "RS384",
+    "RS512",
+    "PS256",
+    "PS384",
+    "PS512",
+    "ES256",
+    "ES384",
+    "ES512",
+    "EdDSA"
+  ],
+  "rules_sha256": "f09c69d82c6f10f036d8d4a786017fe31c3a79fafbee68671c13b6a8dc512f1b"
+}

@@ -15,9 +15,18 @@ browser = ["playwright==1.62.0"]
 mcp = ["mcp==1.29.0"]
 test = ["pytest==9.1.0"]
 benchmark = ["tiktoken==0.12.0"]
+portcast-runtime = [
+  "paramiko==5.0.0", "cryptography==50.0.1", "cffi==2.1.1",
+  "pycparser==3.0", "bcrypt==5.0.0", "PyNaCl==1.6.2",
+  "invoke==3.0.3", "fluidity-sm==0.2.1", "lexicon==3.0.0",
+  "PyYAML==6.0.3",
+]
 
 [project.scripts]
 cptc = "cptc_harness.cli:main"
+
+[tool.setuptools]
+include-package-data = false
 
 [tool.setuptools.packages.find]
 include = ["cptc_harness*"]
@@ -26,7 +35,10 @@ include = ["cptc_harness*"]
 cptc_harness = [
   "resources/CPTC-RULES-2025-10.txt", "resources/MANUAL-ONLY-CARDS.md",
   "resources/release-integrity.json", "resources/tool-catalog.json",
-  "resources/scanner-profiles-v1.json",
+  "resources/portcast-python-runtime-v1.json",
+  "resources/scanner-profiles-v1.json", "resources/scanner-profiles-v2.json",
+  "resources/host-profiles-v1.json", "resources/bounded-profiles-v1.json",
+  "profiles/common_mysql/catalog.json", "profiles/common_tls/catalog.json",
   "resources/zap-passive.yaml", "resources/nuclei/csp.yaml",
   "resources/nuclei/frame-options.yaml", "resources/nuclei/nosniff.yaml",
   "resources/nuclei/processed.yaml", "native/build-nmap-shim.sh",

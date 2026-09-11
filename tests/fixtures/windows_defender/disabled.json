@@ -1,0 +1,6 @@
+{
+  "realtime_protection_enabled": false,
+  "on_access_protection_enabled": false,
+  "ioav_protection_enabled": false,
+  "behavior_monitoring_enabled": false
+}

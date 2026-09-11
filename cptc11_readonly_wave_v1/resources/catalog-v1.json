@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "plan_id": "cptc11-readonly-wave-v1",
+  "parser_rules_sha256": "f09c69d82c6f10f036d8d4a786017fe31c3a79fafbee68671c13b6a8dc512f1b",
+  "actions": [
+    {
+      "order": 1,
+      "action_id": "shorepass-traefik-version",
+      "profile_id": "shorepass.traefik_public_version.v1",
+      "target_id": "cptc11-prod-shorepass",
+      "host": "10.0.1.99",
+      "port": 8080,
+      "parser_id": "traefik",
+      "budget": {
+        "max_connects": 1,
+        "max_requests": 1,
+        "max_tx_bytes": 512,
+        "max_rx_bytes": 4096,
+        "max_capture_bytes": 4096,
+        "timeout_ms": 8000
+      },
+      "operation": {
+        "kind": "http_get",
+        "request": "GET /api/version HTTP/1.1\r\nHost: 10.0.1.99:8080\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n",
+        "request_sha256": "3f55e7ee7ebb6fe0b6f8123468c89abc1a8e93c924456e2bd0a354a301b64e2f"
+      },
+      "profile_sha256": "94f813c353ff1aad885030d28e48c4e04f1db3c6f501115cf86a42ee3d0ebe2c"
+    },
+    {
+      "order": 2,
+      "action_id": "crewcomms-redis-ping",
+      "profile_id": "crewcomms.redis_ping.v1",
+      "target_id": "cptc11-prod-crewcomms",
+      "host": "10.0.1.14",
+      "port": 6379,
+      "parser_id": "redis",
+      "budget": {
+        "max_connects": 1,
+        "max_requests": 1,
+        "max_tx_bytes": 14,
+        "max_rx_bytes": 128,
+        "max_capture_bytes": 128,
+        "timeout_ms": 5000
+      },
+      "operation": {
+        "kind": "redis_ping",
+        "request": "*1\r\n$4\r\nPING\r\n",
+        "request_sha256": "a43cb6a3b9d261112714d00e36b33106d1479eb1b3d8131a07684d4d477c5989"
+      },
+      "profile_sha256": "2e75f1ad481c44eb9ae151d0f2da99f37c3b93aaf8381c824d0dbda43c4f9efc"
+    },
+    {
+      "order": 3,
+      "action_id": "gps-keycloak-oidc-metadata",
+      "profile_id": "gps.keycloak_oidc_metadata.v1",
+      "target_id": "cptc11-prod-gps",
+      "host": "10.0.1.13",
+      "port": 8180,
+      "parser_id": "keycloak",
+      "budget": {
+        "max_connects": 1,
+        "max_requests": 1,
+        "max_tx_bytes": 512,
+        "max_rx_bytes": 16384,
+        "max_capture_bytes": 16384,
+        "timeout_ms": 8000
+      },
+      "operation": {
+        "kind": "http_get",
+        "request": "GET /realms/gps/.well-known/openid-configuration HTTP/1.1\r\nHost: 10.0.1.13:8180\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n",
+        "request_sha256": "73d878866168bca13988d737cf0eef2b65806ec3d8be44a6b45c2fb17d4ddce5"
+      },
+      "profile_sha256": "cfdb4c2ba3006ab67b9e7844d6a570075e695dcba977197e7c103d377ac7c4fa"
+    },
+    {
+      "order": 4,
+      "action_id": "penny-meilisearch-health",
+      "profile_id": "penny.meilisearch_health.v1",
+      "target_id": "cptc11-prod-penny",
+      "host": "10.0.1.11",
+      "port": 7700,
+      "parser_id": "meilisearch",
+      "budget": {
+        "max_connects": 1,
+        "max_requests": 1,
+        "max_tx_bytes": 384,
+        "max_rx_bytes": 2048,
+        "max_capture_bytes": 2048,
+        "timeout_ms": 8000
+      },
+      "operation": {
+        "kind": "http_get",
+        "request": "GET /health HTTP/1.1\r\nHost: 10.0.1.11:7700\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n",
+        "request_sha256": "fa8c6e1974fc90afc4110f570ba2e90b8e81b417b9ecbb389d3b905a8f79391e"
+      },
+      "profile_sha256": "4815064a5477e585ffd8fe8f461d052a765a0986d73251b19c63504f34c928b8"
+    }
+  ],
+  "catalog_sha256": "5c367f9c33b3fa305ea85fde9529edc63c83207ae5a9995442e0e7381bcdc6dc"
+}

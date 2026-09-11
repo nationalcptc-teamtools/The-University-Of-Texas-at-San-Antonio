@@ -151,3 +151,66 @@ def test_capture_failure_remains_stopped_after_reopen(tmp_path, monkeypatch, fai
         audit=AuditWriter(root,policy()); audit.emit(AuditEvent("one")); audit.close()
         (Path(root)/".audit-state.json").unlink()
         with pytest.raises(PolicyError): AuditWriter(root,policy())
+
+
+@pytest.mark.parametrize(
+    "checkpoint",
+    (
+        "output_marker_created",
+        "output_directory_synced",
+        "output_allocated",
+        "output_file_synced",
+        "output_reserved_emitted",
+    ),
+)
+def test_output_reservation_failure_rolls_back_marker_and_allowance(
+    tmp_path, monkeypatch, checkpoint
+):
+    """A crash at any durable reservation boundary must leave no capture grant."""
+
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy(), evidence_cap=16)
+
+    def fail(label):
+        if label == checkpoint:
+            raise OSError("synthetic reservation checkpoint failure")
+
+    monkeypatch.setattr(audit, "_checkpoint", fail)
+    with pytest.raises(PolicyError, match="reservation"):
+        audit.reserve_output("transactional-output", 8)
+
+    marker = tmp_path / (
+        ".reserve-" + __import__("hashlib").sha256(b"transactional-output").hexdigest()
+    )
+    assert not marker.exists()
+    assert "transactional-output" not in audit._output_limits
+    assert audit.ready() is False
+
+
+def test_release_output_idempotently_removes_marker_and_allowance(tmp_path):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy(), evidence_cap=16)
+    audit.reserve_output("released-output", 8)
+    assert audit._output_limits["released-output"] == 8
+
+    audit.release_output("released-output")
+    audit.release_output("released-output")
+
+    assert "released-output" not in audit._output_limits
+
+
+def test_stale_output_marker_is_never_unlinked_by_failed_reservation(tmp_path):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy(), evidence_cap=16)
+    request_id = "stale-marker"
+    marker = tmp_path / (
+        ".reserve-" + __import__("hashlib").sha256(request_id.encode()).hexdigest()
+    )
+    marker.write_bytes(b"preexisting")
+
+    with pytest.raises(PolicyError, match="reservation"):
+        audit.reserve_output(request_id, 8)
+
+    assert marker.read_bytes() == b"preexisting"
+    assert request_id not in audit._output_limits
+    assert audit.ready() is False

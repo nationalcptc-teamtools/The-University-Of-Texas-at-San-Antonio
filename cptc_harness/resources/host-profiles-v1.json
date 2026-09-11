@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "catalog_sha256": "d685575332bb75a66a3b62accbaffb1843e07fbfd1ea19ad8153aa69f2dacc37",
+  "profiles": [
+    {
+      "profile_id": "windows_ad.defender_protection",
+      "platform": "windows_ad",
+      "kind": "host_observation",
+      "mode": "blocked",
+      "required_role": "admin",
+      "source_contract": {
+        "contract_id": "microsoft.defender.preference-fields.v1",
+        "sha256": "9ccafb2e6ee89af2632f184d06ffe831d8314bee546d42f6fc9a6b5b9a760e0b"
+      },
+      "runner_contract": {
+        "contract_id": "blocked.parent-owned-winrm-https.v1",
+        "sha256": "60862bea8e09410b6bd0a0ef5935bddc3e938b0abf549604f4ab64a2ef271256"
+      },
+      "query_contract": {
+        "contract_id": "typed.defender.protection-fields.v1",
+        "sha256": "477dec8abbc3fd6beaca1c953f096e640b2e6b52d13df9aaa7d4d6f4f32bacae"
+      },
+      "result_contract": {
+        "realtime_protection_enabled": "boolean",
+        "on_access_protection_enabled": "boolean",
+        "ioav_protection_enabled": "boolean",
+        "behavior_monitoring_enabled": "boolean"
+      },
+      "budget": {
+        "tcp_connects": 1,
+        "udp_datagrams": 0,
+        "protocol_requests": 1,
+        "tx_bytes": 32768,
+        "rx_bytes": 65536,
+        "timeout_s": 30.0,
+        "cpu_s": 10.0,
+        "output_bytes": 16384,
+        "process_limit": 1,
+        "auth_attempts": 1
+      },
+      "runtime_options": [],
+      "effects": [
+        "credentialed_read_only_observation"
+      ],
+      "blocked_reason": "Credential-bound parent-owned WinRM HTTPS transport and certificate pin are required."
+    }
+  ]
+}
