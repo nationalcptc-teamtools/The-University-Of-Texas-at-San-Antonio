@@ -20,6 +20,7 @@ from .catalog import SealedProfile, load_profile, require_live_admission, valida
 from .contracts import (
     Http11RequestV1,
     MysqlGreetingV1,
+    PORTCAST_RESULT_LIMITATIONS,
     ProfileContractError,
     RedisPingV1,
     TlsHelloV1,
@@ -32,18 +33,7 @@ _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _UTC = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
 _OUTCOMES = frozenset({"complete", "incomplete", "uncertain", "cancelled"})
-_LIMITATIONS = frozenset(
-    {
-        "audit_failure",
-        "capture_incomplete",
-        "certificate_mismatch",
-        "response_truncated",
-        "stop_latched",
-        "timeout",
-        "transport_interrupted",
-        "unexpected_response",
-    }
-)
+_LIMITATIONS = PORTCAST_RESULT_LIMITATIONS
 
 
 def _text_id(value: Any, label: str) -> str:

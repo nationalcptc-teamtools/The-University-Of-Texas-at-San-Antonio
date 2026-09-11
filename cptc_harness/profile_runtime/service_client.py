@@ -8,6 +8,7 @@ import socket
 from typing import Any
 
 from ..contracts import PolicyError, canonical_json
+from .contracts import PORTCAST_FAILURE_STAGES
 
 
 PORTCAST_SERVICE_SOCKET = Path("/run/cptc-harness/portcast-live-v1.sock")
@@ -17,28 +18,199 @@ _RESULT_FIELDS = {
     "audit_verified",
     "automatic_retry",
     "cleanup_status",
+    "execution",
     "profile_id",
     "receipt_outcome",
     "status",
     "workspace",
 }
 _OPTIONAL_RESULT_FIELDS = {"reason"}
+_EXECUTION_FIELDS_V1 = {
+    "reservation_state",
+    "attempt_count",
+    "attempt_state",
+    "transport_counters",
+    "wire_counters_verified",
+    "result_receipt_present",
+}
+_EXECUTION_FIELDS = _EXECUTION_FIELDS_V1 | {"failure_stage"}
+_COUNTER_LIMITS = {
+    "tcp_connects": 1,
+    "udp_datagrams": 0,
+    "protocol_requests": 1,
+    "tx_bytes": 256,
+    "rx_bytes": 8192,
+}
+_SAFE_REASONS = frozenset(
+    {
+        "PortCast broker cleanup failed; manual review required",
+        "PortCast identity response did not match the reviewed parser",
+        "PortCast profile dispatch was denied before connection",
+        "PortCast profile transport did not complete",
+        "PortCast target differs from the reviewed candidate profile",
+        "audit output release failed; human review required",
+        "clock is not safe for active work",
+        "frozen action already has a durable result receipt",
+        "frozen action already has durable admission history",
+        "frozen action has incomplete durable audit history",
+        "operation outcome uncertain; human review required",
+        "operator stop requested",
+        "reconciled predecessor action is permanently spent",
+        "registered operation failed",
+        "result storage or audit failed; human review required",
+        "trusted PortCast profile dispatcher is unavailable",
+        *(
+            f"frozen action already has durable state {state}"
+            for state in (
+                "blocked",
+                "complete",
+                "dispatching",
+                "failed",
+                "planned",
+                "running",
+                "stopped",
+                "uncertain",
+            )
+        ),
+    }
+)
+_RESERVATION_STATES = {
+    None,
+    "planned",
+    "dispatching",
+    "running",
+    "complete",
+    "failed",
+    "blocked",
+    "stopped",
+    "uncertain",
+}
+_ATTEMPT_STATES = {
+    None,
+    "running",
+    "complete",
+    "failed",
+    "blocked",
+    "stopped",
+    "uncertain",
+}
 
 
-def _validate_result(value: Any) -> dict[str, Any]:
+def _invalid_metadata() -> None:
+    raise PolicyError("canonical PortCast service returned invalid metadata")
+
+
+def validate_portcast_result(value: Any) -> dict[str, Any]:
+    """Validate the fixed metadata-only one-shot service result."""
+
     if (
-        not isinstance(value, dict)
+        type(value) is not dict
         or not _RESULT_FIELDS <= set(value)
         or set(value) - _RESULT_FIELDS - _OPTIONAL_RESULT_FIELDS
-        or value.get("action_id") != "cptc11-portcast-public-identity-action-v1"
+        or value.get("action_id") != "cptc11-portcast-public-identity-action-v3"
         or value.get("profile_id") != "web.http_jellyfin_public_identity"
         or value.get("automatic_retry") is not False
         or type(value.get("audit_verified")) is not bool
+        or value.get("cleanup_status") not in {None, "passed", "failed"}
+        or value.get("receipt_outcome")
+        not in {None, "complete", "incomplete", "uncertain", "cancelled"}
         or value.get("status")
         not in {"complete", "failed", "blocked", "stopped", "uncertain"}
+        or value.get("workspace") != "cptc11-portcast-workspace"
+        or (
+            "reason" in value
+            and (
+                type(value["reason"]) is not str
+                or value["reason"] not in _SAFE_REASONS
+            )
+        )
     ):
-        raise PolicyError("canonical PortCast service returned invalid metadata")
-    return dict(value)
+        _invalid_metadata()
+
+    execution = value.get("execution")
+    if (
+        type(execution) is not dict
+        or (
+            set(execution) != _EXECUTION_FIELDS_V1
+            and set(execution) != _EXECUTION_FIELDS
+        )
+    ):
+        _invalid_metadata()
+    attempt_count = execution.get("attempt_count")
+    reservation_state = execution.get("reservation_state")
+    attempt_state = execution.get("attempt_state")
+    counters = execution.get("transport_counters")
+    failure_stage = execution.get("failure_stage")
+    if (
+        reservation_state not in _RESERVATION_STATES
+        or attempt_state not in _ATTEMPT_STATES
+        or type(attempt_count) is not int
+        or attempt_count not in {0, 1}
+        or type(execution.get("wire_counters_verified")) is not bool
+        or type(execution.get("result_receipt_present")) is not bool
+        or failure_stage is not None
+        and failure_stage not in PORTCAST_FAILURE_STAGES
+    ):
+        _invalid_metadata()
+    if attempt_count == 0:
+        if attempt_state is not None or counters is not None:
+            _invalid_metadata()
+        normalized_counters = None
+    else:
+        if attempt_state is None or type(counters) is not dict or set(counters) != set(_COUNTER_LIMITS):
+            _invalid_metadata()
+        if any(
+            type(counters[key]) is not int
+            or counters[key] < 0
+            or counters[key] > _COUNTER_LIMITS[key]
+            for key in _COUNTER_LIMITS
+        ):
+            _invalid_metadata()
+        normalized_counters = {key: counters[key] for key in _COUNTER_LIMITS}
+
+    if execution["wire_counters_verified"] and normalized_counters is None:
+        _invalid_metadata()
+    if value["status"] == "complete":
+        if (
+            "reason" in value
+            or
+            value["audit_verified"] is not True
+            or value["cleanup_status"] != "passed"
+            or value["receipt_outcome"] != "complete"
+            or reservation_state != "complete"
+            or attempt_count != 1
+            or attempt_state != "complete"
+            or normalized_counters is None
+            or normalized_counters["tcp_connects"] != 1
+            or normalized_counters["udp_datagrams"] != 0
+            or normalized_counters["protocol_requests"] != 1
+            or normalized_counters["tx_bytes"] != 103
+            or normalized_counters["rx_bytes"] <= 0
+            or execution["wire_counters_verified"] is not True
+            or execution["result_receipt_present"] is not True
+            or failure_stage is not None
+        ):
+            _invalid_metadata()
+
+    normalized = {key: value[key] for key in _RESULT_FIELDS if key != "execution"}
+    normalized_execution = {
+        "reservation_state": reservation_state,
+        "attempt_count": attempt_count,
+        "attempt_state": attempt_state,
+        "transport_counters": normalized_counters,
+        "wire_counters_verified": execution["wire_counters_verified"],
+        "result_receipt_present": execution["result_receipt_present"],
+    }
+    if "failure_stage" in execution:
+        normalized_execution["failure_stage"] = failure_stage
+    normalized["execution"] = normalized_execution
+    if "reason" in value:
+        normalized["reason"] = value["reason"]
+    return normalized
+
+
+def _validate_result(value: Any) -> dict[str, Any]:
+    return validate_portcast_result(value)
 
 
 class PortcastServiceClient:
@@ -94,4 +266,8 @@ class PortcastServiceClient:
         return self._request("inspect")
 
 
-__all__ = ("PORTCAST_SERVICE_SOCKET", "PortcastServiceClient")
+__all__ = (
+    "PORTCAST_SERVICE_SOCKET",
+    "PortcastServiceClient",
+    "validate_portcast_result",
+)

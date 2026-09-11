@@ -36,6 +36,9 @@ _PRODUCTION_MANIFEST = (
     _PRODUCTION_RELEASE_ROOT / "cptc_harness/resources/release-integrity.json"
 )
 _PRODUCTION_ANCHOR = Path("/etc/cptc-harness/trust/portcast-live-v1.sha256")
+_PRODUCTION_CLOCK_ATTESTATION = Path(
+    "/run/cptc-harness-clock/portcast-live-v1.json"
+)
 _PRODUCTION_RUNTIME_ROOT = (
     _PRODUCTION_RELEASE_ROOT / "vendor/portcast-python3.14/site-packages"
 )
@@ -52,6 +55,8 @@ _PRODUCTION_CREDENTIALS = (
 _RUNTIME_LOCK = "cptc_harness/resources/portcast-python-runtime-v1.json"
 _CPYTHON_LOCK = "cptc_harness/resources/portcast-cpython-runtime-v1.json"
 _PRODUCTION_OPERATOR_UID = 1000
+_PRODUCTION_AGE_BINARY = Path("/app/vendor/portcast-rootfs-runtime/bin/age")
+_PRODUCTION_AGE_RECIPIENT = "age1c6wmzkphupzx0se6jvsra4z43gdsdnl5yn5umy23lxjsae2fc5xqz9vh0r"
 _RUNTIME_IMPORT_ROOTS = frozenset(
     {"bcrypt", "cffi", "cryptography", "fluidity", "invoke", "lexicon", "nacl", "paramiko", "pycparser", "yaml"}
 )
@@ -68,6 +73,19 @@ class ServiceIdentity:
     group: str
     uid: int
     gid: int
+
+
+def _require_clock_attestation():
+    """Require the fixed host attestation before the service can listen."""
+
+    from cptc_harness.clockcheck import ClockService, attested_clock
+
+    if not _PRODUCTION_CLOCK_ATTESTATION.is_file():
+        raise RuntimeError("PortCast host clock attestation is unavailable")
+    clock = ClockService(source=attested_clock)
+    if not clock.valid_for(15.0):
+        raise RuntimeError("PortCast host clock attestation is invalid or expired")
+    return clock
 
 
 def _require_service_identity() -> ServiceIdentity:
@@ -316,18 +334,20 @@ def _assert_verified_process_maps() -> None:
             raise RuntimeError("PortCast executable mapping escaped the verified root")
 
 
-def _seal_service_credential(path: Path, *, owner_uid: int | None = None) -> int:
-    """Copy one fixed systemd credential into a sealed anonymous descriptor."""
+def _seal_service_credential(
+    path: Path, *, owner_uid: int = 0, owner_gid: int = 0
+) -> int:
+    """Copy one root-owned systemd credential into a sealed descriptor."""
 
-    expected_owner = os.geteuid() if owner_uid is None else owner_uid
     source = destination = None
     try:
         source = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
         info = os.fstat(source)
         if (
             not stat.S_ISREG(info.st_mode)
-            or info.st_uid != expected_owner
-            or info.st_mode & 0o077
+            or info.st_uid != owner_uid
+            or info.st_gid != owner_gid
+            or stat.S_IMODE(info.st_mode) != 0o440
             or not 1 <= info.st_size <= 64 * 1024
         ):
             raise RuntimeError("PortCast service credential metadata differs")
@@ -394,6 +414,7 @@ class _CanonicalPortcastService:
         test_age_binary: Path | None = None,
         test_age_recipient: str | None = None,
         provision_for_test: bool = False,
+        prepared_runtime: Any | None = None,
     ) -> None:
         if not provision_for_test and (
             state_root != PRODUCTION_STATE_ROOT or socket_path != PRODUCTION_SOCKET
@@ -404,9 +425,28 @@ class _CanonicalPortcastService:
         self._expected_client_uid = expected_client_uid
         self._verified_release = verified_release
         self._wire_broker_factory = wire_broker_factory
-        self._age_binary = test_age_binary
-        self._age_recipient = test_age_recipient
-        self._provision = provision_for_test
+        if provision_for_test:
+            if prepared_runtime is not None:
+                raise RuntimeError("test PortCast runtime ownership differs")
+            self._age_binary = test_age_binary
+            self._age_recipient = test_age_recipient
+            self._provision = True
+            self._prepared_runtime = None
+            self._plan = None
+        else:
+            from testing.cptc11_lab.portcast_live import load_frozen_portcast_plan
+            from cptc_harness.runtime import Runtime
+
+            plan = load_frozen_portcast_plan()
+            if plan.evidence_recipient != _PRODUCTION_AGE_RECIPIENT:
+                raise RuntimeError("production PortCast evidence recipient differs")
+            if type(prepared_runtime) is not Runtime:
+                raise RuntimeError("production PortCast runtime is not prepared")
+            self._age_binary = _PRODUCTION_AGE_BINARY
+            self._age_recipient = _PRODUCTION_AGE_RECIPIENT
+            self._provision = False
+            self._prepared_runtime = prepared_runtime
+            self._plan = plan
 
     @classmethod
     def _for_test(
@@ -448,6 +488,20 @@ class _CanonicalPortcastService:
             raise RuntimeError("invalid canonical PortCast service request")
         from testing.cptc11_lab import portcast_live
 
+        if self._prepared_runtime is not None:
+            if request["method"] == "inspect":
+                return portcast_live.inspect_prepared_portcast_state(
+                    self._prepared_runtime,
+                    self._plan,
+                    self._state_root,
+                )
+            return portcast_live.run_prepared_portcast_action(
+                self._prepared_runtime,
+                self._plan,
+                self._state_root,
+                self._verified_release,
+                self._wire_broker_factory,
+            )
         if request["method"] == "inspect":
             return portcast_live._inspect_frozen_portcast_state_at_root(
                 state_root=self._state_root,
@@ -491,8 +545,17 @@ class _CanonicalPortcastService:
         self._socket_path.parent.mkdir(parents=True, exist_ok=True)
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         accepted = 0
+        bound_identity = None
         try:
             listener.bind(str(self._socket_path))
+            created = self._socket_path.lstat()
+            if (
+                not stat.S_ISSOCK(created.st_mode)
+                or created.st_uid != os.geteuid()
+                or created.st_gid != os.getegid()
+            ):
+                raise RuntimeError("canonical PortCast socket metadata differs")
+            bound_identity = (created.st_dev, created.st_ino)
             os.chmod(self._socket_path, 0o660)
             listener.listen(4)
             while maximum_connections is None or accepted < maximum_connections:
@@ -504,10 +567,17 @@ class _CanonicalPortcastService:
                 accepted += 1
         finally:
             listener.close()
-            try:
-                self._socket_path.unlink()
-            except FileNotFoundError:
-                pass
+            if bound_identity is not None:
+                try:
+                    current = self._socket_path.lstat()
+                except FileNotFoundError:
+                    current = None
+                if (
+                    current is not None
+                    and stat.S_ISSOCK(current.st_mode)
+                    and (current.st_dev, current.st_ino) == bound_identity
+                ):
+                    self._socket_path.unlink()
 
 
 def main() -> int:
@@ -552,27 +622,46 @@ def main() -> int:
 
         _assert_verified_imports(release)
         return worker_main(verified_release=release)
+    clock_service = None
+    if _PRODUCTION_RELEASE_ROOT.is_dir():
+        clock_service = _require_clock_attestation()
     from cptc_harness.profile_runtime.broker_ipc import _service_wire_broker_factory
-    from testing.cptc11_lab.portcast_live import load_frozen_portcast_plan
+    from testing.cptc11_lab.portcast_live import (
+        _close_runtime,
+        load_frozen_portcast_plan,
+        open_frozen_portcast_runtime_at_root,
+    )
 
     plan = load_frozen_portcast_plan()
-    control_info = PRODUCTION_CONTROL_ROOT.stat()
-    state_info = PRODUCTION_STATE_ROOT.stat()
+    control_info = PRODUCTION_CONTROL_ROOT.lstat()
+    state_info = PRODUCTION_STATE_ROOT.lstat()
     if (
         not stat.S_ISDIR(control_info.st_mode)
         or control_info.st_uid != 0
         or control_info.st_gid != 0
-        or stat.S_IMODE(control_info.st_mode) != 0o700
+        or stat.S_IMODE(control_info.st_mode) != 0o555
         or not stat.S_ISDIR(state_info.st_mode)
-        or state_info.st_uid != service_identity.uid
-        or state_info.st_gid != service_identity.gid
-        or stat.S_IMODE(state_info.st_mode) != 0o700
+        or state_info.st_uid != 0
+        or state_info.st_gid != 0
+        or stat.S_IMODE(state_info.st_mode) != 0o555
     ):
         return 1
     expected_uid = _PRODUCTION_OPERATOR_UID
     _assert_verified_process_maps()
-    credential_fds = _load_service_credentials()
+    runtime_arguments = dict(
+        state_root=PRODUCTION_STATE_ROOT,
+        plan=plan,
+        verified_release=release,
+        age_binary=_PRODUCTION_AGE_BINARY,
+        age_recipient=_PRODUCTION_AGE_RECIPIENT,
+    )
+    if clock_service is not None:
+        runtime_arguments["clock_service"] = clock_service
+    runtime = open_frozen_portcast_runtime_at_root(**runtime_arguments)
+    credential_fds = ()
+    primary = None
     try:
+        credential_fds = _load_service_credentials()
         service = _CanonicalPortcastService(
             state_root=PRODUCTION_STATE_ROOT,
             socket_path=PRODUCTION_SOCKET,
@@ -581,11 +670,16 @@ def main() -> int:
             wire_broker_factory=partial(
                 _service_wire_broker_factory, credential_fds=credential_fds
             ),
+            prepared_runtime=runtime,
         )
         service.serve()
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         for descriptor in credential_fds:
             os.close(descriptor)
+        _close_runtime(runtime, primary)
     return 0
 
 

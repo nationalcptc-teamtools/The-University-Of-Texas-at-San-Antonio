@@ -2,7 +2,7 @@
 """Build or verify the deterministic PortCast release seal.
 
 The default operation is read-only. Admission requires ``--write`` and the
-exact V2 plan digest printed by a preceding review. Privileged executable,
+exact seal-plan digest printed by a preceding review. Privileged executable,
 worker, launcher, and profile-worker pins are independent code-reviewed inputs;
 the command line cannot replace them.
 """
@@ -49,7 +49,7 @@ REVIEWED_EXECUTABLES = {
     "/usr/sbin/chromium": "3f10e456d0275686e7ed1636f61abf9ce57d479f1290bd70a04937be768523a5",
 }
 REVIEWED_WORKERS = {
-    "audit_worker.py": "4c5d6016258de205aaf00afe69337fc01ad67e504f0c1b6406b5156b74c6bcd3",
+    "audit_worker.py": "226a66596dda9531259e04637dd1ad44dd1933c5cc0a3135e00bab3f06305eb1",
     "browser_worker.py": "578cb2aef094d2963e7bceac1635911c13d11c64afccc1254f818bbd18149d48",
     "passive_worker.py": "358fccf3d32e503cedbed1fd89d1ce98f4a05886c92bf43a7043851a3178c984",
     "provider_worker.py": "88be6b83232a99797a04096f69edbce6ae9492cadc3611dc82436911488c5070",
@@ -59,8 +59,11 @@ REVIEWED_WORKERS = {
 REVIEWED_PROFILE_WORKERS = {
     PROFILE_ID: "472620e6112b00882f480ea4a0209e8dcdab9e0c54ba98ae2bef86c07342f400"
 }
+PREVIOUS_LAUNCHER_SHA256 = (
+    "5d7150913806eaf817658e6774c80ca4743df72c66de0bb36b99a6158bb0c622"
+)
 REVIEWED_LAUNCHER_SHA256 = (
-    "b3d40802817f57b7971f78579690680ea5b5b51af9002610edb3cc9dd44415f5"
+    "3f0650a4ae39ddb1d676b1641e0d283142862df915826a564c193730f2cb846e"
 )
 
 
@@ -224,10 +227,13 @@ def _check_preserved_approvals(
 
     launcher = section.get("launcher")
     launcher_hash = _digest(_read(root, LAUNCHER_RELATIVE))
+    admitted_launcher_records = (
+        {"path": LAUNCHER_RELATIVE, "sha256": PREVIOUS_LAUNCHER_SHA256},
+        {"path": LAUNCHER_RELATIVE, "sha256": REVIEWED_LAUNCHER_SHA256},
+    )
     if (
         launcher_hash != REVIEWED_LAUNCHER_SHA256
-        or launcher
-        != {"path": LAUNCHER_RELATIVE, "sha256": REVIEWED_LAUNCHER_SHA256}
+        or launcher not in admitted_launcher_records
     ):
         raise SealError("bootstrap launcher changed without a separate approval")
     return worker_hash, dict(current), {

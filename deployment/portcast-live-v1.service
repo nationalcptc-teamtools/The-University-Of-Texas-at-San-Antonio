@@ -35,9 +35,20 @@ ProtectProc=invisible
 ProcSubset=all
 RemoveIPC=yes
 BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256
+BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json
 BindPaths=/run/cptc-harness
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/deployment.lock
-BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime
+# The v3 coordinator owns the new runtime. Keep the historical v1 ledger
+# writable for its one-time continuation and expose the old evidence only as
+# immutable input. Do not replace these entries with a broad runtime bind.
+BindPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3
+BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit
+# The continuation verifier opens the result through its parent directory to
+# defend against file replacement. Mount that service-owned directory as one
+# immutable object; a file-only bind leaves the release image's root-owned
+# parent visible and correctly fails the verifier's ownership check.
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results
 RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK
 IPAddressDeny=any
 IPAddressAllow=100.85.84.30/32

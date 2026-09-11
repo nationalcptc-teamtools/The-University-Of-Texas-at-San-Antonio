@@ -52,13 +52,16 @@ def _rootfs(tmp_path: Path) -> tuple[Path, dict, Path]:
     anchor.parent.mkdir(parents=True)
     digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     anchor.write_bytes(deployment._anchor_payload(manifest, digest))
-    audit = rootfs / "var/lib/cptc-harness/portcast-live-v1/runtime/audit"
+    audit = (
+        rootfs
+        / "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit"
+    )
     audit.mkdir(parents=True)
     (
         rootfs
         / "var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
     ).mkdir(parents=True)
-    (audit.parents[1] / "deployment.lock").write_bytes(b"")
+    (audit.parents[2] / "deployment.lock").write_bytes(b"")
     for relative in ("run/cptc-harness", "proc", "dev", "tmp"):
         (rootfs / relative).mkdir(parents=True, exist_ok=True)
     for item in rootfs.rglob("*"):
@@ -152,7 +155,12 @@ def test_service_unit_enters_private_root_and_has_no_host_runtime_fallback():
     assert "ExecStart=/app/deployment/portcast-bootstrap" in unit
     assert "MountAPIVFS=yes" in unit
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256" in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1" in unit
+    assert "BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json" in unit
+    assert "BindReadOnlyPaths=/etc/cptc-harness/trust\n" not in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3" in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation" in unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit" in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime\n" not in unit
     assert "BindPaths=/run/cptc-harness" in unit
     assert "ExecStart=/usr/bin/" not in unit
     assert "ReadOnlyPaths=/usr" not in unit
@@ -295,7 +303,7 @@ def test_production_root_audit_worker_encrypts_inside_private_network_namespace(
         (
             "/usr/sbin/bwrap", "--unshare-all", "--share-net", "--unshare-user", "--uid", "0", "--gid", "0",
             "--die-with-parent", "--new-session",
-            "--ro-bind", str(rootfs), "/", "--bind", str(audit.parents[1]), "/var/lib/cptc-harness/portcast-live-v1",
+            "--ro-bind", str(rootfs), "/", "--bind", str(audit.parents[2]), "/var/lib/cptc-harness/portcast-live-v1",
             "--proc", "/proc", "--dev", "/dev",
             "/app/deployment/portcast-bootstrap", "--audit-worker", str(config),
         ),

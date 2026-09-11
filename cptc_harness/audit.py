@@ -423,6 +423,11 @@ class AuditWriter:
     def result_receipts(self):
         if not self.verify().valid or not self.ready():
             raise PolicyError("invalid audit cannot supply result receipts")
+        return self._result_receipts_from_verified_audit()
+
+    def _result_receipts_from_verified_audit(self):
+        """Parse result receipts after the caller has verified the audit."""
+
         receipts = {}
         intents = set()
         expected_actions = set()
@@ -476,10 +481,15 @@ class AuditWriter:
     def profile_wire_receipts(self):
         """Return integrity-verified receipt metadata keyed by action ID."""
 
-        from .profile_runtime.receipts import validate_persisted_profile_wire_receipt
-
         if not self.verify().valid or not self.ready():
             raise PolicyError("invalid audit cannot supply profile wire receipts")
+        return self._profile_wire_receipts_from_verified_audit()
+
+    def _profile_wire_receipts_from_verified_audit(self):
+        """Parse wire receipts after the caller has verified the audit."""
+
+        from .profile_runtime.receipts import validate_persisted_profile_wire_receipt
+
         receipts = {}
         evidence = {}
         paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
@@ -588,7 +598,12 @@ class AuditWriter:
 
         if not self.verify().valid or not self.ready():
             raise PolicyError("invalid audit cannot supply profile cleanup receipts")
-        wire_actions = set(self.profile_wire_receipts())
+        return self._profile_cleanup_receipts_from_verified_audit()
+
+    def _profile_cleanup_receipts_from_verified_audit(self):
+        """Parse cleanup receipts after the caller has verified the audit."""
+
+        wire_actions = set(self._profile_wire_receipts_from_verified_audit())
         receipts = {}
         paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
         for path in paths:
@@ -615,6 +630,38 @@ class AuditWriter:
                 receipts[action] = dict(data)
         return receipts
 
+    def _profile_wire_failure_stages_from_verified_audit(self):
+        """Parse fixed failure stages after their durable wire receipts."""
+
+        from .profile_runtime.contracts import PORTCAST_FAILURE_STAGES
+
+        stages = {}
+        seen_wire = set()
+        paths = [d / "audit.jsonl" for d in sorted(self.segments_root.iterdir())] + [self.path]
+        for path in paths:
+            for line in read_private(path, 128 * 1024 * 1024).splitlines():
+                event = json.loads(line)
+                kind = event.get("kind")
+                action = event.get("action_id")
+                if kind == "profile_wire_receipt" and isinstance(action, str):
+                    seen_wire.add(action)
+                    continue
+                if kind != "profile_wire_failure_stage":
+                    continue
+                data = event.get("data")
+                if (
+                    action not in seen_wire
+                    or action in stages
+                    or len(stages) >= 2048
+                    or not isinstance(data, dict)
+                    or set(data) != {"stage", "automatic_retry"}
+                    or data.get("stage") not in PORTCAST_FAILURE_STAGES
+                    or data.get("automatic_retry") is not False
+                ):
+                    raise PolicyError("invalid or duplicate profile wire failure stage")
+                stages[action] = data["stage"]
+        return stages
+
     def profile_action_history(self, action_id: str):
         """Return durable admission-history kinds for one fixed profile action."""
 
@@ -625,6 +672,11 @@ class AuditWriter:
             or not self.ready()
         ):
             raise PolicyError("verified profile action history is unavailable")
+        return self._profile_action_history_from_verified_audit(action_id)
+
+    def _profile_action_history_from_verified_audit(self, action_id: str):
+        """Parse one action's admission history after audit verification."""
+
         admitted = {
             "profile_release_verified",
             "output_reserved",
@@ -642,6 +694,31 @@ class AuditWriter:
                 if event.get("action_id") == action_id and kind in admitted:
                     kinds.append(kind)
         return tuple(kinds)
+
+    def profile_inspection_snapshot(self, action_id: str):
+        """Return one verified profile snapshot without probing write access."""
+
+        if (
+            not isinstance(action_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}", action_id) is None
+            or self._closed
+            or self._failed
+            or not self.verify().valid
+        ):
+            raise PolicyError("verified profile inspection is unavailable")
+        results = self._result_receipts_from_verified_audit()
+        wire = self._profile_wire_receipts_from_verified_audit()
+        cleanup = self._profile_cleanup_receipts_from_verified_audit()
+        failure_stages = self._profile_wire_failure_stages_from_verified_audit()
+        return {
+            "action_history": list(
+                self._profile_action_history_from_verified_audit(action_id)
+            ),
+            "cleanup_receipt": cleanup.get(action_id),
+            "has_result_receipt": action_id in results,
+            "wire_failure_stage": failure_stages.get(action_id),
+            "wire_receipt": wire.get(action_id),
+        }
 
     def publication_receipts(self):
         if not self.verify().valid or not self.ready():

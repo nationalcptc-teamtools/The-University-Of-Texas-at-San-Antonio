@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import stat
 from .contracts import PolicyError
@@ -74,7 +75,92 @@ def migrate_legacy(root: Path, *, encrypted_storage_verified: bool = False) -> d
             db.close()
 
 
-LEDGER_SCHEMA_VERSION = 2
+LEDGER_SCHEMA_VERSION = 5
+_PROFILE_RECONCILIATION_DDL = """CREATE TABLE IF NOT EXISTS profile_reconciliations(
+        engagement TEXT NOT NULL, device TEXT NOT NULL,
+        predecessor_action_id TEXT NOT NULL, predecessor_plan_id TEXT NOT NULL,
+        predecessor_plan_sha256 TEXT NOT NULL,
+        successor_action_id TEXT NOT NULL, successor_plan_id TEXT NOT NULL,
+        successor_plan_sha256 TEXT NOT NULL,
+        reconciliation_sha256 TEXT NOT NULL, reason_code TEXT NOT NULL,
+        reservation_absent INTEGER NOT NULL CHECK(reservation_absent = 1),
+        attempt_absent INTEGER NOT NULL CHECK(attempt_absent = 1),
+        target_traffic_absent INTEGER NOT NULL CHECK(target_traffic_absent = 1),
+        reconciled_at TEXT NOT NULL, reconciled_monotonic_ns INTEGER NOT NULL,
+        PRIMARY KEY(engagement,device,predecessor_action_id),
+        UNIQUE(engagement,predecessor_action_id),
+        UNIQUE(engagement,successor_action_id))"""
+_PROFILE_CONTINUATION_DDL = """CREATE TABLE IF NOT EXISTS profile_continuations(
+        predecessor_engagement TEXT NOT NULL, predecessor_device TEXT NOT NULL,
+        predecessor_reconciled_action_id TEXT NOT NULL,
+        predecessor_action_id TEXT NOT NULL,
+        predecessor_plan_id TEXT NOT NULL,
+        predecessor_plan_sha256 TEXT NOT NULL,
+        predecessor_release_manifest_sha256 TEXT NOT NULL,
+        predecessor_profile_worker_sha256 TEXT NOT NULL,
+        predecessor_broker_worker_sha256 TEXT NOT NULL,
+        predecessor_audit_chain_tail_sha256 TEXT NOT NULL,
+        predecessor_audit_snapshot_sha256 TEXT NOT NULL,
+        predecessor_reconciliation_sha256 TEXT NOT NULL,
+        predecessor_reconciliation_reason TEXT NOT NULL,
+        predecessor_raw_failure_stage TEXT
+            CHECK(predecessor_raw_failure_stage IS NULL),
+        predecessor_stage TEXT NOT NULL
+            CHECK(predecessor_stage = 'legacy_target_open_unacknowledged'),
+        predecessor_attempt_count INTEGER NOT NULL
+            CHECK(predecessor_attempt_count = 1),
+        predecessor_observed_tcp_connects INTEGER NOT NULL
+            CHECK(predecessor_observed_tcp_connects = 0),
+        predecessor_possible_tcp_connects INTEGER NOT NULL
+            CHECK(predecessor_possible_tcp_connects = 1),
+        predecessor_charged_tcp_connects INTEGER NOT NULL
+            CHECK(predecessor_charged_tcp_connects = 1),
+        predecessor_observed_udp_datagrams INTEGER NOT NULL
+            CHECK(predecessor_observed_udp_datagrams = 0),
+        predecessor_charged_udp_datagrams INTEGER NOT NULL
+            CHECK(predecessor_charged_udp_datagrams = 0),
+        predecessor_observed_protocol_requests INTEGER NOT NULL
+            CHECK(predecessor_observed_protocol_requests = 0),
+        predecessor_charged_protocol_requests INTEGER NOT NULL
+            CHECK(predecessor_charged_protocol_requests = 0),
+        predecessor_observed_tx_bytes INTEGER NOT NULL
+            CHECK(predecessor_observed_tx_bytes = 0),
+        predecessor_charged_tx_bytes INTEGER NOT NULL
+            CHECK(predecessor_charged_tx_bytes = 0),
+        predecessor_observed_rx_bytes INTEGER NOT NULL
+            CHECK(predecessor_observed_rx_bytes = 0),
+        predecessor_charged_rx_bytes INTEGER NOT NULL
+            CHECK(predecessor_charged_rx_bytes = 0),
+        predecessor_evidence_bytes INTEGER NOT NULL
+            CHECK(predecessor_evidence_bytes = 0),
+        predecessor_first_byte_at TEXT
+            CHECK(predecessor_first_byte_at IS NULL),
+        predecessor_wire_event_count INTEGER NOT NULL
+            CHECK(predecessor_wire_event_count = 0),
+        predecessor_outcome TEXT NOT NULL
+            CHECK(predecessor_outcome = 'uncertain'),
+        predecessor_cleanup_status TEXT NOT NULL
+            CHECK(predecessor_cleanup_status = 'passed'),
+        predecessor_stop_reason TEXT NOT NULL
+            CHECK(predecessor_stop_reason = 'transport outcome uncertain'),
+        successor_engagement TEXT NOT NULL, successor_device TEXT NOT NULL,
+        successor_workspace TEXT NOT NULL, successor_target TEXT NOT NULL,
+        successor_workflow TEXT NOT NULL,
+        successor_action_id TEXT NOT NULL, successor_plan_id TEXT NOT NULL,
+        successor_plan_sha256 TEXT NOT NULL,
+        predecessor_proof_sha256 TEXT NOT NULL, created_at TEXT NOT NULL,
+        PRIMARY KEY(predecessor_engagement,predecessor_action_id),
+        UNIQUE(successor_engagement,successor_action_id),
+        UNIQUE(successor_engagement,successor_plan_id))"""
+_PROFILE_CONTINUATION_V4_DDL = (
+    _PROFILE_CONTINUATION_DDL.replace(
+        "        predecessor_reconciled_action_id TEXT NOT NULL,\n", ""
+    ).replace(
+        "        predecessor_profile_worker_sha256 TEXT NOT NULL,\n"
+        "        predecessor_broker_worker_sha256 TEXT NOT NULL,\n",
+        "        predecessor_worker_sha256 TEXT NOT NULL,\n",
+    )
+)
 _LEDGER_DDL = (
     """CREATE TABLE IF NOT EXISTS ledger_schema_migrations(
         version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)""",
@@ -112,6 +198,8 @@ _LEDGER_DDL = (
         role_id TEXT NOT NULL, module_id TEXT NOT NULL, state TEXT NOT NULL, result_json TEXT,
         PRIMARY KEY(engagement,device,wave_id,item_id),
         UNIQUE(engagement,request_id), UNIQUE(engagement,action_id))""",
+    _PROFILE_RECONCILIATION_DDL,
+    _PROFILE_CONTINUATION_DDL,
 )
 
 
@@ -144,6 +232,81 @@ def backfill_reservation_scopes(db: sqlite3.Connection) -> None:
                            (engagement, device, request, kind, key, counter, value))
 
 
+def _normalized_schema_sql(value: str) -> tuple[str, ...]:
+    tokens = re.findall(
+        r"'(?:''|[^'])*'|\"(?:\"\"|[^\"])*\"|`(?:``|[^`])*`|"
+        r"\[[^]]*\]|<=|>=|<>|!=|==|[(),=]|[^\s(),=<>!]+",
+        value,
+    )
+    return tuple(
+        token
+        if token.startswith(("'", '"', "`", "["))
+        else token.lower()
+        for token in tokens
+    )
+
+
+def _profile_continuation_schema_signature(
+    db: sqlite3.Connection,
+) -> tuple[object, ...]:
+    row = db.execute(
+        """SELECT type,sql FROM sqlite_schema
+            WHERE name='profile_continuations'"""
+    ).fetchone()
+    if row is None or row[0] != "table" or type(row[1]) is not str:
+        raise PolicyError("profile continuation schema requires reviewed migration")
+    table_info = tuple(
+        db.execute("PRAGMA table_info(profile_continuations)").fetchall()
+    )
+    indexes = []
+    for _sequence, name, unique, origin, partial in db.execute(
+        "PRAGMA index_list(profile_continuations)"
+    ).fetchall():
+        columns = tuple(
+            db.execute(
+                "SELECT seqno,cid,name FROM pragma_index_info(?) ORDER BY seqno",
+                (name,),
+            ).fetchall()
+        )
+        indexes.append((unique, origin, partial, columns))
+    return (
+        _normalized_schema_sql(row[1]),
+        table_info,
+        tuple(sorted(indexes, key=repr)),
+    )
+
+
+def _expected_profile_continuation_schema_signature(
+    ddl: str,
+) -> tuple[object, ...]:
+    expected = sqlite3.connect(":memory:")
+    try:
+        expected.execute(ddl)
+        return _profile_continuation_schema_signature(expected)
+    finally:
+        expected.close()
+
+
+def _upgrade_profile_continuation_v5(db: sqlite3.Connection) -> None:
+    """Replace only an empty pre-release v4 table with the final proof schema."""
+
+    actual = _profile_continuation_schema_signature(db)
+    if actual == _expected_profile_continuation_schema_signature(
+        _PROFILE_CONTINUATION_DDL
+    ):
+        return
+    if actual != _expected_profile_continuation_schema_signature(
+        _PROFILE_CONTINUATION_V4_DDL
+    ):
+        raise PolicyError("profile continuation schema requires reviewed migration")
+    if db.execute("SELECT 1 FROM profile_continuations LIMIT 1").fetchone():
+        # The old single worker digest cannot prove which broker worker made
+        # the pre-ack target-open decision. Preserve the row and fail closed.
+        raise PolicyError("profile continuation history requires reviewed migration")
+    db.execute("DROP TABLE profile_continuations")
+    db.execute(_PROFILE_CONTINUATION_DDL)
+
+
 def ensure_ledger_schema(db: sqlite3.Connection) -> None:
     """Transactional additive migration, separate from legacy web schema v2."""
     from datetime import datetime, timezone
@@ -153,7 +316,14 @@ def ensure_ledger_schema(db: sqlite3.Connection) -> None:
     try:
         db.execute(_LEDGER_DDL[0])
         versions = [row[0] for row in db.execute("SELECT version FROM ledger_schema_migrations ORDER BY version")]
-        if versions not in ([], [1], [1, 2]):
+        if versions not in (
+            [],
+            [1],
+            [1, 2],
+            [1, 2, 3],
+            [1, 2, 3, 4],
+            [1, 2, 3, 4, 5],
+        ):
             raise PolicyError("unsupported ledger migration history")
         if not versions:
             for statement in _LEDGER_DDL[1:]: db.execute(statement)
@@ -161,6 +331,9 @@ def ensure_ledger_schema(db: sqlite3.Connection) -> None:
             applied = datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
             db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (1, applied))
             db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (2, applied))
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (3, applied))
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (4, applied))
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (5, applied))
         elif versions == [1]:
             for table, columns in {
                 "reservation_attempts": (
@@ -181,6 +354,35 @@ def ensure_ledger_schema(db: sqlite3.Connection) -> None:
             backfill_reservation_scopes(db)
             db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
                 2, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+            db.execute(_PROFILE_RECONCILIATION_DDL)
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                3, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+            db.execute(_PROFILE_CONTINUATION_DDL)
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                4, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                5, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+        elif versions == [1, 2]:
+            db.execute(_PROFILE_RECONCILIATION_DDL)
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                3, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+            db.execute(_PROFILE_CONTINUATION_DDL)
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                4, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                5, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+        elif versions == [1, 2, 3]:
+            db.execute(_PROFILE_CONTINUATION_DDL)
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                4, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                5, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+        elif versions == [1, 2, 3, 4]:
+            _upgrade_profile_continuation_v5(db)
+            db.execute("INSERT INTO ledger_schema_migrations VALUES (?,?)", (
+                5, datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")))
+        else:
+            _upgrade_profile_continuation_v5(db)
         db.commit()
     except Exception:
         db.rollback()

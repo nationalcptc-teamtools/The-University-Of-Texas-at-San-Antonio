@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import fcntl
+import copy
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -22,11 +23,14 @@ from types import SimpleNamespace
 import pytest
 
 from cptc_harness.integrity import VerifiedRelease
+from cptc_harness.contracts import PolicyError
 from cptc_harness.profile_runtime.service_client import PortcastServiceClient
+from cptc_harness.profile_runtime import service_client
+from cptc_harness.runtime import Runtime
 from testing.cptc11_lab import portcast_live as live
 from testing.cptc11_lab import portcast_service
 from testing.cptc11_lab.portcast_service import _CanonicalPortcastService
-from tests.test_portcast_live import SyntheticClient
+from tests.test_portcast_live import SyntheticClient, _seed_blocked_clock_predecessor
 
 
 _DEPLOYMENT_SPEC = importlib.util.spec_from_file_location(
@@ -63,10 +67,198 @@ def _release(plan) -> VerifiedRelease:
     )
 
 
+def _create_synthetic_historical_inputs(state: Path) -> None:
+    ledger = state / "runtime/ledger/cptc11-dell-validation"
+    audit = state / "runtime/runtime/audit"
+    result = state / (
+        "runtime/runtime/results/cptc11-portcast-public-identity-action-v2.json"
+    )
+    ledger.mkdir(parents=True, mode=0o700)
+    audit.mkdir(parents=True, mode=0o700)
+    result.parent.mkdir(parents=True, exist_ok=True)
+    result.write_bytes(b"synthetic-v2-result\n")
+    result.chmod(0o600)
+
+
+def _legacy_v2_service_request_for_test(
+    socket_path: Path, method: str, release_id: str
+):
+    """Exercise the historical v2 service fixture without relaxing its v3 client."""
+
+    connection = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    try:
+        connection.connect(str(socket_path))
+        connection.send(
+            json.dumps({"method": method, "release_id": release_id}).encode()
+        )
+        response = json.loads(connection.recv(64 * 1024))
+    finally:
+        connection.close()
+    assert response == {"ok": True, "result": response["result"]}
+    return response["result"]
+
+
+def _complete_service_result() -> dict:
+    return {
+        "action_id": "cptc11-portcast-public-identity-action-v3",
+        "audit_verified": True,
+        "automatic_retry": False,
+        "cleanup_status": "passed",
+        "profile_id": "web.http_jellyfin_public_identity",
+        "receipt_outcome": "complete",
+        "status": "complete",
+        "workspace": "cptc11-portcast-workspace",
+        "execution": {
+            "reservation_state": "complete",
+            "attempt_count": 1,
+            "attempt_state": "complete",
+            "transport_counters": {
+                "tcp_connects": 1,
+                "udp_datagrams": 0,
+                "protocol_requests": 1,
+                "tx_bytes": 103,
+                "rx_bytes": 282,
+            },
+            "wire_counters_verified": True,
+            "result_receipt_present": True,
+        },
+    }
+
+
+def test_service_result_validator_accepts_only_proven_complete_metadata():
+    value = _complete_service_result()
+
+    assert service_client.validate_portcast_result(value) == value
+
+
+def test_service_result_validator_accepts_only_fixed_failure_stage_metadata():
+    value = _complete_service_result()
+    value.update(
+        status="failed",
+        receipt_outcome="uncertain",
+        reason="PortCast profile transport did not complete",
+    )
+    value["execution"].update(
+        reservation_state="uncertain",
+        attempt_state="uncertain",
+        transport_counters={
+            "tcp_connects": 0,
+            "udp_datagrams": 0,
+            "protocol_requests": 0,
+            "tx_bytes": 0,
+            "rx_bytes": 0,
+        },
+        failure_stage="target_open",
+    )
+
+    assert service_client.validate_portcast_result(value) == value
+    value["execution"]["failure_stage"] = "target_open: token=secret"
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        service_client.validate_portcast_result(value)
+
+
+def test_complete_service_result_rejects_failure_stage():
+    value = _complete_service_result()
+    value["execution"]["failure_stage"] = "target_open"
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        service_client.validate_portcast_result(value)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "missing_execution",
+        "extra_execution_field",
+        "second_attempt",
+        "negative_counter",
+        "floating_counter",
+        "extra_counter",
+        "oversized_counter",
+        "null_complete_counters",
+        "unverified_complete",
+        "failed_complete_cleanup",
+        "missing_result_receipt",
+        "absolute_workspace",
+        "traversal_workspace",
+        "control_workspace",
+        "arbitrary_workspace",
+        "control_reason",
+        "arbitrary_reason",
+        "oversized_reason",
+        "complete_reason",
+        "raw_body",
+    ),
+)
+def test_service_result_validator_rejects_unproven_or_disclosed_metadata(mutation):
+    value = copy.deepcopy(_complete_service_result())
+    if mutation == "missing_execution":
+        value.pop("execution")
+    elif mutation == "extra_execution_field":
+        value["execution"]["evidence_path"] = "/restricted/raw.age"
+    elif mutation == "second_attempt":
+        value["execution"]["attempt_count"] = 2
+    elif mutation == "negative_counter":
+        value["execution"]["transport_counters"]["rx_bytes"] = -1
+    elif mutation == "floating_counter":
+        value["execution"]["transport_counters"]["rx_bytes"] = 282.0
+    elif mutation == "extra_counter":
+        value["execution"]["transport_counters"]["capture_bytes"] = 282
+    elif mutation == "oversized_counter":
+        value["execution"]["transport_counters"]["rx_bytes"] = 8193
+    elif mutation == "null_complete_counters":
+        value["execution"]["attempt_count"] = 0
+        value["execution"]["attempt_state"] = None
+        value["execution"]["transport_counters"] = None
+    elif mutation == "unverified_complete":
+        value["execution"]["wire_counters_verified"] = False
+    elif mutation == "failed_complete_cleanup":
+        value["cleanup_status"] = "failed"
+    elif mutation == "missing_result_receipt":
+        value["execution"]["result_receipt_present"] = False
+    elif mutation == "absolute_workspace":
+        value["workspace"] = "/var/lib/cptc-harness/portcast-live-v1/runtime"
+    elif mutation == "traversal_workspace":
+        value["workspace"] = "../cptc11-portcast-workspace"
+    elif mutation == "control_workspace":
+        value["workspace"] = "cptc11-portcast-workspace\nraw"
+    elif mutation == "arbitrary_workspace":
+        value["workspace"] = "another-workspace"
+    elif mutation == "control_reason":
+        value["reason"] = "blocked\nclient data"
+    elif mutation == "arbitrary_reason":
+        value["reason"] = "printable target value token=secret"
+    elif mutation == "oversized_reason":
+        value["reason"] = "x" * 257
+    elif mutation == "complete_reason":
+        value["reason"] = "unexpected reason on complete result"
+    else:
+        value["body"] = "client data"
+
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        service_client.validate_portcast_result(value)
+
+
 def _synthetic_open_window_plan():
     now = datetime.now(timezone.utc)
     return replace(
         live.load_frozen_portcast_plan(),
+        schema_version=1,
+        reviewed_by="approved:synthetic-reviewer",
+        window_start=(now - timedelta(minutes=5)).strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ"
+        ),
+        window_end=(now + timedelta(minutes=5)).strftime(
+            "%Y-%m-%dT%H:%M:%S.%fZ"
+        ),
+    )
+
+
+def _synthetic_legacy_open_window_plan():
+    now = datetime.now(timezone.utc)
+    return replace(
+        live.load_frozen_portcast_plan_v2(),
+        schema_version=1,
+        reviewed_by="approved:synthetic-reviewer",
         window_start=(now - timedelta(minutes=5)).strftime(
             "%Y-%m-%dT%H:%M:%S.%fZ"
         ),
@@ -113,8 +305,24 @@ def test_two_fresh_clients_share_one_canonical_one_shot_authority(
     thread.join(timeout=10)
 
     assert first["status"] == "complete"
+    assert first["execution"] == {
+        "reservation_state": "complete",
+        "attempt_count": 1,
+        "attempt_state": "complete",
+        "transport_counters": {
+            "tcp_connects": 1,
+            "udp_datagrams": 0,
+            "protocol_requests": 1,
+            "tx_bytes": 103,
+            "rx_bytes": 282,
+        },
+        "wire_counters_verified": True,
+        "result_receipt_present": True,
+        "failure_stage": None,
+    }
     assert second["status"] == "blocked"
     assert second["automatic_retry"] is False
+    assert second["execution"] == first["execution"]
     assert len(SyntheticClient.instances) == 1
 
 
@@ -245,6 +453,8 @@ def test_deployment_unit_exposes_only_the_authenticated_fixed_socket():
     assert "RuntimeDirectory=cptc-harness" in unit
     assert "RuntimeDirectoryMode=0750" in unit
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256" in unit
+    assert "BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json" in unit
+    assert "BindReadOnlyPaths=/etc/cptc-harness/trust\n" not in unit
     assert "BindPaths=/run/cptc-harness" in unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1" in unit
     assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK\n" in unit
@@ -273,10 +483,16 @@ def test_sysusers_and_units_require_the_dedicated_nonroot_service_identity():
         assert "CapabilityBoundingSet=\n" in unit
         assert "AmbientCapabilities=\n" in unit
         assert "User=root\n" not in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results/cptc11-portcast-public-identity-action-v2.json:" not in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime\n" not in service_unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1\n" not in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/deployment.lock\n" in service_unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/systemd-acceptance/%i/worker:/acceptance\n" in acceptance_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/systemd-acceptance/%i/worker/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit\n" in acceptance_unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/systemd-acceptance/%i\n" not in acceptance_unit
 
 
@@ -343,7 +559,10 @@ def test_deployment_lock_is_root_owned_group_readable_and_nonwritable(
     identity = deployment.ServiceIdentity(
         "_cptc-portcast", os.getuid(), os.getgid()
     )
+    v3_parent = tmp_path / "portcast-live-v3"
     monkeypatch.setattr(deployment, "STATE_PATH", state)
+    monkeypatch.setattr(deployment, "V3_STATE_PATH", v3_parent)
+    monkeypatch.setattr(deployment, "V3_RUNTIME_PATH", v3_parent / "runtime")
     monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
 
     with deployment._deployment_lock(exclusive=True, identity=identity):
@@ -411,14 +630,22 @@ def test_deployment_creates_only_the_service_owned_runtime_subtree(tmp_path, mon
     before = state.stat()
     identity = deployment.ServiceIdentity("_cptc-portcast", os.getuid(), os.getgid())
     monkeypatch.setattr(deployment, "STATE_PATH", state)
+    v3_parent = tmp_path / "portcast-live-v3"
+    monkeypatch.setattr(deployment, "V3_STATE_PATH", v3_parent)
+    monkeypatch.setattr(deployment, "V3_RUNTIME_PATH", v3_parent / "runtime")
     monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
     monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
 
     runtime = deployment._prepare_runtime_subtree(identity)
 
-    assert runtime == state / "runtime"
+    assert runtime == v3_parent / "runtime"
     assert stat.S_IMODE(state.stat().st_mode) == 0o700
     assert (state.stat().st_uid, state.stat().st_gid) == (before.st_uid, before.st_gid)
+    assert stat.S_IMODE(v3_parent.stat().st_mode) == 0o755
+    assert (v3_parent.stat().st_uid, v3_parent.stat().st_gid) == (
+        deployment.ROOT_UID,
+        deployment.ROOT_GID,
+    )
     assert (runtime.stat().st_uid, runtime.stat().st_gid) == (identity.uid, identity.gid)
     assert stat.S_IMODE(runtime.stat().st_mode) == 0o700
 
@@ -434,6 +661,364 @@ def test_service_requires_exact_dynamic_identity_and_service_owned_credentials(m
     monkeypatch.setattr(portcast_service.os, "getgroups", lambda: [502, 999])
     with pytest.raises(RuntimeError, match="service identity"):
         portcast_service._require_service_identity()
+
+
+def test_production_main_accepts_read_only_rootfs_parent_and_private_bound_runtime(
+    monkeypatch,
+):
+    """The sealed parent is immutable; only the bound runtime is service-owned."""
+
+    class StaticPath:
+        def __init__(self, metadata):
+            self._metadata = metadata
+
+        def lstat(self):
+            return self._metadata
+
+    identity = portcast_service.ServiceIdentity(
+        "_cptc-portcast", "cptc-harness", 501, 502
+    )
+    control = StaticPath(
+        SimpleNamespace(st_mode=stat.S_IFDIR | 0o555, st_uid=0, st_gid=0)
+    )
+    runtime = StaticPath(
+        SimpleNamespace(
+            st_mode=stat.S_IFDIR | 0o555,
+            st_uid=0,
+            st_gid=0,
+        )
+    )
+    served = []
+    prepared = []
+    closed = []
+    order = []
+    plan = object()
+    runtime_authority = object.__new__(Runtime)
+
+    class Service:
+        def __init__(self, **kwargs):
+            order.append("service")
+            assert kwargs["state_root"] is runtime
+            assert kwargs["prepared_runtime"] is runtime_authority
+
+        def serve(self):
+            order.append("serve")
+            served.append(True)
+
+    read_fd, write_fd = os.pipe()
+    monkeypatch.setattr(sys, "argv", ["portcast_service.py"])
+    monkeypatch.setattr(portcast_service, "PRODUCTION_CONTROL_ROOT", control)
+    monkeypatch.setattr(portcast_service, "PRODUCTION_STATE_ROOT", runtime)
+    monkeypatch.setattr(portcast_service, "_require_service_identity", lambda: identity)
+    monkeypatch.setattr(portcast_service, "_bootstrap_release", lambda: {})
+    monkeypatch.setattr(portcast_service, "_activate_verified_imports", lambda _manifest: None)
+    monkeypatch.setattr(portcast_service, "_assert_verified_imports", lambda _release: None)
+    monkeypatch.setattr(portcast_service, "_assert_verified_process_maps", lambda: None)
+    monkeypatch.setattr(
+        portcast_service,
+        "_load_service_credentials",
+        lambda: order.append("credentials") or (read_fd, write_fd),
+    )
+    monkeypatch.setattr(portcast_service, "_CanonicalPortcastService", Service)
+    monkeypatch.setattr(live, "load_frozen_portcast_plan", lambda: plan)
+    monkeypatch.setattr(
+        live,
+        "open_frozen_portcast_runtime_at_root",
+        lambda **kwargs: order.append("runtime") or prepared.append(kwargs) or runtime_authority,
+    )
+    monkeypatch.setattr(
+        live,
+        "_close_runtime",
+        lambda authority, primary=None: closed.append((authority, primary)),
+    )
+    monkeypatch.setattr(
+        sys.modules["cptc_harness.integrity"],
+        "verify_portcast_release",
+        lambda: SimpleNamespace(release_id="portcast-live-v1"),
+    )
+
+    assert portcast_service.main() == 0
+    assert served == [True]
+    assert closed == [(runtime_authority, None)]
+    assert order == ["runtime", "credentials", "service", "serve"]
+    assert prepared == [{
+        "state_root": runtime,
+        "plan": plan,
+        "verified_release": SimpleNamespace(release_id="portcast-live-v1"),
+        "age_binary": portcast_service._PRODUCTION_AGE_BINARY,
+        "age_recipient": portcast_service._PRODUCTION_AGE_RECIPIENT,
+    }]
+
+
+def test_production_service_dispatch_reuses_the_prepared_sealed_runtime(
+    monkeypatch,
+):
+    plan = live.load_frozen_portcast_plan()
+    release = _release(plan)
+    prepared_runtime = object.__new__(Runtime)
+    monkeypatch.setattr(live, "load_frozen_portcast_plan", lambda: plan)
+
+    service = _CanonicalPortcastService(
+        state_root=portcast_service.PRODUCTION_STATE_ROOT,
+        socket_path=portcast_service.PRODUCTION_SOCKET,
+        expected_client_uid=os.getuid(),
+        verified_release=release,
+        wire_broker_factory=SyntheticClient,
+        prepared_runtime=prepared_runtime,
+    )
+
+    assert service._age_binary == portcast_service._PRODUCTION_AGE_BINARY
+    assert service._age_recipient == plan.evidence_recipient
+    assert service._provision is False
+
+
+def test_production_dispatch_uses_one_prepared_runtime_and_one_broker(
+    tmp_path, monkeypatch
+):
+    legacy_plan = _synthetic_legacy_open_window_plan()
+    age, recipient = _age_identity(tmp_path)
+    legacy_plan = replace(legacy_plan, evidence_recipient=recipient)
+    plan = replace(legacy_plan, schema_version=2)
+    release = replace(
+        _release(plan),
+        native_file_sha256={
+            "bin/age": hashlib.sha256(age.read_bytes()).hexdigest()
+        },
+    )
+    state = tmp_path / "production-state"
+    socket_path = tmp_path / "production.sock"
+    SyntheticClient.instances.clear()
+    monkeypatch.setattr(live, "load_frozen_portcast_plan", lambda: plan)
+    monkeypatch.setattr(live, "validate_current_release", lambda _plan: release)
+    synthetic_predecessor = json.loads(
+        live._PREDECESSOR_PLAN_PATH.read_text()
+    )
+    synthetic_predecessor["evidence_recipient"] = recipient
+    monkeypatch.setattr(
+        live,
+        "_read_predecessor_plan",
+        lambda _plan: synthetic_predecessor,
+    )
+    monkeypatch.setattr(portcast_service, "PRODUCTION_STATE_ROOT", state)
+    monkeypatch.setattr(portcast_service, "PRODUCTION_SOCKET", socket_path)
+    monkeypatch.setattr(portcast_service, "_PRODUCTION_AGE_BINARY", age)
+    monkeypatch.setattr(
+        portcast_service, "_PRODUCTION_AGE_RECIPIENT", recipient
+    )
+    runtime = live._open_frozen_portcast_runtime_at_root_core(
+        state_root=state,
+        plan=legacy_plan,
+        verified_release=release,
+        age_binary=age,
+        age_recipient=recipient,
+    )
+    _seed_blocked_clock_predecessor(runtime, plan)
+    service = _CanonicalPortcastService(
+        state_root=state,
+        socket_path=socket_path,
+        expected_client_uid=os.getuid(),
+        verified_release=release,
+        wire_broker_factory=SyntheticClient,
+        prepared_runtime=runtime,
+    )
+    thread = threading.Thread(
+        target=service.serve, kwargs={"maximum_connections": 3}, daemon=True
+    )
+    thread.start()
+    for _ in range(1000):
+        if socket_path.exists() or not thread.is_alive():
+            break
+        time.sleep(0.01)
+    assert thread.is_alive()
+
+    try:
+        first = _legacy_v2_service_request_for_test(
+            socket_path, "execute", plan.release_id
+        )
+        second = _legacy_v2_service_request_for_test(
+            socket_path, "execute", plan.release_id
+        )
+
+        def snapshot(root):
+            return {
+                path.relative_to(root).as_posix(): (
+                    path.lstat().st_mode,
+                    path.lstat().st_uid,
+                    path.lstat().st_gid,
+                    path.lstat().st_mtime_ns,
+                    path.lstat().st_ctime_ns,
+                    hashlib.sha256(path.read_bytes()).hexdigest()
+                    if path.is_file()
+                    else None,
+                )
+                for path in sorted(root.rglob("*"))
+            }
+
+        before_inspect = snapshot(state)
+        runtime.audit.ready = lambda: pytest.fail(
+            "production inspect probed audit write access"
+        )
+        inspected = _legacy_v2_service_request_for_test(
+            socket_path, "inspect", plan.release_id
+        )
+        assert snapshot(state) == before_inspect
+        thread.join(timeout=10)
+        assert not thread.is_alive()
+
+        assert first["status"] == "complete"
+        assert first["cleanup_status"] == "passed"
+        assert second["status"] == "blocked"
+        assert second["automatic_retry"] is False
+        assert inspected["status"] == "blocked"
+        assert inspected["automatic_retry"] is False
+        assert inspected["execution"] == first["execution"]
+        assert len(SyntheticClient.instances) == 1
+        assert SyntheticClient.instances[0].executions == 1
+        assert SyntheticClient.instances[0].closed is True
+
+        audit = runtime.audit.profile_inspection_snapshot(plan.action_id)
+        assert audit["has_result_receipt"] is True
+        assert audit["cleanup_receipt"]["status"] == "passed"
+        counters = audit["wire_receipt"]["counters"]
+        assert counters == {
+            "capture_bytes": audit["wire_receipt"]["evidence_bytes"],
+            "protocol_requests": 1,
+            "rx_bytes": audit["wire_receipt"]["evidence_bytes"],
+            "tcp_connects": 1,
+            "tls_handshakes": 0,
+            "tx_bytes": 103,
+            "udp_datagrams": 0,
+        }
+        assert runtime.ledger._db.execute(
+            "SELECT COUNT(*) FROM reservation_attempts WHERE request_id=?",
+            (plan.action_id,),
+        ).fetchone() == (1,)
+        encrypted = list((state / "runtime/audit/evidence").iterdir())
+        assert len(encrypted) == 1
+        assert encrypted[0].suffix == ".age"
+    finally:
+        if thread.is_alive():
+            thread.join(timeout=1)
+        live._close_runtime(runtime)
+
+
+def test_production_provisioning_failure_occurs_before_credentials_or_listener(
+    monkeypatch,
+):
+    identity = portcast_service.ServiceIdentity(
+        "_cptc-portcast", "cptc-harness", 501, 502
+    )
+    plan = live.load_frozen_portcast_plan()
+    release = _release(plan)
+    control = SimpleNamespace(
+        lstat=lambda: SimpleNamespace(st_mode=stat.S_IFDIR | 0o555, st_uid=0, st_gid=0)
+    )
+    runtime = SimpleNamespace(
+        lstat=lambda: SimpleNamespace(
+            st_mode=stat.S_IFDIR | 0o555, st_uid=0, st_gid=0
+        )
+    )
+    monkeypatch.setattr(sys, "argv", ["portcast_service.py"])
+    monkeypatch.setattr(portcast_service, "PRODUCTION_CONTROL_ROOT", control)
+    monkeypatch.setattr(portcast_service, "PRODUCTION_STATE_ROOT", runtime)
+    monkeypatch.setattr(portcast_service, "_require_service_identity", lambda: identity)
+    monkeypatch.setattr(portcast_service, "_bootstrap_release", lambda: {})
+    monkeypatch.setattr(portcast_service, "_activate_verified_imports", lambda _manifest: None)
+    monkeypatch.setattr(portcast_service, "_assert_verified_imports", lambda _release: None)
+    monkeypatch.setattr(portcast_service, "_assert_verified_process_maps", lambda: None)
+    monkeypatch.setattr(live, "load_frozen_portcast_plan", lambda: plan)
+    monkeypatch.setattr(
+        live,
+        "open_frozen_portcast_runtime_at_root",
+        lambda **_kwargs: (_ for _ in ()).throw(PolicyError("provision failed")),
+    )
+    monkeypatch.setattr(
+        portcast_service,
+        "_load_service_credentials",
+        lambda: pytest.fail("credentials loaded after failed provisioning"),
+    )
+    monkeypatch.setattr(
+        portcast_service,
+        "_CanonicalPortcastService",
+        lambda **_kwargs: pytest.fail("listener constructed after failed provisioning"),
+    )
+    monkeypatch.setattr(
+        sys.modules["cptc_harness.integrity"],
+        "verify_portcast_release",
+        lambda: release,
+    )
+
+    with pytest.raises(PolicyError, match="provision failed"):
+        portcast_service.main()
+
+
+def test_production_main_rejects_symlinked_control_path_before_runtime_open(
+    tmp_path, monkeypatch
+):
+    control_target = tmp_path / "control-target"
+    control_target.mkdir(mode=0o755)
+    control = tmp_path / "control-link"
+    control.symlink_to(control_target, target_is_directory=True)
+    runtime = tmp_path / "runtime"
+    runtime.mkdir(mode=0o700)
+    plan = live.load_frozen_portcast_plan()
+    release = _release(plan)
+    identity = portcast_service.ServiceIdentity(
+        "_cptc-portcast", "cptc-harness", os.getuid(), os.getgid()
+    )
+    monkeypatch.setattr(sys, "argv", ["portcast_service.py"])
+    monkeypatch.setattr(portcast_service, "PRODUCTION_CONTROL_ROOT", control)
+    monkeypatch.setattr(portcast_service, "PRODUCTION_STATE_ROOT", runtime)
+    monkeypatch.setattr(portcast_service, "_require_service_identity", lambda: identity)
+    monkeypatch.setattr(portcast_service, "_bootstrap_release", lambda: {})
+    monkeypatch.setattr(portcast_service, "_activate_verified_imports", lambda _manifest: None)
+    monkeypatch.setattr(portcast_service, "_assert_verified_imports", lambda _release: None)
+    monkeypatch.setattr(live, "load_frozen_portcast_plan", lambda: plan)
+    monkeypatch.setattr(
+        sys.modules["cptc_harness.integrity"],
+        "verify_portcast_release",
+        lambda: release,
+    )
+    monkeypatch.setattr(
+        live,
+        "open_frozen_portcast_runtime_at_root",
+        lambda **_kwargs: pytest.fail("runtime opened through control symlink"),
+    )
+
+    assert portcast_service.main() == 1
+
+
+@pytest.mark.parametrize("kind", ("file", "symlink"))
+def test_failed_socket_bind_preserves_preexisting_path(tmp_path, kind):
+    plan = live.load_frozen_portcast_plan()
+    age, recipient = _age_identity(tmp_path)
+    socket_path = tmp_path / "service.sock"
+    if kind == "file":
+        socket_path.write_text("preserve")
+    else:
+        target = tmp_path / "target"
+        target.write_text("preserve")
+        socket_path.symlink_to(target)
+    before = socket_path.lstat()
+    service = _CanonicalPortcastService._for_test(
+        state_root=tmp_path / "state",
+        socket_path=socket_path,
+        expected_client_uid=os.getuid(),
+        verified_release=_release(plan),
+        wire_broker_factory=SyntheticClient,
+        age_binary=age,
+        age_recipient=recipient,
+    )
+
+    with pytest.raises(OSError):
+        service.serve(maximum_connections=1)
+
+    after = socket_path.lstat()
+    assert (after.st_dev, after.st_ino, after.st_mode) == (
+        before.st_dev,
+        before.st_ino,
+        before.st_mode,
+    )
 
 
 def test_production_socket_never_uses_root_chown(tmp_path, monkeypatch):
@@ -490,6 +1075,48 @@ def test_deployment_helper_plan_is_no_target_and_requires_reviewed_release():
         deployment.plan("0" * 64)
 
 
+def test_attest_clock_is_root_only_atomic_and_fixed_path(tmp_path, monkeypatch):
+    path = tmp_path / "trust" / "portcast-clock-attestation.json"
+    monkeypatch.setattr(deployment, "CLOCK_ATTESTATION_PATH", path)
+    monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
+    monkeypatch.setattr(deployment.os, "geteuid", lambda: os.getuid())
+    monkeypatch.setattr(
+        deployment,
+        "_resolve_service_identity",
+        lambda: deployment.ServiceIdentity("_cptc-portcast", 12345, os.getgid()),
+    )
+    monkeypatch.setattr(deployment, "_timedatectl_clock", lambda: (True, 0.001))
+    monkeypatch.setattr(
+        deployment, "_boot_identity", lambda: "11111111-2222-4333-8444-555555555555"
+    )
+
+    result = deployment.attest_clock()
+    assert result["target_traffic"] is False
+    assert result["ttl_seconds"] == 30
+    info = path.stat()
+    assert stat.S_IMODE(info.st_mode) == 0o440
+    assert (info.st_uid, info.st_gid) == (os.getuid(), os.getgid())
+    value = json.loads(path.read_text())
+    assert set(value) == {
+        "version", "boot_id", "observed_utc", "observed_monotonic_ns",
+        "expires_utc", "expires_monotonic_ns", "synchronized", "offset_s", "source",
+    }
+    assert value["expires_monotonic_ns"] - value["observed_monotonic_ns"] == 30_000_000_000
+    assert not (path.parent / ("." + path.name + ".new")).exists()
+
+    # A fresh attestation replaces the prior valid 0440 file atomically. The
+    # production workflow attests once for acceptance and again for execution.
+    second = deployment.attest_clock()
+    assert second["target_traffic"] is False
+    assert stat.S_IMODE(path.stat().st_mode) == 0o440
+    assert not (path.parent / ("." + path.name + ".new")).exists()
+
+    monkeypatch.setattr(deployment.os, "geteuid", lambda: os.getuid() + 1)
+    with pytest.raises(deployment.DeploymentError, match="root"):
+        deployment.attest_clock()
+
+
 def test_deployment_helper_apply_verify_and_rollback_preserve_state(
     tmp_path, monkeypatch
 ):
@@ -506,6 +1133,18 @@ def test_deployment_helper_apply_verify_and_rollback_preserve_state(
     state.chmod(0o700)
     marker = state / "preserved-state"
     marker.write_text("unchanged")
+    # The production helper validates the exact v2 continuation inputs. Keep
+    # this lifecycle test self-contained with service-owned synthetic inputs.
+    historical_ledger = state / "runtime/ledger/cptc11-dell-validation"
+    historical_audit = state / "runtime/runtime/audit"
+    historical_result = state / (
+        "runtime/runtime/results/cptc11-portcast-public-identity-action-v2.json"
+    )
+    historical_ledger.mkdir(parents=True, mode=0o700)
+    historical_audit.mkdir(parents=True, mode=0o700)
+    historical_result.parent.mkdir(parents=True, exist_ok=True)
+    historical_result.write_bytes(b"synthetic-v2-result\n")
+    historical_result.chmod(0o600)
     for path in credentials:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"synthetic-encrypted-credential")
@@ -516,6 +1155,11 @@ def test_deployment_helper_apply_verify_and_rollback_preserve_state(
     monkeypatch.setattr(deployment, "ANCHOR_PATH", anchor)
     monkeypatch.setattr(deployment, "STATE_PATH", state)
     monkeypatch.setattr(deployment, "CREDENTIAL_PATHS", credentials)
+    monkeypatch.setattr(
+        deployment,
+        "CLOCK_ATTESTATION_PATH",
+        tmp_path / "host/clock/portcast-live-v1.json",
+    )
     monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
     monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
     monkeypatch.setattr(
@@ -599,7 +1243,8 @@ def test_deployment_helper_apply_verify_and_rollback_preserve_state(
     sysusers.with_name(sysusers.name + ".previous").write_text("old policy\n")
     rolled_back = deployment.rollback()
 
-    assert verified["startup_smoke"] == "verified-no-target"
+    assert verified["startup_smoke"] == "release-only-no-target"
+    assert verified["clock_admission_checked"] is False
     assert verified["inspect"] == "not-requested"
     assert rolled_back["state_preserved"] is True
     assert marker.read_text() == "unchanged"
@@ -620,6 +1265,7 @@ def test_deployment_helper_retires_verified_previous_generation_idempotently(
     state = tmp_path / "var/lib/cptc-harness/portcast-live-v1"
     state.mkdir(parents=True)
     state.chmod(0o700)
+    _create_synthetic_historical_inputs(state)
     marker = state / "preserved-state"
     marker.write_text("unchanged")
     release.mkdir(parents=True)
@@ -713,6 +1359,7 @@ def test_deployment_helper_refuses_partial_or_unreviewed_previous_generation(
     anchor = tmp_path / "anchor"
     state = tmp_path / "state"
     state.mkdir(mode=0o700)
+    _create_synthetic_historical_inputs(state)
     release.mkdir(mode=0o555)
     release.with_name(release.name + ".previous").mkdir(mode=0o555)
     unit.write_text("current")
@@ -919,7 +1566,18 @@ def test_deployment_inspect_refuses_root_and_accepts_only_fixed_operator(
     }
 
 
-@pytest.mark.parametrize("mutation", ("missing", "symlink", "permissive", "empty"))
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "missing",
+        "symlink",
+        "permissive",
+        "empty",
+        "wrong_uid",
+        "wrong_gid",
+        "wrong_mode",
+    ),
+)
 def test_service_credentials_fail_closed_before_any_network(tmp_path, monkeypatch, mutation):
     path = tmp_path / "cptc11-dell"
     if mutation == "symlink":
@@ -928,19 +1586,42 @@ def test_service_credentials_fail_closed_before_any_network(tmp_path, monkeypatc
         path.symlink_to(target)
     elif mutation != "missing":
         path.write_bytes(b"" if mutation == "empty" else b"synthetic-password")
-        path.chmod(0o644 if mutation == "permissive" else 0o400)
+        path.chmod(
+            0o644
+            if mutation == "permissive"
+            else 0o400
+            if mutation == "wrong_mode"
+            else 0o440
+        )
     network = []
     monkeypatch.setattr(portcast_service.socket, "create_connection", lambda *a, **k: network.append(a))
+    owner_uid = os.getuid() + 1 if mutation == "wrong_uid" else os.getuid()
+    owner_gid = os.getgid() + 1 if mutation == "wrong_gid" else os.getgid()
     with pytest.raises(RuntimeError, match="credential"):
-        portcast_service._seal_service_credential(path, owner_uid=os.getuid())
+        portcast_service._seal_service_credential(
+            path, owner_uid=owner_uid, owner_gid=owner_gid
+        )
     assert network == []
+
+
+def test_service_credential_production_defaults_require_root_owner_and_group(
+    tmp_path,
+):
+    path = tmp_path / "cptc11-dell"
+    path.write_bytes(b"synthetic-password")
+    path.chmod(0o440)
+
+    with pytest.raises(RuntimeError, match="credential"):
+        portcast_service._seal_service_credential(path)
 
 
 def test_service_credential_is_copied_to_a_sealed_anonymous_descriptor(tmp_path):
     path = tmp_path / "cptc11-dell"
     path.write_bytes(b"synthetic-password")
-    path.chmod(0o400)
-    descriptor = portcast_service._seal_service_credential(path, owner_uid=os.getuid())
+    path.chmod(0o440)
+    descriptor = portcast_service._seal_service_credential(
+        path, owner_uid=os.getuid(), owner_gid=os.getgid()
+    )
     try:
         assert os.read(descriptor, 1024) == b"synthetic-password"
         assert "/memfd:portcast-credential" in os.readlink(f"/proc/self/fd/{descriptor}")
@@ -1034,6 +1715,26 @@ def test_no_target_startup_smoke_uses_the_prepared_installed_tree(tmp_path, monk
     monkeypatch.setattr(deployment, "RELEASE_PATH", rootfs)
     monkeypatch.setattr(deployment, "ANCHOR_PATH", anchor)
     monkeypatch.setattr(deployment, "STATE_PATH", state)
+    v3_parent = tmp_path / "host/portcast-live-v3"
+    old_ledger = state / "runtime/ledger/cptc11-dell-validation"
+    old_audit = state / "runtime/runtime/audit"
+    old_result = state / "runtime/runtime/results/cptc11-portcast-public-identity-action-v2.json"
+    old_ledger.mkdir(parents=True)
+    old_audit.mkdir(parents=True)
+    old_result.parent.mkdir(parents=True, exist_ok=True)
+    old_result.write_bytes(b"synthetic-v2-result\n")
+    v3_parent.mkdir(parents=True)
+    (v3_parent / "runtime").mkdir()
+    monkeypatch.setattr(deployment, "V3_STATE_PATH", v3_parent)
+    monkeypatch.setattr(deployment, "V3_RUNTIME_PATH", v3_parent / "runtime")
+    monkeypatch.setattr(deployment, "OLD_LEDGER_PATH", old_ledger)
+    monkeypatch.setattr(deployment, "OLD_AUDIT_PATH", old_audit)
+    monkeypatch.setattr(deployment, "OLD_RESULT_PATH", old_result)
+    monkeypatch.setattr(
+        deployment,
+        "CLOCK_ATTESTATION_PATH",
+        tmp_path / "host/clock/portcast-live-v1.json",
+    )
     deployment._prepare_tree(rootfs, deployment._payloads(manifest))
     digest = hashlib.sha256((rootfs / "app" / manifest_relative).read_bytes()).hexdigest()
     anchor.write_bytes(deployment._anchor_payload(manifest, digest))
@@ -1042,3 +1743,39 @@ def test_no_target_startup_smoke_uses_the_prepared_installed_tree(tmp_path, monk
     (state / "deployment.lock").chmod(0o600)
 
     deployment._startup_smoke(manifest)
+
+
+def test_no_target_startup_smoke_does_not_mount_engagement_state(tmp_path, monkeypatch):
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "deployment.lock").write_bytes(b"")
+    monkeypatch.setattr(deployment, "STATE_PATH", state)
+    monkeypatch.setattr(
+        deployment,
+        "CLOCK_ATTESTATION_PATH",
+        tmp_path / "missing-clock-attestation.json",
+    )
+    captured = {}
+
+    def run(arguments, **kwargs):
+        captured["arguments"] = tuple(arguments)
+        captured["kwargs"] = kwargs
+        return subprocess.CompletedProcess(arguments, 0, b"", b"")
+
+    monkeypatch.setattr(deployment.subprocess, "run", run)
+    deployment._startup_smoke({})
+
+    arguments = captured["arguments"]
+    assert "--unshare-net" in arguments
+    assert arguments[-2:] == (
+        "/app/deployment/portcast-bootstrap",
+        "--verify-startup-only",
+    )
+    assert str(state / "deployment.lock") in arguments
+    assert not any(
+        value.startswith(str(state / "runtime"))
+        or value.startswith("/var/lib/cptc-harness/portcast-live-v3")
+        for value in arguments
+    )
+    assert captured["kwargs"]["env"] == {}
+    assert captured["kwargs"]["close_fds"] is True

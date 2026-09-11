@@ -17,6 +17,7 @@ from cptc_harness.ledger import Ledger
 from cptc_harness.profile_runtime.catalog import load_profile
 from cptc_harness.memfd import MFD_ALLOW_SEALING, MFD_CLOEXEC, memfd_create, seal_readonly, write_all
 from cptc_harness.profile_runtime.broker_ipc import BrokerWireResult, DispatchNonce
+from cptc_harness.profile_runtime.contracts import WireCounters
 from cptc_harness.profile_runtime.worker import WireExecutionError, capture_cleartext_http11
 
 
@@ -203,6 +204,30 @@ class SyntheticBroker:
         )
 
 
+class StagedFailureBroker:
+    expected_worker_sha256 = WORKER_SHA256
+
+    def bind_reserved_attempt(self, _binding):
+        return DispatchNonce(b"f" * 32, 2**63 - 1)
+
+    def execute_once(self, _nonce, _record, _stopped):
+        descriptor = memfd_create(
+            "executor-staged-failure", MFD_CLOEXEC | MFD_ALLOW_SEALING
+        )
+        seal_readonly(descriptor)
+        return BrokerWireResult(
+            "uncertain",
+            "transport_interrupted",
+            WireCounters(0, 0, 0, 0, 0, 0, 0),
+            descriptor,
+            0,
+            hashlib.sha256(b"").hexdigest(),
+            None,
+            WORKER_SHA256,
+            "target_open",
+        )
+
+
 def capability(provider: Provider):
     return SyntheticBroker(provider)
 
@@ -282,6 +307,50 @@ def test_stop_after_durable_reservation_never_opens_channel(tmp_path):
     assert store._db.execute(
         "SELECT state FROM reservations WHERE request_id=?", ("portcast-action",)
     ).fetchone() == ("stopped",)
+
+
+def test_fixed_worker_failure_stage_is_audited_after_the_wire_receipt(tmp_path):
+    from cptc_harness.profile_runtime.executor import dispatch_profile as dispatch
+
+    store = ledger(tmp_path)
+    calls = []
+    receipt = dispatch(
+        action(),
+        StagedFailureBroker(),
+        store,
+        capture_ref,
+        lambda value: calls.append(("receipt", value.schema_version)),
+        lambda: False,
+        failure_stage_sink=lambda stage: calls.append(("stage", stage)),
+    )
+
+    assert receipt.schema_version == 1
+    assert receipt.outcome == "uncertain"
+    assert receipt.limitations == ("transport_interrupted",)
+    assert calls == [("receipt", 1), ("stage", "target_open")]
+    assert store.attempt_receipt("portcast-action")["attempts"][0]["state"] == "uncertain"
+
+
+def test_failure_stage_audit_error_latches_stop_and_exposes_no_worker_text(tmp_path):
+    from cptc_harness.profile_runtime.executor import dispatch_profile as dispatch
+
+    store = ledger(tmp_path)
+
+    def fail_stage(_stage):
+        raise OSError("attacker supplied token=secret")
+
+    with pytest.raises(PolicyError, match="failure stage") as raised:
+        dispatch(
+            action(),
+            StagedFailureBroker(),
+            store,
+            capture_ref,
+            lambda _receipt: None,
+            lambda: False,
+            failure_stage_sink=fail_stage,
+        )
+    assert "token" not in str(raised.value)
+    assert store.stopped() is True
 
 
 def test_empty_response_is_uncertain_and_never_claimed_parseable(tmp_path):
@@ -541,6 +610,105 @@ def test_profile_wire_receipt_is_durable_and_reopens_from_audit(
     )
     assert final.profile_cleanup_receipts()["durable-action"]["status"] == "passed"
     final.close()
+
+
+def test_fixed_failure_stage_is_integrity_verified_and_survives_reopen(tmp_path):
+    from cptc_harness.profile_runtime.executor import dispatch_profile as dispatch
+
+    audit_root = tmp_path / "stage-audit"
+    audit_root.mkdir(mode=0o700)
+    policy = PolicySnapshot(
+        "engagement",
+        "revision",
+        "workspace",
+        "device",
+        "operator",
+        ScopeSpec(),
+        encrypted_storage=True,
+    )
+    writer = AuditWriter(
+        audit_root,
+        policy,
+        encrypted_volume_verified=True,
+        profile_worker_sha256=WORKER_SHA256,
+        compatible_profile_workers=(WORKER_SHA256,),
+    )
+    store = ledger(tmp_path / "stage-durable")
+    writer.reserve_output("durable-stage-action", 16384)
+    dispatch(
+        action("durable-stage-action"),
+        StagedFailureBroker(),
+        store,
+        capture_ref,
+        writer.record_profile_wire_receipt,
+        lambda: False,
+        failure_stage_sink=lambda stage: writer.emit(
+            contracts.AuditEvent(
+                "profile_wire_failure_stage",
+                "durable-stage-action",
+                {"stage": stage, "automatic_retry": False},
+            )
+        ),
+    )
+    writer.release_output("durable-stage-action")
+
+    assert writer.profile_inspection_snapshot("durable-stage-action")[
+        "wire_failure_stage"
+    ] == "target_open"
+    writer.close()
+
+    reopened = AuditWriter(
+        audit_root,
+        policy,
+        encrypted_volume_verified=True,
+        profile_worker_sha256=WORKER_SHA256,
+        compatible_profile_workers=(WORKER_SHA256,),
+    )
+    assert reopened.profile_inspection_snapshot("durable-stage-action")[
+        "wire_failure_stage"
+    ] == "target_open"
+    reopened.emit(
+        contracts.AuditEvent(
+            "profile_wire_failure_stage",
+            "durable-stage-action",
+            {"stage": "target_open", "automatic_retry": False},
+        )
+    )
+    with pytest.raises(PolicyError, match="invalid or duplicate"):
+        reopened.profile_inspection_snapshot("durable-stage-action")
+    reopened.close()
+
+
+def test_failure_stage_without_a_durable_wire_receipt_is_rejected(tmp_path):
+    audit_root = tmp_path / "orphan-stage-audit"
+    audit_root.mkdir(mode=0o700)
+    policy = PolicySnapshot(
+        "engagement",
+        "revision",
+        "workspace",
+        "device",
+        "operator",
+        ScopeSpec(),
+        encrypted_storage=True,
+    )
+    writer = AuditWriter(
+        audit_root,
+        policy,
+        encrypted_volume_verified=True,
+        profile_worker_sha256=WORKER_SHA256,
+        compatible_profile_workers=(WORKER_SHA256,),
+    )
+    writer.emit(
+        contracts.AuditEvent(
+            "profile_wire_failure_stage",
+            "orphan-stage-action",
+            {"stage": "target_open", "automatic_retry": False},
+        )
+    )
+
+    with pytest.raises(PolicyError, match="invalid or duplicate"):
+        writer.profile_inspection_snapshot("orphan-stage-action")
+    writer.close()
 
 
 def test_cleanup_receipt_requires_existing_wire_receipt(tmp_path):

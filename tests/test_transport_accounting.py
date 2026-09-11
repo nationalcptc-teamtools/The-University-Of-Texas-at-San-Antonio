@@ -115,6 +115,44 @@ def test_attempt_events_produce_one_durable_terminal_receipt(tmp_path):
     }
 
 
+def test_optional_attempt_receipt_distinguishes_reserved_from_dispatched(tmp_path):
+    store = ledger(tmp_path)
+    reserve(store)
+
+    assert store.optional_attempt_receipt("action") is None
+
+    store.begin_attempt(
+        "action", "attempt-1", started_ns=1_000_000_000, deadline_ns=2_000_000_000
+    )
+    assert store.optional_attempt_receipt("action") == {
+        "request_id": "action",
+        "usage": {
+            "tcp_connects": 0,
+            "udp_datagrams": 0,
+            "protocol_requests": 0,
+            "tx_bytes": 0,
+            "rx_bytes": 0,
+        },
+        "attempts": [
+            {
+                "attempt_id": "attempt-1",
+                "state": "running",
+                "started_ns": 1_000_000_000,
+                "deadline_ns": 2_000_000_000,
+                "elapsed_ms": 0,
+                "deadline_exceeded": False,
+                "usage": {
+                    "tcp_connects": 0,
+                    "udp_datagrams": 0,
+                    "protocol_requests": 0,
+                    "tx_bytes": 0,
+                    "rx_bytes": 0,
+                },
+            }
+        ],
+    }
+
+
 def test_exact_duplicate_event_is_idempotent_but_conflict_latches_stop(tmp_path):
     store = ledger(tmp_path)
     reserve(store)

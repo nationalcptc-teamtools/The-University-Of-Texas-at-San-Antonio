@@ -15,7 +15,9 @@ from typing import Any
 
 _RUN_ID = re.compile(r"^accept-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$")
 _ACCEPTANCE_ROOT = Path("/acceptance")
-_AUDIT_ROOT = Path("/var/lib/cptc-harness/portcast-live-v1/runtime/audit")
+_AUDIT_ROOT = Path(
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit"
+)
 _AGE = Path("/app/vendor/portcast-rootfs-runtime/bin/age")
 _RECIPIENT = "age1wkvzdqsamcwuug4nk3q6g4c3zp44dkx2taak89ywh2ztvpdcpu0qavdfrv"
 _SYNTHETIC = b"portcast-local-synthetic-systemd-acceptance-v1\n"

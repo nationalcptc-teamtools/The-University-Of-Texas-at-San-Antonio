@@ -330,6 +330,8 @@ func main() {
 				"--ro-bind", anchorPath, anchorPath, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
 				"--dir", "/var", "--dir", "/var/lib", "--dir", "/var/lib/cptc-harness",
 				"--dir", "/var/lib/cptc-harness/portcast-live-v1", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger",
+				// The coordinator writes continuation state before starting this
+				// child. The broker may inspect only the exact historical ledger.
 				"--ro-bind", ledger, ledger, "--chdir", ledger,
 			}
 			bwrapArgs = append(bwrapArgs, pythonArgs("/app/testing/cptc11_lab/portcast_service.py", "--broker-worker")...)
@@ -354,7 +356,9 @@ func main() {
 			"--unshare-user", "--uid", "0", "--gid", "0", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
 			"--die-with-parent", "--cap-drop", "ALL", "--clearenv",
 			"--ro-bind", "/app", "/app", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-			"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/audit", "/audit",
+				// New audit events belong to the v3 runtime. The old v2 audit is
+				// mounted read-only by systemd and is verified by the coordinator.
+				"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit", "/audit",
 			"--ro-bind-data", strconv.Itoa(fd), "/config.json",
 		}
 		bwrapArgs = append(bwrapArgs, pythonArgs("/app/cptc_harness/audit_worker.py")...)

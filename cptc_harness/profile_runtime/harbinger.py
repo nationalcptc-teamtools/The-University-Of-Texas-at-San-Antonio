@@ -199,7 +199,7 @@ def _validate_execution_state(runtime: Any, plan: Mapping[str, Any]) -> dict[str
     if (
         not isinstance(wire, dict)
         or wire.get("outcome") != "complete"
-        or wire.get("wave_id") != plan["plan_id"]
+        or wire.get("wave_id") != plan.get("workflow_id", plan["plan_id"])
         or wire.get("action_id") != plan["action_id"]
         or wire.get("profile_id") != plan["profile_id"]
         or wire.get("target_id") != plan["target_id"]
@@ -255,7 +255,7 @@ def _validate_execution_state(runtime: Any, plan: Mapping[str, Any]) -> dict[str
     expected_request = {
         "module_id": plan["module_id"],
         "policy_revision": plan["policy_revision"],
-        "workflow_id": plan["plan_id"],
+        "workflow_id": plan.get("workflow_id", plan["plan_id"]),
         "args": {"profile_id": plan["profile_id"]},
     }
     if any(request.get(name) != expected for name, expected in expected_request.items()):

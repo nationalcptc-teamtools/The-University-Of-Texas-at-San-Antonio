@@ -11,7 +11,12 @@ import time
 from typing import Any, Callable
 
 from ..contracts import Bounds, EvidenceRef, PolicyError, ProfileAction, _validate_profile_action
-from .broker_ipc import BrokerWireEvent, BrokerWireResult, ReservationBinding
+from .broker_ipc import (
+    BrokerWireEvent,
+    BrokerWireResult,
+    PortcastBrokerFailure,
+    ReservationBinding,
+)
 from .catalog import SealedProfile, load_profile, require_live_admission, validate_sealed_profile
 from .contracts import WireCounters
 from .receipts import ProfileWireReceipt
@@ -181,6 +186,8 @@ def dispatch_profile(
     capture: Callable[[bytes], EvidenceRef],
     receipt_sink: Callable[[ProfileWireReceipt], Any],
     stopped: Callable[[], bool],
+    *,
+    failure_stage_sink: Callable[[str], Any] | None = None,
 ) -> ProfileWireReceipt:
     """Reserve first, consume one broker nonce, then finalize before completion."""
 
@@ -203,8 +210,22 @@ def dispatch_profile(
         or not callable(capture)
         or not callable(receipt_sink)
         or not callable(stopped)
+        or failure_stage_sink is not None
+        and not callable(failure_stage_sink)
     ):
         raise PolicyError("trusted PortCast profile wire broker is unavailable")
+
+    def record_failure_stage(stage: str | None) -> None:
+        if stage is None or failure_stage_sink is None:
+            return
+        try:
+            failure_stage_sink(stage)
+        except Exception:
+            try:
+                ledger.stop("profile wire failure stage audit failed")
+            except Exception:
+                pass
+            raise PolicyError("profile wire failure stage could not be recorded") from None
     started_ns = time.monotonic_ns()
     deadline_ns = started_ns + int(profile.budget.timeout_s * 1_000_000_000)
     started_at = _utc_now()
@@ -279,7 +300,10 @@ def dispatch_profile(
         measured = _parent_counters(ledger, exact_action.action_id, capture_bytes=0)
         if not _same_wire_counts(measured, result.counters):
             raise PolicyError("parent and broker wire accounting differ")
-    except Exception:
+    except Exception as error:
+        failure_stage = (
+            error.failure_stage if isinstance(error, PortcastBrokerFailure) else None
+        )
         _finish_noncomplete(
             ledger, exact_action.action_id, attempt_id, "uncertain", time.monotonic_ns()
         )
@@ -300,6 +324,8 @@ def dispatch_profile(
             receipt_sink(receipt)
         except Exception:
             ledger.stop("profile wire receipt audit failed")
+        else:
+            record_failure_stage(failure_stage)
         return receipt
 
     capture_ref = None
@@ -357,6 +383,8 @@ def dispatch_profile(
             receipt_sink(receipt)
         except Exception:
             ledger.stop("profile wire receipt audit failed")
+        else:
+            record_failure_stage(result.failure_stage)
         return receipt
 
     ended_ns = time.monotonic_ns()

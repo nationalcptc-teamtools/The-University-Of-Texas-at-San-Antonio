@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from collections import namedtuple
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import fcntl
 import grp
@@ -25,6 +25,8 @@ import socket
 import stat
 import subprocess
 import sys
+import time
+import uuid
 from typing import Any
 
 
@@ -38,11 +40,25 @@ SYSUSERS_SOURCE = Path("deployment/portcast-live-v1.sysusers")
 SYSUSERS_PATH = Path("/usr/lib/sysusers.d/cptc-harness-portcast.conf")
 ANCHOR_PATH = Path("/etc/cptc-harness/trust/portcast-live-v1.sha256")
 STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v1")
+# v3 state is deliberately outside the historical v1 tree. systemd mounts
+# only this child at the logical v1/runtime/v3 path.
+V3_STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v3")
+V3_RUNTIME_PATH = V3_STATE_PATH / "runtime"
+OLD_LEDGER_PATH = STATE_PATH / "runtime/ledger/cptc11-dell-validation"
+OLD_AUDIT_PATH = STATE_PATH / "runtime/runtime/audit"
+OLD_RESULT_PATH = STATE_PATH / (
+    "runtime/runtime/results/cptc11-portcast-public-identity-action-v2.json"
+)
+_DEFAULT_STATE_PATH = STATE_PATH
 SOCKET_PATH = Path("/run/cptc-harness/portcast-live-v1.sock")
 CREDENTIAL_PATHS = (
     Path("/etc/cptc-harness/credentials/cptc11-dell.cred"),
     Path("/etc/cptc-harness/credentials/cptc11-kali.cred"),
 )
+CLOCK_ATTESTATION_PATH = Path(
+    "/run/cptc-harness-clock/portcast-live-v1.json"
+)
+CLOCK_ATTESTATION_TTL_NS = 30_000_000_000
 MANIFEST_RELATIVE = Path("cptc_harness/resources/release-integrity.json")
 RELEASE_ID = "portcast-live-v1"
 ROOT_UID = 0
@@ -67,6 +83,7 @@ _EXECUTABLE_FILES = frozenset(
 )
 _ROOTFS_ANCHOR = "/etc/cptc-harness/trust/portcast-live-v1.sha256"
 _ROOTFS_DEPLOYMENT_LOCK = "/var/lib/cptc-harness/portcast-live-v1/deployment.lock"
+_CLOCK_OFFSET = re.compile(r"Offset:\s*([+-]?[0-9.]+)\s*(ns|us|µs|ms|s)\b")
 
 
 class DeploymentError(RuntimeError):
@@ -74,6 +91,26 @@ class DeploymentError(RuntimeError):
 
 
 ServiceIdentity = namedtuple("ServiceIdentity", "account uid gid")
+
+
+def _v3_state_path() -> Path:
+    """Resolve the fixed v3 sibling for the selected deployment state root."""
+
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V3_STATE_PATH
+    return STATE_PATH.parent / "portcast-live-v3"
+
+
+def _historical_paths() -> tuple[Path, Path, Path]:
+    """Resolve only the fixed historical paths below the v1 state root."""
+
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return OLD_LEDGER_PATH, OLD_AUDIT_PATH, OLD_RESULT_PATH
+    return (
+        STATE_PATH / "runtime/ledger/cptc11-dell-validation",
+        STATE_PATH / "runtime/runtime/audit",
+        STATE_PATH / "runtime/runtime/results/cptc11-portcast-public-identity-action-v2.json",
+    )
 
 
 def _resolve_service_identity() -> ServiceIdentity:
@@ -386,32 +423,90 @@ def _metadata(path: Path, *, directory: bool, mode_mask: int, allow_empty: bool)
     return info
 
 
-def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
-    """Create the sole service-writable subtree without changing control state."""
+def _service_metadata(
+    path: Path,
+    identity: ServiceIdentity,
+    *,
+    directory: bool,
+    mode: int,
+    allow_empty: bool,
+) -> os.stat_result:
+    """Validate a historical service-owned input without changing it."""
 
-    runtime = STATE_PATH / "runtime"
+    try:
+        info = path.lstat()
+    except OSError:
+        raise DeploymentError(f"required historical path is unavailable: {path}") from None
+    if (
+        (not stat.S_ISDIR(info.st_mode) if directory else not stat.S_ISREG(info.st_mode))
+        or info.st_uid != identity.uid
+        or info.st_gid != identity.gid
+        or stat.S_IMODE(info.st_mode) != mode
+        or not allow_empty and info.st_size == 0
+        or not directory and info.st_nlink != 1
+    ):
+        raise DeploymentError(f"historical path metadata differs: {path}")
+    return info
+
+
+def _validate_historical_inputs(identity: ServiceIdentity) -> None:
+    """Check the exact v1 continuation inputs and never create or mutate them."""
+
+    ledger, audit, result = _historical_paths()
+    _service_metadata(
+        ledger, identity, directory=True, mode=0o700, allow_empty=True
+    )
+    _service_metadata(
+        audit, identity, directory=True, mode=0o700, allow_empty=True
+    )
+    _service_metadata(
+        result, identity, directory=False, mode=0o600, allow_empty=False
+    )
+
+
+def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
+    """Create only the v3 service-writable subtree."""
+
+    parent = _v3_state_path()
+    try:
+        info = parent.lstat()
+    except FileNotFoundError:
+        try:
+            parent.mkdir(mode=0o755)
+            os.chown(parent, ROOT_UID, ROOT_GID)
+            parent.chmod(0o755)
+        except OSError:
+            raise DeploymentError("PortCast v3 state parent cannot be created") from None
+        info = parent.lstat()
+    except OSError:
+        raise DeploymentError("PortCast v3 state parent is unavailable") from None
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != ROOT_UID
+        or info.st_gid != ROOT_GID
+        or stat.S_IMODE(info.st_mode) != 0o755
+    ):
+        raise DeploymentError("PortCast v3 state parent metadata differs")
+    runtime = parent / "runtime"
     try:
         info = runtime.lstat()
     except FileNotFoundError:
         try:
             runtime.mkdir(mode=0o700)
-        except OSError:
-            raise DeploymentError("PortCast service runtime cannot be created") from None
-        try:
             os.chown(runtime, identity.uid, identity.gid)
             runtime.chmod(0o700)
             info = runtime.lstat()
         except OSError:
-            raise DeploymentError("PortCast service runtime metadata differs") from None
+            raise DeploymentError("PortCast v3 service runtime cannot be created") from None
     except OSError:
-        raise DeploymentError("PortCast service runtime is unavailable") from None
+        raise DeploymentError("PortCast v3 service runtime is unavailable") from None
     if (
         not stat.S_ISDIR(info.st_mode)
         or info.st_uid != identity.uid
         or info.st_gid != identity.gid
         or stat.S_IMODE(info.st_mode) != 0o700
     ):
-        raise DeploymentError("PortCast service runtime metadata differs")
+        raise DeploymentError("PortCast v3 service runtime metadata differs")
     return runtime
 
 
@@ -422,6 +517,7 @@ def _prerequisites(identity: ServiceIdentity | None = None) -> ServiceIdentity:
     _metadata(STATE_PATH, directory=True, mode_mask=0o077, allow_empty=True)
     for path in CREDENTIAL_PATHS:
         _metadata(path, directory=False, mode_mask=0o077, allow_empty=False)
+    _validate_historical_inputs(identity)
     _prepare_runtime_subtree(identity)
     return identity
 
@@ -555,6 +651,164 @@ def _anchor_payload(manifest: dict[str, Any], manifest_sha256: str) -> bytes:
     ).encode("ascii")
 
 
+def _timedatectl_clock() -> tuple[bool, float | None]:
+    """Read the host synchronization state through fixed timedatectl calls."""
+
+    environment = {"LC_ALL": "C"}
+    deadline = time.monotonic() + 30
+    try:
+        status = subprocess.run(
+            ("/usr/bin/timedatectl", "show", "--no-pager", "--property=NTPSynchronized", "--value"),
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=environment,
+            close_fds=True,
+            timeout=30,
+        )
+        remaining = max(0.01, deadline - time.monotonic())
+        details = subprocess.run(
+            ("/usr/bin/timedatectl", "timesync-status", "--no-pager"),
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=environment,
+            close_fds=True,
+            timeout=remaining,
+        )
+    except (OSError, subprocess.SubprocessError):
+        raise DeploymentError("host clock synchronization status is unavailable") from None
+    if status.returncode != 0 or details.returncode != 0:
+        raise DeploymentError("host clock synchronization status is unavailable")
+    try:
+        synchronized = status.stdout.decode("ascii", "strict").strip() == "yes"
+        text = details.stdout.decode("utf-8", "strict")
+    except UnicodeDecodeError:
+        raise DeploymentError("host clock synchronization status is invalid") from None
+    if not synchronized:
+        raise DeploymentError("host clock is not synchronized")
+    found = _CLOCK_OFFSET.search(text)
+    if found is None:
+        raise DeploymentError("host clock offset is unavailable")
+    scale = {"ns": 1e-9, "us": 1e-6, "µs": 1e-6, "ms": 1e-3, "s": 1}
+    try:
+        offset = float(found[1]) * scale[found[2]]
+    except (KeyError, ValueError, OverflowError):
+        raise DeploymentError("host clock offset is invalid") from None
+    if not -2.0 <= offset <= 2.0:
+        raise DeploymentError("host clock offset exceeds policy")
+    return True, offset
+
+
+def _boot_identity() -> str:
+    try:
+        value = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+        parsed = uuid.UUID(value)
+    except (OSError, UnicodeError, ValueError, AttributeError):
+        raise DeploymentError("host boot identity is unavailable") from None
+    if str(parsed) != value.lower():
+        raise DeploymentError("host boot identity is invalid")
+    return value.lower()
+
+
+def _write_clock_attestation(value: bytes, service_gid: int) -> None:
+    path = CLOCK_ATTESTATION_PATH
+    if (
+        not path.is_absolute()
+        or type(service_gid) is not int
+        or service_gid in {0, 65534}
+    ):
+        raise DeploymentError("clock attestation path is fixed")
+    try:
+        parent = path.parent
+        parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+        parent_info = parent.lstat()
+        if (
+            not stat.S_ISDIR(parent_info.st_mode)
+            or parent_info.st_uid != ROOT_UID
+            or parent_info.st_mode & 0o022
+        ):
+            raise DeploymentError("clock attestation directory metadata differs")
+        if path.exists() or path.is_symlink():
+            info = path.lstat()
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != ROOT_UID
+                or info.st_gid != service_gid
+                or stat.S_IMODE(info.st_mode) != 0o440
+                or info.st_nlink != 1
+            ):
+                raise DeploymentError("clock attestation file metadata differs")
+        temporary = path.with_name("." + path.name + ".new")
+        if temporary.exists() or temporary.is_symlink():
+            raise DeploymentError("clock attestation staging file requires review")
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+            0o440,
+        )
+        try:
+            written = 0
+            while written < len(value):
+                written += os.write(descriptor, value[written:])
+            os.fchmod(descriptor, 0o440)
+            os.fchown(descriptor, ROOT_UID, service_gid)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.replace(temporary, path)
+        _fsync_parent(path)
+    except DeploymentError:
+        raise
+    except OSError:
+        raise DeploymentError("clock attestation could not be written atomically") from None
+    finally:
+        try:
+            if 'temporary' in locals() and temporary.exists():
+                temporary.unlink()
+        except OSError:
+            pass
+
+
+def attest_clock() -> dict[str, Any]:
+    """Record a root-created, 30-second host clock attestation."""
+
+    if os.geteuid() != ROOT_UID:
+        raise DeploymentError("attest-clock requires the root deployment identity")
+    service_identity = _resolve_service_identity()
+    synchronized, offset = _timedatectl_clock()
+    observed_ns = time.monotonic_ns()
+    observed_at = datetime.now(timezone.utc)
+    observed_utc = observed_at.isoformat(timespec="microseconds").replace("+00:00", "Z")
+    expires_utc = (observed_at + timedelta(seconds=30)).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    payload = {
+        "version": 1,
+        "boot_id": _boot_identity(),
+        "observed_utc": observed_utc,
+        "expires_utc": expires_utc,
+        "observed_monotonic_ns": observed_ns,
+        "expires_monotonic_ns": observed_ns + CLOCK_ATTESTATION_TTL_NS,
+        "synchronized": synchronized,
+        "offset_s": float(offset),
+        "source": "timedatectl",
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+    _write_clock_attestation(encoded, service_identity.gid)
+    return {
+        "operation": "attest-clock",
+        "path": str(CLOCK_ATTESTATION_PATH),
+        "expires_monotonic_ns": payload["expires_monotonic_ns"],
+        "ttl_seconds": CLOCK_ATTESTATION_TTL_NS // 1_000_000_000,
+        "synchronized": True,
+        "offset_s": float(offset),
+        "service_started": False,
+        "target_traffic": False,
+        "state_preserved": True,
+    }
+
+
 def _verified_static_generation(
     release: Path,
     unit: Path,
@@ -636,7 +890,13 @@ def _prepare_tree(path: Path, payloads: dict[str, bytes]) -> None:
         _write(target, payload, _release_mode(relative))
     for relative in (
         "etc/cptc-harness/trust", "run/cptc-harness",
-        "var/lib/cptc-harness/portcast-live-v1/runtime/audit", "tmp",
+        "run/cptc-harness-clock",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results",
+        "var/lib/cptc-harness/portcast-live-v3/runtime",
+        "tmp",
     ):
         directory = path / relative
         directory.mkdir(parents=True, exist_ok=True)
@@ -678,7 +938,14 @@ def plan(expected_manifest_sha256: str | None) -> dict[str, Any]:
         "release_path": str(RELEASE_PATH),
         "unit_path": str(UNIT_PATH),
         "anchor_path": str(ANCHOR_PATH),
+        "clock_attestation_path": str(CLOCK_ATTESTATION_PATH),
+        "clock_attestation_ttl_seconds": CLOCK_ATTESTATION_TTL_NS // 1_000_000_000,
         "state_path": str(STATE_PATH),
+        "v3_state_path": str(_v3_state_path()),
+        "v3_runtime_path": str(_v3_state_path() / "runtime"),
+        "historical_ledger_path": str(_historical_paths()[0]),
+        "historical_audit_path": str(_historical_paths()[1]),
+        "historical_result_path": str(_historical_paths()[2]),
         "credential_paths": [str(path) for path in CREDENTIAL_PATHS],
         "service_start_requested": False,
         "target_traffic": False,
@@ -769,6 +1036,26 @@ def _apply_locked(manifest: dict[str, Any], expected_manifest_sha256: str) -> di
 
 
 def _startup_smoke(manifest: dict[str, Any]) -> None:
+    clock_bind = []
+    try:
+        clock_info = CLOCK_ATTESTATION_PATH.lstat()
+    except FileNotFoundError:
+        clock_info = None
+    if clock_info is not None and (
+        not stat.S_ISREG(clock_info.st_mode)
+        or clock_info.st_uid != ROOT_UID
+        or clock_info.st_nlink != 1
+        or stat.S_IMODE(clock_info.st_mode) != 0o440
+    ):
+        raise DeploymentError("clock attestation file metadata differs")
+    if clock_info is not None:
+        clock_bind = [
+            "--dir",
+            "/run/cptc-harness-clock",
+            "--ro-bind",
+            str(CLOCK_ATTESTATION_PATH),
+            "/run/cptc-harness-clock/portcast-live-v1.json",
+        ]
     completed = subprocess.run(
         (
             "/usr/bin/bwrap",
@@ -799,9 +1086,12 @@ def _startup_smoke(manifest: dict[str, Any]) -> None:
             "/etc/cptc-harness",
             "--dir",
             "/etc/cptc-harness/trust",
+            "--tmpfs",
+            "/run",
             "--ro-bind",
             str(ANCHOR_PATH),
             _ROOTFS_ANCHOR,
+            *clock_bind,
             "--dir",
             "/var",
             "--dir",
@@ -820,8 +1110,6 @@ def _startup_smoke(manifest: dict[str, Any]) -> None:
             "--ro-bind",
             "/sys",
             "/sys",
-            "--tmpfs",
-            "/run",
             "--tmpfs",
             "/tmp",
             "--remount-ro",
@@ -911,7 +1199,8 @@ def verify(*, inspect: bool) -> dict[str, Any]:
         "credentials": [
             {"path": str(path), "metadata_verified": True} for path in CREDENTIAL_PATHS
         ],
-        "startup_smoke": "verified-no-target",
+        "startup_smoke": "release-only-no-target",
+        "clock_admission_checked": False,
         "inspect": "not-requested",
         "target_traffic": False,
         "state_preserved": True,
@@ -1368,6 +1657,7 @@ def main(argv: list[str] | None = None) -> int:
     subcommands = parser.add_subparsers(dest="operation", required=True)
     plan_parser = subcommands.add_parser("plan")
     plan_parser.add_argument("--expected-manifest-sha256")
+    subcommands.add_parser("attest-clock")
     apply_parser = subcommands.add_parser("apply")
     apply_parser.add_argument("--expected-manifest-sha256", required=True)
     subcommands.add_parser("verify")
@@ -1380,6 +1670,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if arguments.operation == "plan":
             result = plan(arguments.expected_manifest_sha256)
+        elif arguments.operation == "attest-clock":
+            result = attest_clock()
         elif arguments.operation == "apply":
             result = apply(arguments.expected_manifest_sha256)
         elif arguments.operation == "verify":

@@ -617,6 +617,115 @@ def test_parent_transport_exposes_no_portcast_channel_surface():
     assert not hasattr(LabSession, "acquire_portcast_channel_provider")
 
 
+def test_service_portcast_wrapper_opens_only_the_frozen_direct_tcpip_channel():
+    calls = []
+    channel = object()
+
+    class NestedTransport:
+        def open_channel(self, *args, **kwargs):
+            calls.append((args, kwargs))
+            return channel
+
+    provider = transport._ServicePortcastChannelProvider(NestedTransport(), timeout_s=7.5)
+
+    assert provider.open_portcast_channel() is channel
+    assert calls == [
+        (
+            ("direct-tcpip", ("10.0.1.30", 8096), ("127.0.0.1", 0)),
+            {"timeout": 7.5},
+        )
+    ]
+
+
+def test_paramiko_dell_factory_grants_fixed_portcast_provider_only_to_service_credential(
+    monkeypatch,
+):
+    class NestedTransport:
+        def __init__(self, _channel):
+            self.authenticated = False
+
+        def start_client(self, *, timeout):
+            assert timeout == 20
+
+        def get_remote_server_key(self):
+            return object()
+
+        def auth_password(self, username, secret, *, fallback):
+            assert username == DEFAULT_CONFIG.kali.username
+            assert secret == "synthetic-secret"
+            assert fallback is False
+            self.authenticated = True
+
+        def is_authenticated(self):
+            return self.authenticated
+
+        def close(self):
+            pass
+
+    class DellTransport:
+        def open_session(self, *, timeout):
+            assert timeout == 15
+            return SimpleNamespace(exec_command=lambda _command: None, close=lambda: None)
+
+    resolver = SimpleNamespace(resolve=lambda _credential: "synthetic-secret")
+    monkeypatch.setattr(
+        transport,
+        "_load_paramiko",
+        lambda: SimpleNamespace(Transport=NestedTransport),
+    )
+    monkeypatch.setattr(
+        transport,
+        "_fingerprint",
+        lambda _key: DEFAULT_CONFIG.kali.host_key_sha256,
+    )
+    dell = transport._ParamikoDell(DellTransport(), resolver, SimpleNamespace())
+
+    service_connection = dell.open_kali(
+        transport._proxy_argv(SERVICE_CONFIG),
+        DEFAULT_CONFIG.kali,
+        SERVICE_CONFIG.kali_credential,
+    )
+    operator_connection = dell.open_kali(
+        transport._proxy_argv(DEFAULT_CONFIG),
+        DEFAULT_CONFIG.kali,
+        DEFAULT_CONFIG.kali_credential,
+    )
+
+    assert type(service_connection) is transport._ServiceParamikoKali
+    assert type(operator_connection) is transport._ParamikoKali
+    assert not hasattr(operator_connection, "_take_portcast_channel_provider")
+    assert (
+        type(service_connection._take_portcast_channel_provider())
+        is transport._ServicePortcastChannelProvider
+    )
+    with pytest.raises(TransportError, match="unavailable"):
+        service_connection._take_portcast_channel_provider()
+
+
+def test_service_portcast_channel_is_gated_by_authority_preflight_control_and_one_use():
+    class Provider:
+        def __init__(self):
+            self.opens = 0
+
+        def open_portcast_channel(self):
+            self.opens += 1
+            return object()
+
+    session = object.__new__(LabSession)
+    session.config = SERVICE_CONFIG
+    session._service_session = True
+    session._kali = object()
+    session._portcast_candidate_ready = True
+    session._portcast_alternate_denied = True
+    session._portcast_channel_used = False
+    session._service_portcast_channel_provider = Provider()
+
+    assert session._open_portcast_channel() is not None
+    with pytest.raises(PreflightRejected, match="one use"):
+        session._open_portcast_channel()
+    assert session._service_portcast_channel_provider.opens == 1
+
+
 def test_blocked_portcast_dispatch_does_not_open_even_the_fixed_channel(tmp_path):
     dell = FakeDell()
     run = RunDirectory.create(tmp_path, encryptor=FakeEncryptor())
@@ -897,14 +1006,28 @@ def test_scan_portcast_cli_uses_frozen_session_runner_and_writes_no_target_artif
     def runner():
         calls.append(True)
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v1",
+            "action_id": "cptc11-portcast-public-identity-action-v3",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": "passed",
             "profile_id": "web.http_jellyfin_public_identity",
             "receipt_outcome": "complete",
             "status": "complete",
-            "workspace": "/var/lib/cptc-harness/portcast-live-v1/runtime",
+            "workspace": "cptc11-portcast-workspace",
+            "execution": {
+                "reservation_state": "complete",
+                "attempt_count": 1,
+                "attempt_state": "complete",
+                "transport_counters": {
+                    "tcp_connects": 1,
+                    "udp_datagrams": 0,
+                    "protocol_requests": 1,
+                    "tx_bytes": 103,
+                    "rx_bytes": 282,
+                },
+                "wire_counters_verified": True,
+                "result_receipt_present": True,
+            },
         }
 
     status = main(
@@ -915,14 +1038,199 @@ def test_scan_portcast_cli_uses_frozen_session_runner_and_writes_no_target_artif
     result = json.loads(output.getvalue())
     run_path = Path(result["run_directory"])
     assert status == 0 and result["status"] == "passed"
-    assert result["action_id"] == "cptc11-portcast-public-identity-action-v1"
+    assert result["action_id"] == "cptc11-portcast-public-identity-action-v3"
     assert result["receipt_outcome"] == "complete"
     assert result["cleanup_status"] == "passed"
+    assert result["execution"] == {
+        "reservation_state": "complete",
+        "attempt_count": 1,
+        "attempt_state": "complete",
+        "failure_stage": None,
+        "transport_counters": {
+            "tcp_connects": 1,
+            "udp_datagrams": 0,
+            "protocol_requests": 1,
+            "tx_bytes": 103,
+            "rx_bytes": 282,
+        },
+        "wire_counters_verified": True,
+        "result_receipt_present": True,
+    }
+    events = [json.loads(line) for line in (run_path / "transcript.jsonl").read_text().splitlines()]
+    coordinator = next(event for event in events if event["event"] == "profile.coordinator")
+    assert {
+        key: coordinator[key]
+        for key in (
+            "attempt_count",
+            "attempt_state",
+            "failure_stage",
+            "protocol_requests",
+            "reservation_state",
+            "result_receipt_present",
+            "rx_bytes",
+            "tcp_connects",
+            "tx_bytes",
+            "udp_datagrams",
+            "wire_counters_verified",
+        )
+    } == {
+        "attempt_count": 1,
+        "attempt_state": "complete",
+        "failure_stage": None,
+        "protocol_requests": 1,
+        "reservation_state": "complete",
+        "result_receipt_present": True,
+        "rx_bytes": 282,
+        "tcp_connects": 1,
+        "tx_bytes": 103,
+        "udp_datagrams": 0,
+        "wire_counters_verified": True,
+    }
     assert len(calls) == 1
     assert calls == [True]
     assert dell.preflight_calls == 0
     assert dell.kali.commands == []
     assert not list(run_path.glob("portcast-identity.*.age"))
+
+
+def test_scan_portcast_cli_rejects_extra_raw_result_without_disclosing_it(tmp_path):
+    output = io.StringIO()
+    marker = "raw-client-value-must-not-appear"
+
+    def runner():
+        return {
+            "action_id": "cptc11-portcast-public-identity-action-v3",
+            "audit_verified": True,
+            "automatic_retry": False,
+            "cleanup_status": "passed",
+            "profile_id": "web.http_jellyfin_public_identity",
+            "receipt_outcome": "complete",
+            "status": "complete",
+            "workspace": "cptc11-portcast-workspace",
+            "execution": {
+                "reservation_state": "complete",
+                "attempt_count": 1,
+                "attempt_state": "complete",
+                "transport_counters": {
+                    "tcp_connects": 1,
+                    "udp_datagrams": 0,
+                    "protocol_requests": 1,
+                    "tx_bytes": 103,
+                    "rx_bytes": 282,
+                },
+                "wire_counters_verified": True,
+                "result_receipt_present": True,
+            },
+            "body": marker,
+        }
+
+    status = main(
+        ["scan-portcast", "--run-root", str(tmp_path)],
+        stdout=output,
+        encryptor=FakeEncryptor(),
+        portcast_session_runner=runner,
+    )
+
+    result = json.loads(output.getvalue())
+    transcript = (Path(result["run_directory"]) / "transcript.jsonl").read_text()
+    assert status == 1
+    assert result["status"] == "failed"
+    assert marker not in output.getvalue()
+    assert marker not in transcript
+
+
+def test_scan_portcast_cli_does_not_render_missing_counters_as_zero(tmp_path):
+    output = io.StringIO()
+
+    def runner():
+        return {
+            "action_id": "cptc11-portcast-public-identity-action-v3",
+            "audit_verified": True,
+            "automatic_retry": False,
+            "cleanup_status": None,
+            "profile_id": "web.http_jellyfin_public_identity",
+            "receipt_outcome": None,
+            "status": "blocked",
+            "workspace": "cptc11-portcast-workspace",
+            "reason": "frozen action has incomplete durable audit history",
+            "execution": {
+                "reservation_state": None,
+                "attempt_count": 0,
+                "attempt_state": None,
+                "transport_counters": None,
+                "wire_counters_verified": False,
+                "result_receipt_present": False,
+            },
+        }
+
+    status = main(
+        ["scan-portcast", "--run-root", str(tmp_path)],
+        stdout=output,
+        encryptor=FakeEncryptor(),
+        portcast_session_runner=runner,
+    )
+
+    result = json.loads(output.getvalue())
+    events = [
+        json.loads(line)
+        for line in (Path(result["run_directory"]) / "transcript.jsonl").read_text().splitlines()
+    ]
+    coordinator = next(event for event in events if event["event"] == "profile.coordinator")
+    assert status == 1
+    assert result["execution"]["transport_counters"] is None
+    assert not {
+        "tcp_connects", "udp_datagrams", "protocol_requests", "tx_bytes", "rx_bytes"
+    } & set(coordinator)
+
+
+def test_scan_portcast_cli_reports_only_the_fixed_failure_stage(tmp_path):
+    output = io.StringIO()
+
+    def runner():
+        return {
+            "action_id": "cptc11-portcast-public-identity-action-v3",
+            "audit_verified": True,
+            "automatic_retry": False,
+            "cleanup_status": "passed",
+            "profile_id": "web.http_jellyfin_public_identity",
+            "receipt_outcome": "uncertain",
+            "status": "uncertain",
+            "workspace": "cptc11-portcast-workspace",
+            "reason": "PortCast profile transport did not complete",
+            "execution": {
+                "reservation_state": "uncertain",
+                "attempt_count": 1,
+                "attempt_state": "uncertain",
+                "transport_counters": {
+                    "tcp_connects": 0,
+                    "udp_datagrams": 0,
+                    "protocol_requests": 0,
+                    "tx_bytes": 0,
+                    "rx_bytes": 0,
+                },
+                "wire_counters_verified": True,
+                "result_receipt_present": True,
+                "failure_stage": "target_open",
+            },
+        }
+
+    status = main(
+        ["scan-portcast", "--run-root", str(tmp_path)],
+        stdout=output,
+        encryptor=FakeEncryptor(),
+        portcast_session_runner=runner,
+    )
+
+    result = json.loads(output.getvalue())
+    events = [
+        json.loads(line)
+        for line in (Path(result["run_directory"]) / "transcript.jsonl").read_text().splitlines()
+    ]
+    coordinator = next(event for event in events if event["event"] == "profile.coordinator")
+    assert status == 1
+    assert result["execution"]["failure_stage"] == "target_open"
+    assert coordinator["failure_stage"] == "target_open"
+    assert coordinator["automatic_retry"] is False
 
 
 def test_run_directory_is_private_and_refuses_incomplete_command_streams(tmp_path):
@@ -1073,6 +1381,30 @@ def test_cli_exposes_only_preflight_and_exact_dc_scan(
         assert typed["collection_state"] == "unmetered_lab_acceptance"
         assert typed["confirmed_vulnerability"] is False
     assert summary["status"] == "passed"
+
+
+def test_cli_portcast_preflight_cannot_open_the_target(tmp_path):
+    dell = FakeDell()
+    stdout = io.StringIO()
+
+    status = main(
+        ["preflight-portcast", "--run-root", str(tmp_path)],
+        connector=FakeConnector(dell),
+        stdout=stdout,
+    )
+
+    assert status == 0
+    assert dell.kali.commands == [
+        KALI_OPENSSH_INVENTORY_ARGV,
+        KALI_PORTCAST_RELAY_POLICY_ARGV,
+    ]
+    assert dell.kali.alternate_denial_checks == 1
+    assert dell.kali.portcast_channels == 0
+    summary = json.loads(stdout.getvalue())
+    assert summary["command"] == "preflight-portcast"
+    assert summary["status"] == "passed"
+    run_path = Path(summary["run_directory"])
+    assert sorted(path.name for path in run_path.iterdir()) == ["transcript.jsonl"]
 
 
 def test_failed_remote_command_stores_capped_stdout_and_stderr_before_raising(tmp_path):

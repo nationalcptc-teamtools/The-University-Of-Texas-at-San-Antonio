@@ -117,6 +117,27 @@ class SyntheticWireBroker(PortcastBrokerClient):
         return None
 
 
+class StagedFailureWireBroker(SyntheticWireBroker):
+    """Return a sealed, zero-traffic failure at the fixed target-open stage."""
+
+    def execute_once(self, _nonce, _record_event, _stopped):
+        self.events.append(("open",))
+        self.opens += 1
+        descriptor = memfd_create("broker-staged-failure", MFD_CLOEXEC | MFD_ALLOW_SEALING)
+        seal_readonly(descriptor)
+        return BrokerWireResult(
+            "uncertain",
+            "transport_interrupted",
+            WireCounters(0, 0, 0, 0, 0, 0, 0),
+            descriptor,
+            0,
+            hashlib.sha256(b"").hexdigest(),
+            None,
+            self.expected_worker_sha256,
+            "target_open",
+        )
+
+
 def setup(tmp_path, raw=RAW_RESPONSE, *, with_broker=True):
     events, registry = [], build_registry()
     spec = registry.get("web.portcast_identity")
@@ -217,3 +238,32 @@ def test_duplicate_action_is_prewire_denial(tmp_path):
     assert broker.execute(request, actor="operator").status == "blocked"
     assert wire_broker.opens == 1 and ledger.stopped() is False
     assert audit.active_reservations == set()
+
+
+def test_fixed_failure_stage_is_audited_after_wire_receipt(tmp_path):
+    broker, request, ledger, audit, _wire_broker, events = setup(tmp_path)
+    staged = StagedFailureWireBroker(ledger, b"", events)
+    broker._profile_wire_broker = staged
+
+    result = broker.execute(request, actor="operator")
+
+    assert result.status == "uncertain"
+    assert staged.opens == 1
+    assert ledger.stopped() is True
+    assert ledger.attempt_receipt(request.request_id)["usage"] == {
+        "protocol_requests": 0,
+        "rx_bytes": 0,
+        "tcp_connects": 0,
+        "tx_bytes": 0,
+        "udp_datagrams": 0,
+    }
+    kinds = [event[0] for event in events]
+    receipt_index = kinds.index("profile_wire_receipt")
+    stage_index = kinds.index("profile_wire_failure_stage")
+    assert receipt_index < stage_index < kinds.index("operation_result")
+    assert events[stage_index] == (
+        "profile_wire_failure_stage",
+        request.request_id,
+        {"stage": "target_open", "automatic_retry": False},
+    )
+    assert audit.evidence == []

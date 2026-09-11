@@ -20,9 +20,18 @@ Prepare these items before `apply`:
   release manifest.
 - `/var/lib/cptc-harness/portcast-live-v1` is an initialized `root:root`
   directory with mode `0700`. Keep the deployment lock, journal, release
-  history, trust records, and encrypted credentials root-owned. The helper
-  creates only `runtime/` below it, owned by `_cptc-portcast:cptc-harness`
-  with mode `0700`; mutable ledger and audit data remain in that subtree.
+  history, trust records, and encrypted credentials root-owned. The v3
+  continuation uses `/var/lib/cptc-harness/portcast-live-v3` as a root-owned
+  parent and creates only its `runtime/` child, owned by
+  `_cptc-portcast:cptc-harness` with mode `0700`.
+- The old v1 ledger at
+  `/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation`
+  is the only historical path that remains writable. The old audit directory
+  and v2 result are mounted read-only. The service has no broad v1 runtime
+  mount.
+- The release contains the reviewed public `age` recipient. It does not contain
+  the private identity. The service verifies the recipient and the sealed
+  `age` executable before it accepts a local request.
 - `/etc/cptc-harness/credentials/cptc11-dell.cred` and
   `/etc/cptc-harness/credentials/cptc11-kali.cred` are nonempty, regular,
   root-owned systemd encrypted-credential blobs. Remove all group and other
@@ -38,6 +47,29 @@ Create the encrypted blobs through the approved local systemd credential
 workflow. Do not put plaintext credentials in a command argument, environment
 variable, file in this repository, or deployment log. The helper checks file
 metadata only. It never reads or prints credential contents.
+
+## Host clock attestation
+
+Before a production service start, create the short-lived host clock record as
+root:
+
+```sh
+sudo /usr/bin/python3.14 -I -S deployment/manage-portcast-service.py attest-clock
+```
+
+The command accepts no path or user arguments. It calls the fixed host
+`timedatectl` commands with a 30-second deadline, verifies synchronization and
+an offset of at most two seconds, and writes
+`/run/cptc-harness-clock/portcast-live-v1.json` atomically. The file
+is root-owned with mode `0440`, bound into the private service root as one
+read-only file, and expires after 30 seconds of the current boot's monotonic
+clock. A boot identity change, malformed record, clock jump, or expiry blocks
+active work. The service does not access host D-Bus and does not mount a broad
+`/etc` tree. Run this command again for a later operating window.
+
+The audit writer and broker receive one shared `ClockService` from the opened
+runtime. They use the same validated attestation and cannot refresh it or
+change the host clock.
 
 ## Plan
 
@@ -155,9 +187,41 @@ or connect to Dell, Kali, or a target.
 The canonical service runs as `_cptc-portcast:cptc-harness`, retains an empty
 capability set and `NoNewPrivileges=yes`, and receives only its `runtime/`
 subtree as writable. It verifies its nonroot effective UID/GID, exact group
-set, service-owned runtime metadata, and service-user-owned systemd credential
-files before it opens a socket. The socket inherits the service user and
+set, service-owned runtime metadata, and root-owned, root-group, mode-`0440`
+systemd credential files before it opens a socket. The socket inherits the service user and
 `cptc-harness` group; the service does not rewrite its ownership.
+
+On the first start, the service creates the evidence runtime in a private
+staging directory. It validates the policy, public recipient, executable path
+and hash, directory layout, ownership, and modes. It then renames the complete
+directory into place and syncs the parent directory before it opens the local
+socket. Publication uses the Linux no-replace rename operation. A competing
+file, directory, or link blocks startup and is preserved. The service then
+opens the SQLite ledger and audit writer, performs recovery, checks SQLite and
+audit integrity, and retains that one runtime for the service lifetime. It
+does all of this before it loads target credentials or binds the socket.
+The v3 application runtime is the fixed logical path
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime`. Its host storage
+is `/var/lib/cptc-harness/portcast-live-v3/runtime`. The contained audit
+worker receives only the v3 `audit/` child. The historical ledger is the
+separate fixed `runtime/ledger/cptc11-dell-validation` directory. The old
+audit and result paths are read-only inputs for continuation verification.
+
+The coordinator loads the v2 plan and verifies the old audit chain and result
+before it reserves v3 state. It records the continuation proof in the old
+ledger, then uses the v3 runtime for new audit and result records. A changed,
+missing, or writable historical input blocks startup. The v2 action is never
+retried.
+
+A restart reuses that exact runtime. It does not repair or replace a partial
+final runtime or a corrupt ledger or audit chain. Incomplete staging
+directories are never treated as authority and remain available for review
+after an abrupt stop. The request handler cannot provision or reopen storage;
+both `inspect` and `execute` use the already-open startup authority.
+
+The public recipient is sealed in the frozen plan and service source. A change
+to either value requires a new plan hash, release seal, review, and deployment.
+The service does not read the operator's private `age` identity.
 
 The canonical service gives each accepted peer a fixed idle receive deadline.
 It contains a peer disconnect or broken response pipe and continues to serve
@@ -173,11 +237,49 @@ network authority; the worker cannot select another route or destination.
 The separate `inspect` command runs as the fixed authorized operator. The root
 deployment identity is refused. It sends only the fixed local `inspect`
 request and cannot send `execute`. The response contains state metadata only.
-A failed or unavailable
-inspection fails verification and does not retry.
+A failed or unavailable inspection fails verification and does not retry.
+After startup preparation succeeds, `inspect` validates existing state without
+creating or reopening a policy, ledger, audit writer, or evidence runtime.
+
+Before the first action, `inspect` returns `null`. After an action has durable
+admission history, it returns a blocked replay status and this fixed execution
+object:
+
+```json
+{
+  "reservation_state": "complete",
+  "attempt_count": 1,
+  "attempt_state": "complete",
+  "transport_counters": {
+    "tcp_connects": 1,
+    "udp_datagrams": 0,
+    "protocol_requests": 1,
+    "tx_bytes": 103,
+    "rx_bytes": 282
+  },
+  "wire_counters_verified": true,
+  "result_receipt_present": true
+}
+```
+
+The receive-byte value depends on the bounded response. It must be from 1 to
+8192. A clean first execution also requires `status=complete`,
+`reservation_state=complete`, one complete attempt, one connection, one
+request, 103 transmitted bytes, a verified wire-counter match, a result
+receipt, `receipt_outcome=complete`, and `cleanup_status=passed`. A later
+inspection reports `status=blocked` because replay is denied. It keeps the
+same completed execution metadata. Null counters mean the service has no
+verified attempt counters. They do not mean zero traffic.
+
+The response does not contain response bodies, headers, evidence paths,
+evidence hashes, credentials, stdout, or audit contents.
 
 Review the JSON fields `manifest_sha256`, `installed_unit_sha256`,
-`startup_smoke`, `inspect`, `target_traffic`, and `state_preserved`. Keep the
+`startup_smoke`, `clock_admission_checked`, `inspect`, `target_traffic`, and
+`state_preserved`. `release-only-no-target` verifies the installed release and
+isolated startup path. It deliberately reports `clock_admission_checked: false`.
+Create a fresh clock attestation immediately before the separate acceptance or
+production start gate. Keep the
 output with the deployment review record.
 
 ## Roll back

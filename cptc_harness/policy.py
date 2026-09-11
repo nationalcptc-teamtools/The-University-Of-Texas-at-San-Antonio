@@ -28,17 +28,58 @@ def strict_object(cls, value):
         raise PolicyError("missing or invalid policy field") from None
 
 
+def _host_identity(host):
+    if isinstance(host, str):
+        try:
+            return "ip", ipaddress.ip_address(host)
+        except ValueError:
+            pass
+    return "dns", host
+
+
+def _canonical_origin(scheme, host, port):
+    kind, identity = _host_identity(host)
+    if kind == "ip":
+        rendered_host = identity.compressed
+        if identity.version == 6:
+            rendered_host = f"[{rendered_host}]"
+    else:
+        rendered_host = host
+    return f"{scheme}://{rendered_host}:{port}"
+
+
+def _canonical_ip_origin(value):
+    try:
+        url = urlsplit(value)
+        port = url.port
+    except (TypeError, ValueError):
+        return None
+    if (url.scheme not in ("http", "https") or url.username or url.password
+            or url.path or url.query or url.fragment or not url.hostname or port is None):
+        return None
+    kind, address = _host_identity(url.hostname)
+    if kind != "ip":
+        return None
+    if address.version == 6 and not url.netloc.startswith("["):
+        return None
+    return _canonical_origin(url.scheme, url.hostname, port)
+
+
 def parse_target(value) -> TargetRef:
     target = strict_object(TargetRef, value)
     identifier(target.target_id)
-    url = urlsplit(target.canonical_url)
+    try:
+        url = urlsplit(target.canonical_url)
+        url_port = url.port
+    except (TypeError, ValueError):
+        raise PolicyError("target must be a canonical HTTP origin/base path") from None
     if url.scheme not in ("http", "https") or url.username or url.password or url.query or url.fragment:
         raise PolicyError("target must be a canonical HTTP origin/base path")
     if not url.hostname or not isinstance(target.port, int) or isinstance(target.port, bool) or not 1 <= target.port <= 65535:
         raise PolicyError("invalid target port/host")
     if any(ord(c) < 33 or ord(c) > 126 for c in target.canonical_url) or "\\" in target.canonical_url:
         raise PolicyError("invalid target URL characters")
-    if (url.scheme, url.hostname, url.port or (443 if url.scheme == "https" else 80), url.path or "/") != (target.scheme, target.host, target.port, target.base_path):
+    if (url.scheme, _host_identity(url.hostname), url_port or (443 if url.scheme == "https" else 80), url.path or "/") != (target.scheme, _host_identity(target.host), target.port, target.base_path):
         raise PolicyError("target identity does not match canonical URL")
     if not target.base_path.startswith("/") or ".." in target.base_path or "%" in target.base_path:
         raise PolicyError("invalid target base path")
@@ -77,7 +118,18 @@ def parse_policy(value) -> PolicySnapshot:
         targets.append(target)
     if len({t.target.target_id for t in targets}) != len(targets):
         raise PolicyError("duplicate target identifier")
-    if len({t.target.canonical_url for t in targets}) != len(targets):
+    target_identities = {
+        (
+            t.target.scheme,
+            _host_identity(t.target.host),
+            t.target.port,
+            t.target.base_path,
+        )
+        if _host_identity(t.target.host)[0] == "ip"
+        else t.target.canonical_url
+        for t in targets
+    }
+    if len(target_identities) != len(targets):
         raise PolicyError("duplicate target origin")
     value["targets"] = tuple(targets)
     value["approvals"] = tuple(strict_object(Approval, a) for a in value.get("approvals", []))
@@ -93,14 +145,31 @@ def parse_policy(value) -> PolicySnapshot:
     policy = strict_object(PolicySnapshot, value)
     for name in ("engagement_id", "revision", "workspace_id", "device_id", "operator_id"):
         identifier(getattr(policy, name))
+    target_aliases = {}
+    for target_policy in policy.targets:
+        target = target_policy.target
+        origin = _canonical_origin(target.scheme, target.host, target.port)
+        for alias in (target.target_id, origin):
+            target_aliases.setdefault(alias, set()).add(target.target_id)
     allowed_budget_keys = {
         "engagement": {policy.engagement_id}, "device": {policy.device_id}, "workspace": {policy.workspace_id},
-        "target": {f"{t.target.scheme}://{t.target.host}:{t.target.port}" for t in policy.targets},
         "realm": {t.auth_realm for t in policy.targets if t.auth_realm},
     }
+    target_limits = set()
     for limit in policy.budget_limits:
         if limit.scope == "workflow":
             identifier(limit.key)
+        elif limit.scope == "target":
+            matching_targets = target_aliases.get(limit.key)
+            if matching_targets is None:
+                canonical_ip_origin = _canonical_ip_origin(limit.key)
+                matching_targets = target_aliases.get(canonical_ip_origin, ())
+            if len(matching_targets) != 1:
+                raise PolicyError("budget scope key does not match policy")
+            logical_limit = (next(iter(matching_targets)), limit.counter)
+            if logical_limit in target_limits:
+                raise PolicyError("duplicate policy target budget limit")
+            target_limits.add(logical_limit)
         elif limit.key not in allowed_budget_keys[limit.scope]:
             raise PolicyError("budget scope key does not match policy")
     if policy.contract_version != 1:

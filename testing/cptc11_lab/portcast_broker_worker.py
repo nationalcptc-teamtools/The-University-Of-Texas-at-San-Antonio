@@ -28,6 +28,7 @@ from cptc_harness.memfd import (
     write_all,
 )
 from cptc_harness.profile_runtime.catalog import load_profile, require_live_admission
+from cptc_harness.profile_runtime.contracts import WireCounters
 from cptc_harness.profile_runtime.worker import WireExecutionError, capture_cleartext_http11
 
 
@@ -36,6 +37,30 @@ _PRODUCTION_LEDGER_ROOT = Path(
     "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
 )
 _BROKER_ROUTE = "100.85.84.30/32"
+_FAILURE_STAGES = frozenset(
+    {
+        "session_open",
+        "inventory",
+        "alternate_destination_control",
+        "deadline_before_target_open",
+        "target_open",
+        "connected_ack",
+        "wire_exchange",
+        "session_cleanup",
+    }
+)
+
+
+def _empty_counters() -> WireCounters:
+    return WireCounters(
+        tcp_connects=0,
+        udp_datagrams=0,
+        tls_handshakes=0,
+        protocol_requests=0,
+        tx_bytes=0,
+        rx_bytes=0,
+        capture_bytes=0,
+    )
 
 
 def _assert_exact_worker_descriptors() -> None:
@@ -270,31 +295,32 @@ def _execute(
     outcome = "uncertain"
     limitation = "transport_interrupted"
     first_byte_at = None
-    counters = None
+    counters = _empty_counters()
+    failure_stage: str | None = None
+    stage = "session_open"
+    channel: _AcknowledgedChannel | None = None
+    capture_started = False
     try:
         session.open()
+        stage = "inventory"
         session.preflight_portcast_inventory()
+        stage = "alternate_destination_control"
         if session.verify_portcast_alternate_destination_denied() is not True:
             raise PolicyError("PortCast alternate destination control differs")
-        if session._kali is None:
-            raise PolicyError("PortCast Kali transport is unavailable")
-        transport = getattr(session._kali, "_transport", None)
-        if transport is None:
-            raise PolicyError("PortCast worker transport owner differs")
+        stage = "deadline_before_target_open"
         if time.monotonic_ns() >= deadline_ns:
             raise PolicyError("PortCast canonical deadline reached before target open")
+        stage = "target_open"
         channel = _AcknowledgedChannel(
-            transport.open_channel(
-                "direct-tcpip",
-                ("10.0.1.30", 8096),
-                ("127.0.0.1", 0),
-                timeout=profile.budget.timeout_s,
-            ),
+            session._open_portcast_channel(),
             ipc,
             deadline_ns,
         )
+        stage = "connected_ack"
         channel.connected()
         try:
+            stage = "wire_exchange"
+            capture_started = True
             capture = capture_cleartext_http11(profile, channel)
             raw = capture.raw_response
             counters = capture.counters
@@ -305,12 +331,25 @@ def _execute(
             raw = error.raw_response
             counters = error.counters
             first_byte_at = channel.first_byte_at
-            outcome = error.outcome
+            outcome = "uncertain"
             limitation = error.limitation
+            failure_stage = "wire_exchange"
+    except BaseException:
+        failure_stage = stage
     finally:
-        session.close()
-    if counters is None:
-        raise PolicyError("PortCast worker has no wire accounting")
+        if channel is not None and not capture_started:
+            try:
+                channel.close()
+            except BaseException:
+                pass
+        try:
+            session.close()
+        except BaseException:
+            outcome = "uncertain"
+            limitation = "transport_interrupted"
+            failure_stage = "session_cleanup"
+    if failure_stage is not None and failure_stage not in _FAILURE_STAGES:
+        raise PolicyError("PortCast worker failure stage differs")
     descriptor = memfd_create("portcast-evidence", MFD_CLOEXEC | MFD_ALLOW_SEALING)
     try:
         write_all(descriptor, raw)
@@ -319,18 +358,18 @@ def _execute(
     except BaseException:
         os.close(descriptor)
         raise
-    return (
-        {
-            "kind": "result",
-            "outcome": outcome,
-            "limitation": limitation,
-            "first_byte_at": first_byte_at,
-            "evidence_bytes": len(raw),
-            "evidence_sha256": hashlib.sha256(raw).hexdigest(),
-            "counters": counters.as_dict(),
-        },
-        descriptor,
-    )
+    result = {
+        "kind": "result",
+        "outcome": outcome,
+        "limitation": limitation,
+        "first_byte_at": first_byte_at,
+        "evidence_bytes": len(raw),
+        "evidence_sha256": hashlib.sha256(raw).hexdigest(),
+        "counters": counters.as_dict(),
+    }
+    if failure_stage is not None:
+        result["failure_stage"] = failure_stage
+    return result, descriptor
 
 
 def main(*, verified_release: VerifiedRelease | None = None) -> int:

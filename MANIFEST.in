@@ -3,11 +3,12 @@ recursive-include docs/harness *.md *.txt *.json *.lock
 recursive-include docs/harness/portcast-vendor-inputs/files *
 recursive-include scripts *.py *.md
 recursive-include testing *.py
-include testing/cptc11_lab/README.md testing/cptc11_lab/portcast-live-plan-v1.json
+include testing/cptc11_lab/README.md testing/cptc11_lab/portcast-live-plan-v1.json testing/cptc11_lab/portcast-live-plan-v2.json testing/cptc11_lab/portcast-live-plan-v3.json
 recursive-include testing/cptc11_readonly_wave_v1 *.json *.md
 recursive-include deployment *
 recursive-include cptc11_readonly_wave_v1 *.py *.json
 include cptc_harness/profile_runtime/README.md
+include cptc_harness/audit_readonly.py
 recursive-include cptc_harness/profiles *.md *.json
 include cptc_harness/resources/portcast-bootstrap-v1.sha256
 include cptc_harness/resources/portcast-cpython-runtime-v1.json

@@ -8,8 +8,15 @@ import json
 
 import pytest
 
-from cptc_harness.contracts import Bounds, MergeBundle, PolicyError, RESOURCE_COUNTERS, digest
-from cptc_harness.ledger import Ledger
+from cptc_harness.contracts import (
+    Bounds,
+    BudgetLimit,
+    MergeBundle,
+    PolicyError,
+    RESOURCE_COUNTERS,
+    digest,
+)
+from cptc_harness.ledger import Ledger, ProfileContinuationProof
 
 
 def _signing_key():
@@ -218,6 +225,312 @@ def test_successful_handover_preserves_origins_assignments_totals_and_two_hop(tm
     assert device_c.usage()["request_limit"] == 5
     assert device_c.usage()["model_calls"] == 1
     assert source.stopped()
+
+
+def test_handover_preserves_reconciliation_tombstone_and_rejects_tampering(
+    tmp_path,
+):
+    key, public, _ = _signing_key()
+    _, _, destination_fingerprint = _signing_key()
+    source = Ledger(
+        tmp_path / "reconcile-source",
+        "engagement",
+        "source",
+        policy_revision="policy-v2",
+    )
+    predecessor = "spent-action"
+    source.reconcile_profile_predecessor(
+        predecessor_action_id=predecessor,
+        predecessor_plan_id="old-plan",
+        predecessor_plan_sha256="1" * 64,
+        successor_action_id="successor-action",
+        successor_plan_id="new-plan",
+        successor_plan_sha256="2" * 64,
+        reconciliation_sha256="3" * 64,
+        reason_code="clock-source-unavailable",
+    )
+    source.reserve("successor-action", _bounds(actions=1), workspace_id="workspace")
+    source.finish("successor-action", state="complete")
+    expected = source.profile_reconciliation(predecessor)
+    source.stop("operator handover")
+    bundle = source.handover_bundle(
+        source.seal_for_handover("destination", destination_fingerprint),
+        key.sign,
+    )
+    assert bundle.payload["version"] == 3
+    assert bundle.payload["snapshot"]["profile_reconciliations"]
+
+    destination = Ledger(
+        tmp_path / "reconcile-destination",
+        "engagement",
+        "destination",
+        policy_revision="policy-v2",
+    )
+    report = _merge(destination, bundle, public, destination_fingerprint)
+    assert report.accepted
+    assert destination.profile_reconciliation(predecessor) == expected
+    with pytest.raises(PolicyError, match="permanently spent"):
+        destination.reserve(predecessor, _bounds(actions=1))
+    with pytest.raises(PolicyError, match="successor action is already spent"):
+        destination.reserve("successor-action", _bounds(actions=1))
+
+    tampered_snapshot = deepcopy(bundle.payload["snapshot"])
+    tampered_snapshot["profile_reconciliations"][0][
+        "target_traffic_absent"
+    ] = False
+    tampered = _resign(bundle, key, tampered_snapshot)
+    fresh = Ledger(
+        tmp_path / "tampered-destination",
+        "engagement",
+        "destination",
+        policy_revision="policy-v2",
+    )
+    assert not _merge(fresh, tampered, public, destination_fingerprint).accepted
+    assert fresh.profile_reconciliation(predecessor) is None
+
+
+def test_handover_cannot_reintroduce_a_locally_reconciled_predecessor(tmp_path):
+    key, public, _ = _signing_key()
+    _, _, destination_fingerprint = _signing_key()
+    predecessor = "spent-action"
+    source = Ledger(
+        tmp_path / "reservation-source",
+        "engagement",
+        "source",
+        policy_revision="policy-v2",
+    )
+    source.reserve(predecessor, _bounds(actions=1), workspace_id="workspace")
+    source.finish(predecessor, state="blocked")
+    source.stop("operator handover")
+    bundle = source.handover_bundle(
+        source.seal_for_handover("destination", destination_fingerprint),
+        key.sign,
+    )
+
+    destination = Ledger(
+        tmp_path / "reservation-destination",
+        "engagement",
+        "destination",
+        policy_revision="policy-v2",
+    )
+    destination.reconcile_profile_predecessor(
+        predecessor_action_id=predecessor,
+        predecessor_plan_id="old-plan",
+        predecessor_plan_sha256="1" * 64,
+        successor_action_id="successor-action",
+        successor_plan_id="new-plan",
+        successor_plan_sha256="2" * 64,
+        reconciliation_sha256="3" * 64,
+        reason_code="clock-source-unavailable",
+    )
+
+    report = _merge(destination, bundle, public, destination_fingerprint)
+    assert not report.accepted
+    assert report.imported == 0
+    assert destination._db.execute(
+        "SELECT 1 FROM reservations WHERE request_id=?", (predecessor,)
+    ).fetchone() is None
+
+
+def test_handover_cannot_reintroduce_a_locally_spent_successor(tmp_path):
+    key, public, _ = _signing_key()
+    _, _, destination_fingerprint = _signing_key()
+    successor = "successor-action"
+    source = Ledger(
+        tmp_path / "successor-source",
+        "engagement",
+        "source",
+        policy_revision="policy-v2",
+    )
+    source.reserve(successor, _bounds(actions=1), workspace_id="workspace")
+    source.finish(successor, state="complete")
+    source.stop("operator handover")
+    bundle = source.handover_bundle(
+        source.seal_for_handover("destination", destination_fingerprint),
+        key.sign,
+    )
+
+    destination = Ledger(
+        tmp_path / "successor-destination",
+        "engagement",
+        "destination",
+        policy_revision="policy-v2",
+    )
+    destination.reconcile_profile_predecessor(
+        predecessor_action_id="spent-action",
+        predecessor_plan_id="old-plan",
+        predecessor_plan_sha256="1" * 64,
+        successor_action_id=successor,
+        successor_plan_id="new-plan",
+        successor_plan_sha256="2" * 64,
+        reconciliation_sha256="3" * 64,
+        reason_code="clock-source-unavailable",
+    )
+
+    report = _merge(destination, bundle, public, destination_fingerprint)
+    assert not report.accepted
+    assert report.imported == 0
+    assert destination._db.execute(
+        "SELECT 1 FROM reservations WHERE request_id=?", (successor,)
+    ).fetchone() is None
+
+
+def test_handover_preserves_profile_continuation_charge_and_both_tombstones(
+    tmp_path,
+):
+    key, public, _ = _signing_key()
+    _, _, destination_fingerprint = _signing_key()
+    shared_root = tmp_path / "continuation-source"
+    old_engagement = "legacy-engagement"
+    engagement = "engagement"
+    v1_action = "identity-action-v1"
+    v2_action = "identity-action-v2"
+    v3_action = "identity-action-v3"
+    workspace = "workspace"
+    target = "http://192.0.2.10:8096"
+    workflow = "public-identity"
+
+    predecessor = Ledger(shared_root, old_engagement, "source", policy_revision="policy-v2")
+    predecessor.reconcile_profile_predecessor(
+        predecessor_action_id=v1_action,
+        predecessor_plan_id="identity-plan-v1",
+        predecessor_plan_sha256="1" * 64,
+        successor_action_id=v2_action,
+        successor_plan_id="identity-plan-v2",
+        successor_plan_sha256="2" * 64,
+        reconciliation_sha256="3" * 64,
+        reason_code="clock-source-unavailable",
+    )
+    predecessor.reserve_attempt(
+        v2_action,
+        _bounds(
+            actions=1,
+            request_limit=1,
+            tcp_connects=1,
+            protocol_requests=1,
+            tx_bytes=1024,
+            rx_bytes=1024,
+        ),
+        "attempt-v2",
+        started_ns=1,
+        deadline_ns=1_000_000_001,
+        workspace_id=workspace,
+        target_id=target,
+        workflow_id=workflow,
+    )
+    predecessor.finish_attempt(v2_action, "attempt-v2", state="uncertain", ended_ns=2)
+    predecessor.finish(v2_action, state="uncertain")
+    predecessor.stop("transport outcome uncertain")
+
+    source = Ledger(shared_root, engagement, "source", policy_revision="policy-v2")
+    proof = ProfileContinuationProof(
+        predecessor_engagement=old_engagement,
+        predecessor_action_id=v2_action,
+        predecessor_plan_id="identity-plan-v2",
+        predecessor_plan_sha256="2" * 64,
+        predecessor_release_manifest_sha256="4" * 64,
+        predecessor_profile_worker_sha256="5" * 64,
+        predecessor_broker_worker_sha256="6" * 64,
+        predecessor_audit_chain_tail_sha256="7" * 64,
+        predecessor_audit_snapshot_sha256="8" * 64,
+        predecessor_raw_failure_stage=None,
+        predecessor_stage="legacy_target_open_unacknowledged",
+        predecessor_attempt_count=1,
+        predecessor_observed_tcp_connects=0,
+        predecessor_possible_tcp_connects=1,
+        predecessor_charged_tcp_connects=1,
+        predecessor_observed_udp_datagrams=0,
+        predecessor_charged_udp_datagrams=0,
+        predecessor_observed_protocol_requests=0,
+        predecessor_charged_protocol_requests=0,
+        predecessor_observed_tx_bytes=0,
+        predecessor_charged_tx_bytes=0,
+        predecessor_observed_rx_bytes=0,
+        predecessor_charged_rx_bytes=0,
+        predecessor_evidence_bytes=0,
+        predecessor_first_byte_at=None,
+        predecessor_wire_event_count=0,
+        predecessor_outcome="uncertain",
+        predecessor_cleanup_status="passed",
+        predecessor_stop_reason="transport outcome uncertain",
+        reconciliation_sha256="3" * 64,
+    )
+    source.record_profile_continuation(
+        proof=proof,
+        successor_action_id=v3_action,
+        successor_plan_id="identity-plan-v3",
+        successor_plan_sha256="9" * 64,
+        successor_workspace_id=workspace,
+        successor_target_id=target,
+        successor_workflow_id=workflow,
+    )
+    expected = source.profile_continuation(old_engagement, v2_action)
+    source.stop("operator handover")
+    bundle = source.handover_bundle(
+        source.seal_for_handover("destination", destination_fingerprint),
+        key.sign,
+    )
+
+    assert bundle.payload["version"] == 4
+    assert bundle.payload["snapshot"]["profile_continuations"]
+    destination = Ledger(
+        tmp_path / "continuation-destination",
+        engagement,
+        "destination",
+        policy_revision="policy-v2",
+        limits={"tcp_connects": 1},
+    )
+    report = _merge(destination, bundle, public, destination_fingerprint)
+    assert report.accepted
+    assert destination.profile_continuation(old_engagement, v2_action) == expected
+    assert destination.usage()["tcp_connects"] == 1
+    for spent_action in (v1_action, v2_action):
+        with pytest.raises(PolicyError, match="continuation predecessor.*permanently spent"):
+            destination.reserve(spent_action, _bounds(actions=1))
+    with pytest.raises(PolicyError, match="durable scoped budget exhausted"):
+        destination.reserve(
+            "fresh-action",
+            _bounds(tcp_connects=1),
+            workspace_id=workspace,
+            target_id=target,
+            workflow_id=workflow,
+            budget_limits=(BudgetLimit("target", target, "tcp_connects", 1),),
+        )
+
+    tampered_snapshot = deepcopy(bundle.payload["snapshot"])
+    tampered_snapshot["profile_continuations"][0][
+        "predecessor_charged_tcp_connects"
+    ] = 0
+    tampered = _resign(bundle, key, tampered_snapshot)
+    fresh = Ledger(
+        tmp_path / "continuation-tampered",
+        engagement,
+        "destination",
+        policy_revision="policy-v2",
+    )
+    assert not _merge(fresh, tampered, public, destination_fingerprint).accepted
+    assert fresh.profile_continuation(old_engagement, v2_action) is None
+
+    same_workers = deepcopy(bundle.payload["snapshot"])
+    same_workers["profile_continuations"][0][
+        "predecessor_broker_worker_sha256"
+    ] = same_workers["profile_continuations"][0][
+        "predecessor_profile_worker_sha256"
+    ]
+    same_workers_bundle = _resign(bundle, key, same_workers)
+    distinct_workers = Ledger(
+        tmp_path / "continuation-same-workers",
+        engagement,
+        "destination",
+        policy_revision="policy-v2",
+    )
+    assert not _merge(
+        distinct_workers,
+        same_workers_bundle,
+        public,
+        destination_fingerprint,
+    ).accepted
+    assert distinct_workers.profile_continuation(old_engagement, v2_action) is None
 
 
 def test_signature_recipient_policy_and_totals_fail_before_import(tmp_path):

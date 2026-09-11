@@ -115,6 +115,17 @@ class Broker:
                 def profile_dispatch(action, capture):
                     from .profile_runtime.executor import dispatch_profile
 
+                    def record_failure_stage(stage):
+                        return required_emit(
+                            self.audit,
+                            self.ledger,
+                            AuditEvent(
+                                "profile_wire_failure_stage",
+                                action.action_id,
+                                {"stage": stage, "automatic_retry": False},
+                            ),
+                        )
+
                     receipt = dispatch_profile(
                         action,
                         self._profile_wire_broker,
@@ -122,6 +133,7 @@ class Broker:
                         capture,
                         self.audit.record_profile_wire_receipt,
                         self.ledger.stopped,
+                        failure_stage_sink=record_failure_stage,
                     )
                     profile_receipts.append(receipt)
                     return receipt

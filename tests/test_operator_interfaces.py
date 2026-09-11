@@ -2,6 +2,7 @@
 import asyncio
 import base64
 from dataclasses import asdict
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -9,7 +10,12 @@ from pathlib import Path
 import sys
 
 import pytest
-from cptc_harness.clockcheck import ClockService
+import cptc_harness.clockcheck as clockcheck
+from cptc_harness.clockcheck import (
+    CLOCK_ATTESTATION_TTL_NS,
+    ClockService,
+    parse_clock_attestation,
+)
 from cptc_harness.contracts import ClockState, PolicyError, PolicySnapshot, ScopeSpec, Bounds, digest, AuditEvent
 from cptc_harness.policy import save_policy
 from cptc_harness.providers import ProviderProfile
@@ -90,6 +96,24 @@ def test_workspace_recreation_does_not_reset_identity_or_counters(private, age_i
     reopened.audit.close()
 
 
+def test_runtime_shares_one_clock_service_between_audit_and_broker(private, age_identity):
+    age, _identity, recipient = age_identity
+    policy_path = private / "policy.json"
+    save_policy(
+        policy_path,
+        PolicySnapshot("synthetic", "v1", "clock-workspace", "device", "operator", ScopeSpec()),
+    )
+    root = private / "engagement"
+    initialize(root, policy_path, recipient=recipient, age_binary=age)
+    clock = ClockService(source=lambda: ClockState(True, 0.01, "synthetic"))
+    runtime = Runtime(root, ledger_root=private / "ledger", clock_service=clock)
+    try:
+        assert runtime.audit.clock is clock
+        assert runtime.broker.clock is clock
+    finally:
+        runtime.close()
+
+
 def test_central_clock_jumps_latch_and_never_change_host_time():
     times = {"wall": 100.0, "mono": 10.0}
     service = ClockService(source=lambda: ClockState(True, 0.01, "synthetic"), wall=lambda: times["wall"], monotonic=lambda: times["mono"])
@@ -100,6 +124,109 @@ def test_central_clock_jumps_latch_and_never_change_host_time():
     assert not service().synchronized and service().source == "local-clock-jump"
     times.update(wall=103.0, mono=13.0)
     assert not service().synchronized
+
+
+def test_clock_attestation_is_bound_to_boot_and_monotonic_expiry():
+    value = {
+        "version": 1,
+        "boot_id": "11111111-2222-4333-8444-555555555555",
+        "observed_utc": "2026-09-11T00:00:00.000000Z",
+        "expires_utc": "2026-09-11T00:00:30.000000Z",
+        "observed_monotonic_ns": 100,
+        "expires_monotonic_ns": 100 + CLOCK_ATTESTATION_TTL_NS,
+        "synchronized": True,
+        "offset_s": 0.001,
+        "source": "timedatectl",
+    }
+    assert parse_clock_attestation(
+        json.dumps(value),
+        boot_id=value["boot_id"],
+        monotonic_ns=101,
+        utc_now=datetime.fromisoformat("2026-09-11T00:00:01+00:00"),
+    ).source == "timedatectl-attestation"
+    with pytest.raises(ValueError, match="expired"):
+        parse_clock_attestation(
+            json.dumps(value),
+            boot_id=value["boot_id"],
+            monotonic_ns=value["expires_monotonic_ns"],
+            utc_now=datetime.fromisoformat("2026-09-11T00:00:01+00:00"),
+        )
+    with pytest.raises(ValueError, match="boot identity"):
+        parse_clock_attestation(
+            json.dumps(value),
+            boot_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            monotonic_ns=101,
+            utc_now=datetime.fromisoformat("2026-09-11T00:00:01+00:00"),
+        )
+
+
+def test_attested_clock_must_cover_the_action_and_failure_latches(monkeypatch):
+    calls = {"count": 0}
+
+    def clock_read(*, minimum_remaining_s=0.0, **_kwargs):
+        calls["count"] += 1
+        if minimum_remaining_s >= 12:
+            raise ValueError("insufficient lifetime")
+        return ClockState(True, 0.001, "timedatectl-attestation")
+
+    monkeypatch.setattr(clockcheck, "read_clock_attestation", clock_read)
+    service = ClockService(
+        source=clockcheck.attested_clock,
+        wall=lambda: 100.0,
+        monotonic=lambda: 10.0,
+    )
+
+    assert service.valid_for(12.0) is False
+    assert service().synchronized is False
+    monkeypatch.setattr(
+        clockcheck,
+        "read_clock_attestation",
+        lambda **_kwargs: ClockState(
+            True, 0.001, "timedatectl-attestation"
+        ),
+    )
+    assert service.valid_for(1.0) is False
+    assert calls["count"] == 2
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("extra", "duplicate", "wide_expiry", "integer_offset", "bad_utc"),
+)
+def test_clock_attestation_parser_rejects_ambiguous_fields(mutation):
+    value = {
+        "version": 1,
+        "boot_id": "11111111-2222-4333-8444-555555555555",
+        "observed_utc": "2026-09-11T00:00:00.000000Z",
+        "expires_utc": "2026-09-11T00:00:30.000000Z",
+        "observed_monotonic_ns": 100,
+        "expires_monotonic_ns": 100 + CLOCK_ATTESTATION_TTL_NS,
+        "synchronized": True,
+        "offset_s": 0.001,
+        "source": "timedatectl",
+    }
+    raw = json.dumps(value)
+    if mutation == "extra":
+        value["path"] = "/etc/passwd"
+        raw = json.dumps(value)
+    elif mutation == "duplicate":
+        raw = raw[:-1] + ',"source":"timedatectl"}'
+    elif mutation == "wide_expiry":
+        value["expires_monotonic_ns"] += 1
+        raw = json.dumps(value)
+    elif mutation == "integer_offset":
+        value["offset_s"] = 1
+        raw = json.dumps(value)
+    else:
+        value["observed_utc"] = "2026-09-11T00:00:00Z"
+        raw = json.dumps(value)
+    with pytest.raises(ValueError):
+        parse_clock_attestation(
+            raw,
+            boot_id=value["boot_id"],
+            monotonic_ns=101,
+            utc_now=datetime.fromisoformat("2026-09-11T00:00:01+00:00"),
+        )
 
 
 def test_imported_accounting_survives_audit_failure_and_destination_stops(private, age_identity, monkeypatch):

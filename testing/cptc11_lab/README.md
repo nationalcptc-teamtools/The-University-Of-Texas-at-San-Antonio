@@ -26,6 +26,33 @@ python -m testing.cptc11_lab.transport preflight \
   --run-root ~/.local/state/harbinger/cptc11
 ```
 
+Run the PortCast-specific OpenSSH and forwarding-policy preflight without
+opening the application target:
+
+```sh
+python3 -m testing.cptc11_lab.transport preflight-portcast \
+  --run-root ~/.local/state/harbinger/cptc11
+```
+
+This command checks the pinned Kali OpenSSH files, the exact
+`PermitOpen 10.0.1.30:8096` policy, and one administratively prohibited
+Kali-loopback control channel. It cannot request the PortCast channel. It keeps
+only metadata in the run transcript and does not retain the inventory output.
+
+Check the PortCast VM identity and isolated bridge on the Dell host:
+
+```sh
+python3 -m testing.cptc11_lab.portcast_vm_preflight
+```
+
+This command accepts no target or command arguments. It reads the fixed VM
+1106 status, configuration, snapshots, bridge metadata, namespace inventory,
+and lifecycle-process count. It cannot start, stop, enter, or run a command in
+the guest. It does not open the PortCast application address. Raw host output
+is encrypted before storage under
+`~/.local/state/harbinger/cptc11-diagnostics/`. The terminal receives only the
+validated VM name, state, bridge, MAC, snapshot names, and safety booleans.
+
 Run the one admitted lab observation:
 
 ```sh
@@ -69,6 +96,35 @@ only. Raw HTTP bytes remain in the encrypted Audit evidence store. The typed
 result identifies Jellyfin Server 10.10.7 as a component candidate. It does
 not confirm a vulnerability or a CVE.
 
+### v3 continuation
+
+The installed PortCast service keeps the release protocol name
+`portcast-live-v1`, but the current frozen coordinator is schema v3. Its new
+runtime is mounted at the logical path
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v3` from the host path
+`/var/lib/cptc-harness/portcast-live-v3/runtime`.
+
+At startup it verifies the exact v2 audit and result files. It records one
+continuation proof in the historical ledger and then performs at most one new
+connection and one request. It does not retry the uncertain v2 action. The v2
+audit and result are read-only inputs; v3 audit and result files are written in
+the new runtime. A missing, changed, or writable historical input blocks the
+run before target access.
+
+Use the deployment helper to inspect this layout. It reports the v3 state,
+historical ledger, historical audit, and historical result paths. It never
+starts the service during `plan` or `apply`.
+
+A clean CLI result includes one complete reservation, one complete attempt,
+and these counters: one TCP connection, zero UDP datagrams, one protocol
+request, 103 transmitted bytes, and 1 to 8192 received bytes. It also reports
+`wire_counters_verified=true` and `result_receipt_present=true`. These values
+are local accounting metadata. The CLI does not print the response or an
+evidence path. A later `inspect` result uses `status=blocked` to show that a
+second action is denied. It retains the first action's counters. If counters
+are null, treat the action as incomplete or unavailable. Do not convert null
+to zero.
+
 The exact target command is:
 
 ```text
@@ -95,10 +151,10 @@ preflight.
 
 The canonical root service accepts only two systemd encrypted-credential
 inputs: `cptc11-dell` and `cptc11-kali`. systemd exposes them at the fixed
-`/run/credentials/portcast-live-v1.service/` path. The service rejects a
-missing, symlinked, empty, wrong-owner, or group/world-accessible credential
-before it creates a network connection. It copies each value into a sealed
-anonymous descriptor. The broker owns the resulting `LabSession`; the fixed
+`/run/credentials/portcast-live-v1.service/` path as root-owned, root-group,
+mode-`0440` files. The service rejects any different ownership, mode, type,
+size, or path before it creates a network connection. It copies each value
+into a sealed anonymous descriptor. The broker owns the resulting `LabSession`; the fixed
 wire operation receives only that broker-owned channel.
 
 The operator CLI remains a separate, human-run lab utility. Its default
@@ -123,6 +179,25 @@ their reserved files. The local identity is mode `0600`. The readable
 microseconds, a monotonic timestamp, sequence, event ID, action state, byte
 counts, and failure reasons. Each stream has a 16 KiB collection limit.
 Incomplete capture fails closed.
+
+The canonical service contains only the reviewed public `age` recipient. The
+private identity stays in the operator key directory and is not mounted into
+the service. Before the service opens its local socket, it atomically creates
+and validates the encrypted evidence runtime with the sealed `age` binary. It
+uses a no-replace publish, opens and verifies the ledger and audit writer,
+performs recovery, and keeps that one authority open. Only then does it load
+the target credentials and bind the local socket. Later `inspect` and
+`execute` requests can only reuse that exact state. They cannot initialize,
+repair, replace, or reopen it. A recipient, path, hash, policy, ownership,
+mode, layout, SQLite, or audit-integrity mismatch blocks the service before
+target access.
+
+The production v3 application runtime is fixed at the logical path
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime`; its host storage
+is `/var/lib/cptc-harness/portcast-live-v3/runtime`. Its audit worker sees only
+the `audit/` child. Durable request accounting uses the separate fixed
+historical `runtime/ledger/cptc11-dell-validation` directory. The historical
+v2 audit and result are read-only continuation inputs.
 
 ## Scope and lifecycle
 

@@ -69,7 +69,7 @@ writer = AuditWriter(
     profile_worker_sha256=config["profile_worker_sha256"],
     compatible_profile_workers=tuple(config["compatible_profile_workers"]),
 )
-methods = {"emit", "capture", "reserve_output", "release_output", "verify", "ready", "encryption_ready", "seal", "result_receipts", "record_profile_wire_receipt", "profile_wire_receipts", "record_profile_cleanup_receipt", "profile_cleanup_receipts", "profile_action_history", "publication_receipts", "control_receipts"}
+methods = {"emit", "capture", "reserve_output", "release_output", "verify", "ready", "encryption_ready", "seal", "result_receipts", "record_profile_wire_receipt", "profile_wire_receipts", "record_profile_cleanup_receipt", "profile_cleanup_receipts", "profile_action_history", "profile_inspection_snapshot", "publication_receipts", "control_receipts"}
 try:
     while True:
         size = struct.unpack("!I", receive(channel, 4))[0]

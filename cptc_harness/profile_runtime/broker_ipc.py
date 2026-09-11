@@ -22,7 +22,12 @@ from ..contracts import PolicyError, canonical_json
 from ..integrity import VerifiedRelease
 from ..memfd import F_GET_SEALS, READONLY_SEALS
 from .catalog import load_profile, require_live_admission
-from .contracts import ProfileContractError, WireCounters
+from .contracts import (
+    PORTCAST_FAILURE_STAGES,
+    PORTCAST_RESULT_LIMITATIONS,
+    ProfileContractError,
+    WireCounters,
+)
 
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -31,7 +36,7 @@ _PROFILE_ID = "web.http_jellyfin_public_identity"
 _TARGET_ID = "cptc11-prod-portcast"
 _MAX_PACKET = 64 * 1024
 _PRODUCTION_LEDGER_ROOT = Path(
-    "/var/lib/cptc-harness/portcast-live-v1/ledger/cptc11-dell-validation"
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
 )
 _SERVICE_AUTHORITY = object()
 
@@ -87,6 +92,17 @@ class BrokerWireResult:
     evidence_sha256: str
     first_byte_at: str | None
     worker_sha256: str
+    failure_stage: str | None = None
+
+
+class PortcastBrokerFailure(PolicyError):
+    """Safe broker failure with one fixed, non-sensitive execution stage."""
+
+    def __init__(self, failure_stage: str, message: str) -> None:
+        if failure_stage not in PORTCAST_FAILURE_STAGES:
+            failure_stage = "ipc"
+        super().__init__(message)
+        self.failure_stage = failure_stage
 
 
 def _validate_binding(binding: Any) -> ReservationBinding:
@@ -120,7 +136,14 @@ class PortcastBrokerClient:
         _authority: object | None = None,
         _credential_fds: tuple[int, int] | None = None,
     ) -> None:
-        if _authority is not _SERVICE_AUTHORITY or os.geteuid() != 0:
+        effective_uid = os.geteuid()
+        effective_gid = os.getegid()
+        if (
+            _authority is not _SERVICE_AUTHORITY
+            or effective_uid in {0, 65534}
+            or effective_gid in {0, 65534}
+            or set(os.getgroups()) != {effective_gid}
+        ):
             raise PolicyError(
                 "PortCast worker authority belongs to the canonical local service"
             )
@@ -258,7 +281,14 @@ class PortcastBrokerClient:
             self._process = process
             process = None
             ready, descriptors = self._receive()
-            if descriptors or ready != {
+            if descriptors:
+                for descriptor in descriptors:
+                    try:
+                        os.close(descriptor)
+                    except OSError:
+                        pass
+                raise PolicyError("PortCast broker sandbox attestation differs")
+            if ready != {
                 "kind": "sandbox_ready",
                 "cap_eff": "0000000000000000",
                 "allowed_route": "100.85.84.30/32",
@@ -401,6 +431,7 @@ class PortcastBrokerClient:
             if time.monotonic_ns() >= binding.deadline_ns:
                 raise OSError("PortCast canonical deadline reached")
 
+        failure_stage = "ipc"
         try:
             before_deadline()
             self._send(
@@ -420,6 +451,11 @@ class PortcastBrokerClient:
                         os.close(descriptor)
                     raise
                 if value.get("kind") == "event":
+                    failure_stage = (
+                        "connected_ack"
+                        if value.get("event_id") == "connect-000000"
+                        else "wire_exchange"
+                    )
                     if descriptors:
                         for descriptor in descriptors:
                             os.close(descriptor)
@@ -460,8 +496,36 @@ class PortcastBrokerClient:
                         os.close(descriptor)
                     raise OSError("invalid PortCast broker result")
                 descriptor = descriptors[0]
+                failure_stage = "ipc"
                 try:
+                    required_fields = {
+                        "kind",
+                        "outcome",
+                        "limitation",
+                        "first_byte_at",
+                        "evidence_bytes",
+                        "evidence_sha256",
+                        "counters",
+                    }
+                    allowed_fields = required_fields | {"failure_stage"}
+                    outcome = value.get("outcome")
+                    limitation = value.get("limitation")
+                    worker_stage = value.get("failure_stage")
+                    if (
+                        not required_fields <= set(value)
+                        or set(value) - allowed_fields
+                        or outcome
+                        not in {"complete", "incomplete", "uncertain", "cancelled"}
+                        or limitation is not None
+                        and limitation not in PORTCAST_RESULT_LIMITATIONS
+                        or worker_stage is not None
+                        and worker_stage not in PORTCAST_FAILURE_STAGES
+                        or outcome == "complete"
+                        and (limitation is not None or worker_stage is not None)
+                    ):
+                        raise ValueError()
                     counters = WireCounters.from_dict(value.get("counters"))
+                    failure_stage = "evidence_seal"
                     info = os.fstat(descriptor)
                     if (
                         not stat_is_regular(info.st_mode)
@@ -470,10 +534,6 @@ class PortcastBrokerClient:
                         or type(value.get("evidence_bytes")) is not int
                         or info.st_size != value["evidence_bytes"]
                         or _HEX64.fullmatch(value.get("evidence_sha256", "")) is None
-                        or value.get("outcome")
-                        not in {"complete", "incomplete", "uncertain", "cancelled"}
-                        or value.get("limitation") is not None
-                        and not isinstance(value.get("limitation"), str)
                     ):
                         raise ValueError()
                     os.lseek(descriptor, 0, os.SEEK_SET)
@@ -490,6 +550,7 @@ class PortcastBrokerClient:
                     value["evidence_sha256"],
                     value.get("first_byte_at"),
                     self._worker_sha256,
+                    value.get("failure_stage"),
                 )
         except Exception:
             durable = self._mark_uncertain()
@@ -498,9 +559,7 @@ class PortcastBrokerClient:
                 if durable
                 else "PortCast broker outcome is uncertain; durable stop is latched and reconciliation is required"
             )
-            raise PolicyError(
-                detail
-            ) from None
+            raise PortcastBrokerFailure(failure_stage, detail) from None
 
     def _mark_uncertain(self) -> bool:
         binding = self._binding
@@ -570,43 +629,58 @@ class PortcastBrokerClient:
     def close(self) -> None:
         if self._closed:
             return
-        if self._inflight:
-            self._mark_uncertain()
-        self._closed = True
         failures: list[str] = []
-        if self._channel is not None:
-            try:
-                self._channel.close()
-            except OSError:
-                failures.append("IPC socket close")
+        try:
+            if self._inflight:
+                try:
+                    if not self._mark_uncertain():
+                        self._uncertainty_reconciliation_required = True
+                        failures.append("uncertainty persistence")
+                except Exception:
+                    self._uncertainty_reconciliation_required = True
+                    failures.append("uncertainty persistence")
+        finally:
+            # Teardown is unconditional. A failed durable checkpoint must not
+            # leave the worker, IPC socket, or credential capabilities live.
+            self._closed = True
+            self._inflight = False
+            channel = self._channel
             self._channel = None
-        process = self._process
-        self._process = None
-        if process is not None:
-            try:
-                if process.poll() is None:
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except (OSError, ProcessLookupError):
-                        failures.append("broker process-group kill")
+            if channel is not None:
+                try:
+                    channel.close()
+                except OSError:
+                    failures.append("IPC socket close")
+            process = self._process
+            self._process = None
+            if process is not None:
+                try:
+                    if process.poll() is None:
                         try:
-                            process.kill()
+                            os.killpg(process.pid, signal.SIGKILL)
                         except (OSError, ProcessLookupError):
-                            failures.append("broker process kill")
-                process.wait(timeout=3)
-            except (OSError, subprocess.TimeoutExpired):
-                failures.append("broker process reap")
-        for descriptor in self._credential_fds:
-            try:
-                os.close(descriptor)
-            except OSError:
-                failures.append("credential descriptor close")
-        self._credential_fds = ()
+                            failures.append("broker process-group kill")
+                            try:
+                                process.kill()
+                            except (OSError, ProcessLookupError):
+                                failures.append("broker process kill")
+                    process.wait(timeout=3)
+                except (OSError, subprocess.TimeoutExpired):
+                    failures.append("broker process reap")
+            credentials = self._credential_fds
+            self._credential_fds = ()
+            for descriptor in credentials:
+                try:
+                    os.close(descriptor)
+                except OSError:
+                    failures.append("credential descriptor close")
         if failures:
-            self._mark_uncertain()
-            raise PolicyError(
-                "PortCast broker cleanup failed: " + ", ".join(failures)
-            )
+            if "uncertainty persistence" not in failures:
+                try:
+                    self._mark_uncertain()
+                except Exception:
+                    self._uncertainty_reconciliation_required = True
+            raise PolicyError("PortCast broker cleanup failed; reconciliation required")
 
 
 def stat_is_regular(mode: int) -> bool:
@@ -637,6 +711,7 @@ __all__ = (
     "BrokerWireEvent",
     "BrokerWireResult",
     "DispatchNonce",
+    "PortcastBrokerFailure",
     "PortcastBrokerClient",
     "ReservationBinding",
 )

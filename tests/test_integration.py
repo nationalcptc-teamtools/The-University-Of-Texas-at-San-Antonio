@@ -13,6 +13,7 @@ import subprocess
 import threading
 import pytest
 from cptc_harness.contracts import (
+    BudgetLimit,
     ClockState,
     OperationRequest,
     PolicyError,
@@ -26,7 +27,7 @@ from cptc_harness.contracts import (
 from cptc_harness.integrity import VerifiedRelease
 from cptc_harness.profile_runtime.catalog import load_profile
 from cptc_harness.exports import prepare_export, encrypted_export
-from cptc_harness.policy import parse_policy, save_policy
+from cptc_harness.policy import parse_policy, policy_hash, save_policy
 from cptc_harness.providers import (ChatAdapter, DisclosureGate, DisclosureItem, ExcerptApproval,
     ProviderProfile, parse_response, render_template, validate_profile)
 from cptc_harness.runtime import Runtime, initialize
@@ -58,6 +59,218 @@ def test_policy_rejects_broadened_contract_and_limits():
     for key, value in (("model_calls", 7), ("http_rate", 2), ("model_actions", True), ("unknown", "injected"), ("encrypted_storage", "yes")):
         with pytest.raises(PolicyError):
             parse_policy({**asdict(policy), key: value})
+
+
+def _policy_target(
+    target_id="fixed-target", *, host="fixture.example", base_path="/app"
+):
+    url_host = f"[{host}]" if ":" in host else host
+    return TargetPolicy(
+        TargetRef(
+            target_id,
+            f"https://{url_host}:443{base_path}",
+            "https",
+            host,
+            443,
+            base_path,
+        )
+    )
+
+
+def _policy_with_target_budget(key, *targets):
+    return _policy_with_target_budgets(
+        (BudgetLimit("target", key, "tcp_connects", 2),), *targets
+    )
+
+
+def _policy_with_target_budgets(budget_limits, *targets):
+    return PolicySnapshot(
+        "synthetic",
+        "v1",
+        "workspace",
+        "device",
+        "operator",
+        ScopeSpec(),
+        targets=targets,
+        budget_limits=budget_limits,
+    )
+
+
+def test_policy_accepts_declared_target_id_as_target_budget_key():
+    policy = _policy_with_target_budget("fixed-target", _policy_target())
+
+    assert parse_policy(asdict(policy)) == policy
+    assert policy_hash(policy) == digest(asdict(policy))
+
+
+def test_policy_preserves_exact_declared_origin_as_legacy_target_budget_key():
+    policy = _policy_with_target_budget(
+        "https://fixture.example:443", _policy_target()
+    )
+
+    assert parse_policy(asdict(policy)) == policy
+    assert policy_hash(policy) == digest(asdict(policy))
+
+
+@pytest.mark.parametrize("origin_ceiling", (1, 2))
+def test_policy_rejects_multiple_alias_limits_for_one_target_counter(
+    origin_ceiling,
+):
+    policy = _policy_with_target_budgets(
+        (
+            BudgetLimit("target", "fixed-target", "tcp_connects", 2),
+            BudgetLimit(
+                "target",
+                "https://fixture.example:443",
+                "tcp_connects",
+                origin_ceiling,
+            ),
+        ),
+        _policy_target(),
+    )
+
+    with pytest.raises(PolicyError, match="duplicate policy target budget limit"):
+        parse_policy(asdict(policy))
+
+
+@pytest.mark.parametrize(
+    "key",
+    (
+        "undeclared-target",
+        "fixed",
+        "fixture.example",
+        "https://fixture.example",
+        "https://fixture.example:443/app",
+        "https://other.example:443",
+    ),
+)
+def test_policy_rejects_undeclared_or_broadened_target_budget_keys(key):
+    policy = _policy_with_target_budget(key, _policy_target())
+
+    with pytest.raises(PolicyError, match="budget scope key does not match policy"):
+        parse_policy(asdict(policy))
+
+
+def test_policy_rejects_ambiguous_legacy_origin_budget_key():
+    policy = _policy_with_target_budget(
+        "https://fixture.example:443",
+        _policy_target("first-target", base_path="/first"),
+        _policy_target("second-target", base_path="/second"),
+    )
+
+    with pytest.raises(PolicyError, match="budget scope key does not match policy"):
+        parse_policy(asdict(policy))
+
+
+def test_policy_accepts_canonical_bracketed_ipv6_origin_budget_key():
+    policy = _policy_with_target_budget(
+        "https://[2001:db8::1]:443",
+        _policy_target(host="2001:db8::1"),
+    )
+
+    assert parse_policy(asdict(policy)) == policy
+
+
+def test_policy_accepts_equivalent_bracketed_ipv6_origin_budget_key():
+    policy = _policy_with_target_budget(
+        "https://[2001:0db8:0000:0000:0000:0000:0000:0001]:443",
+        _policy_target(host="2001:db8::1"),
+    )
+
+    assert parse_policy(asdict(policy)) == policy
+
+
+def test_policy_rejects_unbracketed_ipv6_origin_budget_key():
+    policy = _policy_with_target_budget(
+        "https://2001:db8::1:443",
+        _policy_target(host="2001:db8::1"),
+    )
+
+    with pytest.raises(PolicyError, match="budget scope key does not match policy"):
+        parse_policy(asdict(policy))
+
+
+def test_policy_rejects_multiple_equivalent_ipv6_alias_limits():
+    policy = _policy_with_target_budgets(
+        (
+            BudgetLimit(
+                "target", "https://[2001:db8::1]:443", "tcp_connects", 2
+            ),
+            BudgetLimit(
+                "target",
+                "https://[2001:0db8:0000:0000:0000:0000:0000:0001]:443",
+                "tcp_connects",
+                1,
+            ),
+        ),
+        _policy_target(host="2001:db8::1"),
+    )
+
+    with pytest.raises(PolicyError, match="duplicate policy target budget limit"):
+        parse_policy(asdict(policy))
+
+
+def test_policy_treats_equivalent_ipv6_target_spellings_as_duplicate_endpoints():
+    policy = PolicySnapshot(
+        "synthetic",
+        "v1",
+        "workspace",
+        "device",
+        "operator",
+        ScopeSpec(),
+        targets=(
+            _policy_target("compressed", host="2001:db8::1"),
+            _policy_target(
+                "expanded", host="2001:0db8:0000:0000:0000:0000:0000:0001"
+            ),
+        ),
+    )
+
+    with pytest.raises(PolicyError, match="duplicate target origin"):
+        parse_policy(asdict(policy))
+
+
+def test_policy_rejects_equivalent_ipv6_origin_shared_by_multiple_targets():
+    policy = _policy_with_target_budget(
+        "https://[2001:db8::1]:443",
+        _policy_target("first-target", host="2001:db8::1", base_path="/first"),
+        _policy_target(
+            "second-target",
+            host="2001:0db8:0000:0000:0000:0000:0000:0001",
+            base_path="/second",
+        ),
+    )
+
+    with pytest.raises(PolicyError, match="budget scope key does not match policy"):
+        parse_policy(asdict(policy))
+
+
+@pytest.mark.parametrize(
+    "targets,message",
+    (
+        (
+            (
+                _policy_target("duplicate", host="first.example"),
+                _policy_target("duplicate", host="second.example"),
+            ),
+            "duplicate target identifier",
+        ),
+        (
+            (
+                _policy_target("first-target"),
+                _policy_target("second-target"),
+            ),
+            "duplicate target origin",
+        ),
+    ),
+)
+def test_policy_rejects_duplicate_target_identity_or_canonical_url(targets, message):
+    policy = PolicySnapshot(
+        "synthetic", "v1", "workspace", "device", "operator", ScopeSpec(), targets
+    )
+
+    with pytest.raises(PolicyError, match=message):
+        parse_policy(asdict(policy))
 
 
 def test_disclosure_denies_client_raw_and_split_excerpts():

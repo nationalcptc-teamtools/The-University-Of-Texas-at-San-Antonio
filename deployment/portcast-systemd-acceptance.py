@@ -706,7 +706,7 @@ def _expected_bind_paths(run_id: str) -> frozenset[str]:
     return frozenset(
         {
             f"{worker}:/acceptance:rbind",
-            f"{worker / 'audit'}:/var/lib/cptc-harness/portcast-live-v1/runtime/audit:rbind",
+            f"{worker / 'audit'}:/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit:rbind",
         }
     )
 

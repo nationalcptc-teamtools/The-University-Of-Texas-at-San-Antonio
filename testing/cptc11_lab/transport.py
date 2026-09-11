@@ -28,6 +28,7 @@ from typing import Any, Callable, Mapping, Protocol, TextIO
 import uuid
 
 from cptc_harness.contracts import PolicyError
+from cptc_harness.profile_runtime.service_client import validate_portcast_result
 from cptc_harness.scanner_results import parse_smb2_xml_facts
 from cptc_harness.portcast_identity import (
     PORTCAST_PROFILE_ID,
@@ -1302,7 +1303,10 @@ def main(
     """Run preflight or one exact frozen lab action through reviewed entrypoints."""
 
     parser = argparse.ArgumentParser(prog="cptc11-lab-transport")
-    parser.add_argument("command", choices=("preflight", "scan-dc", "scan-portcast"))
+    parser.add_argument(
+        "command",
+        choices=("preflight", "preflight-portcast", "scan-dc", "scan-portcast"),
+    )
     parser.add_argument(
         "--run-root",
         type=Path,
@@ -1324,6 +1328,8 @@ def main(
                 portcast_session_runner = run_frozen_portcast_session
             value = portcast_session_runner()
             portcast_result = _validate_portcast_cli_result(value)
+            execution = portcast_result["execution"]
+            counters = execution["transport_counters"] or {}
             run.transcript.emit(
                 "profile.coordinator",
                 phase="portcast-identity",
@@ -1333,6 +1339,13 @@ def main(
                 cleanup_status=portcast_result["cleanup_status"],
                 receipt_outcome=portcast_result["receipt_outcome"],
                 automatic_retry=False,
+                reservation_state=execution["reservation_state"],
+                attempt_count=execution["attempt_count"],
+                attempt_state=execution["attempt_state"],
+                failure_stage=execution["failure_stage"],
+                wire_counters_verified=execution["wire_counters_verified"],
+                result_receipt_present=execution["result_receipt_present"],
+                **counters,
             )
             if not (
                 portcast_result["status"] == "complete"
@@ -1342,9 +1355,17 @@ def main(
             ):
                 raise TransportError("frozen PortCast action did not complete cleanly")
         else:
-            with LabSession(connector=connector, run_directory=run) as session:
+            session_options = (
+                {"connector": connector, "transcript": run.transcript}
+                if args.command == "preflight-portcast"
+                else {"connector": connector, "run_directory": run}
+            )
+            with LabSession(**session_options) as session:
                 if args.command == "preflight":
                     session.preflight_inventory()
+                elif args.command == "preflight-portcast":
+                    session.preflight_portcast_inventory()
+                    session.verify_portcast_alternate_destination_denied()
                 else:
                     session.preflight_inventory()
                     captured = session.run_scan("dc-smb-security", "10.0.1.6")
@@ -1370,6 +1391,7 @@ def main(
                 "action_id": portcast_result["action_id"],
                 "cleanup_status": portcast_result["cleanup_status"],
                 "receipt_outcome": portcast_result["receipt_outcome"],
+                "execution": portcast_result["execution"],
             }
         )
     print(json.dumps(output, sort_keys=True), file=destination)
@@ -1379,36 +1401,18 @@ def main(
 def _validate_portcast_cli_result(value: Any) -> dict[str, Any]:
     """Select metadata-only coordinator fields for transcript and stdout."""
 
-    required = {
-        "action_id",
-        "audit_verified",
-        "automatic_retry",
-        "cleanup_status",
-        "profile_id",
-        "receipt_outcome",
-        "status",
-        "workspace",
-    }
-    if (
-        not isinstance(value, dict)
-        or not required <= set(value)
-        or set(value) - required - {"reason"}
-        or type(value["action_id"]) is not str
-        or value["action_id"] != "cptc11-portcast-public-identity-action-v1"
-        or type(value["profile_id"]) is not str
-        or value["profile_id"] != PORTCAST_PROFILE_ID
-        or type(value["audit_verified"]) is not bool
-        or value["automatic_retry"] is not False
-        or value["cleanup_status"] not in {None, "passed", "failed"}
-        or value["receipt_outcome"]
-        not in {None, "complete", "incomplete", "uncertain", "cancelled"}
-        or value["status"]
-        not in {"complete", "failed", "blocked", "stopped", "uncertain"}
-        or type(value["workspace"]) is not str
-        or ("reason" in value and type(value["reason"]) is not str)
-    ):
+    try:
+        validated = validate_portcast_result(value)
+    except PolicyError:
         raise TransportError("PortCast coordinator returned invalid metadata")
-    return {key: value[key] for key in required}
+    if validated["profile_id"] != PORTCAST_PROFILE_ID:
+        raise TransportError("PortCast coordinator returned invalid metadata")
+    # Older service responses did not carry the fixed diagnostic stage. Keep
+    # accepting them, but give the operator CLI one stable metadata shape.
+    validated = dict(validated)
+    validated["execution"] = dict(validated["execution"])
+    validated["execution"].setdefault("failure_stage", None)
+    return validated
 
 
 class Transcript(Protocol):
@@ -1437,6 +1441,22 @@ class JsonlTranscript:
             "capture_complete",
             "stderr_bytes",
             "stdout_bytes",
+            "action_id",
+            "audit_verified",
+            "automatic_retry",
+            "cleanup_status",
+            "receipt_outcome",
+            "reservation_state",
+            "attempt_count",
+            "attempt_state",
+            "failure_stage",
+            "wire_counters_verified",
+            "result_receipt_present",
+            "tcp_connects",
+            "udp_datagrams",
+            "protocol_requests",
+            "tx_bytes",
+            "rx_bytes",
         }
     )
 
@@ -1658,6 +1678,24 @@ def _proxy_argv(config: LabConfig) -> tuple[str, ...]:
     )
 
 
+class _ServicePortcastChannelProvider:
+    """One fixed direct-tcpip opener held only by the service session."""
+
+    __slots__ = ("_nested_transport", "_timeout_s")
+
+    def __init__(self, nested_transport: Any, *, timeout_s: float) -> None:
+        self._nested_transport = nested_transport
+        self._timeout_s = timeout_s
+
+    def open_portcast_channel(self):
+        return self._nested_transport.open_channel(
+            "direct-tcpip",
+            ("10.0.1.30", 8096),
+            ("127.0.0.1", 0),
+            timeout=self._timeout_s,
+        )
+
+
 class LabSession:
     """Own the Dell, guardian, and nested Kali channels as one lifecycle."""
 
@@ -1693,8 +1731,11 @@ class LabSession:
         self._kali: KaliConnection | None = None
         self._runtime_manifest: KaliRuntimeManifest | None = None
         self._openssh_manifest: OpenSshRuntimeManifest | None = None
+        self._service_session = service_config
+        self._service_portcast_channel_provider: _ServicePortcastChannelProvider | None = None
         self._portcast_candidate_ready = False
         self._portcast_alternate_denied = False
+        self._portcast_channel_used = False
 
     @classmethod
     def _for_portcast_service(cls, credential_fds: tuple[int, int]) -> "LabSession":
@@ -1712,6 +1753,8 @@ class LabSession:
         self._openssh_manifest = None
         self._portcast_candidate_ready = False
         self._portcast_alternate_denied = False
+        self._portcast_channel_used = False
+        self._service_portcast_channel_provider = None
         self.transcript.emit("session.open", phase="dell", status="starting")
         try:
             self._dell = self.connector.connect(
@@ -1727,6 +1770,12 @@ class LabSession:
                 self.config.kali,
                 self.config.kali_credential,
             )
+            if self._service_session:
+                if type(self._kali) is not _ServiceParamikoKali:
+                    raise TransportError("service Kali transport differs")
+                self._service_portcast_channel_provider = (
+                    self._kali._take_portcast_channel_provider()
+                )
             self.transcript.emit("session.open", phase="kali", status="ready")
         except BaseException as error:
             self.transcript.emit(
@@ -1850,6 +1899,30 @@ class LabSession:
         )
         return True
 
+    def _open_portcast_channel(self):
+        """Open the single service-owned PortCast channel after local controls."""
+
+        if (
+            not self._service_session
+            or type(self.config.dell_credential) is not ServiceCredentialRef
+            or type(self.config.kali_credential) is not ServiceCredentialRef
+            or self._kali is None
+        ):
+            raise PreflightRejected("PortCast channel requires the canonical service session")
+        if self._portcast_channel_used:
+            raise PreflightRejected("PortCast channel has one use")
+        if not self._portcast_candidate_ready:
+            raise PreflightRejected("PortCast channel requires a current-session preflight")
+        if not self._portcast_alternate_denied:
+            raise PreflightRejected("PortCast channel requires alternate destination control")
+        provider = self._service_portcast_channel_provider
+        if provider is None:
+            raise PreflightRejected("PortCast service channel is unavailable")
+        self._portcast_channel_used = True
+        self._portcast_candidate_ready = False
+        self._portcast_alternate_denied = False
+        return provider.open_portcast_channel()
+
     def run_portcast_identity(self) -> bytes:
         """Refuse dispatch until a parent-owned exact wire receipt is admitted."""
 
@@ -1929,8 +2002,10 @@ class LabSession:
     def close(self) -> None:
         self._runtime_manifest = None
         self._openssh_manifest = None
+        self._service_portcast_channel_provider = None
         self._portcast_candidate_ready = False
         self._portcast_alternate_denied = False
+        self._portcast_channel_used = False
         errors: list[BaseException] = []
         for resource_name in ("_kali", "_guardian", "_dell"):
             resource = getattr(self, resource_name)
@@ -2131,6 +2206,27 @@ class _ParamikoKali:
             self._proxy_channel.close()
 
 
+class _ServiceParamikoKali(_ParamikoKali):
+    """Nested Kali connection that transfers the fixed opener to its owner once."""
+
+    def __init__(self, transport: Any, proxy_channel: Any) -> None:
+        super().__init__(transport, proxy_channel)
+        profile = get_portcast_profile(PORTCAST_PROFILE_ID)
+        self._service_portcast_channel_provider: _ServicePortcastChannelProvider | None = (
+            _ServicePortcastChannelProvider(
+                transport,
+                timeout_s=profile.budget.timeout_s,
+            )
+        )
+
+    def _take_portcast_channel_provider(self) -> _ServicePortcastChannelProvider:
+        provider = self._service_portcast_channel_provider
+        if provider is None:
+            raise TransportError("PortCast service channel provider is unavailable")
+        self._service_portcast_channel_provider = None
+        return provider
+
+
 class _ParamikoDell:
     def __init__(
         self, transport: Any, resolver: CredentialResolver, transcript: Transcript
@@ -2166,7 +2262,7 @@ class _ParamikoDell:
         self,
         proxy_argv: tuple[str, ...],
         endpoint: SshEndpoint,
-        credential: EncryptedCredentialRef,
+        credential: EncryptedCredentialRef | ServiceCredentialRef,
     ) -> KaliConnection:
         expected_proxy = _proxy_argv(self._service_or_default_config(credential))
         if proxy_argv != expected_proxy or endpoint != DEFAULT_CONFIG.kali:
@@ -2188,7 +2284,12 @@ class _ParamikoDell:
                 del secret
             if not nested.is_authenticated():
                 raise TransportError("Kali SSH authentication failed")
-            return _ParamikoKali(nested, proxy_channel)
+            connection_type = (
+                _ServiceParamikoKali
+                if type(credential) is ServiceCredentialRef
+                else _ParamikoKali
+            )
+            return connection_type(nested, proxy_channel)
         except BaseException:
             nested.close()
             proxy_channel.close()

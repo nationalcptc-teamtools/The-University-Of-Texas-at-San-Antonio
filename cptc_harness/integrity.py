@@ -57,6 +57,7 @@ cptc_harness/advisories.py
 cptc_harness/assessment_contracts.py
 cptc_harness/audit.py
 cptc_harness/audit_control.py
+cptc_harness/audit_readonly.py
 cptc_harness/audit_service.py
 cptc_harness/audit_worker.py
 cptc_harness/broker.py
@@ -152,6 +153,8 @@ testing/__init__.py
 testing/cptc11_lab/__init__.py
 testing/cptc11_lab/kali_portcast_relay.py
 testing/cptc11_lab/portcast-live-plan-v1.json
+testing/cptc11_lab/portcast-live-plan-v2.json
+testing/cptc11_lab/portcast-live-plan-v3.json
 testing/cptc11_lab/portcast_broker_worker.py
 testing/cptc11_lab/portcast_acceptance.py
 testing/cptc11_lab/portcast_live.py

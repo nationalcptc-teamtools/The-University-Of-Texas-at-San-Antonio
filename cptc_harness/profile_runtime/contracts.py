@@ -53,6 +53,36 @@ _COUNTER_FIELDS = frozenset(
     }
 )
 
+# These values cross the isolated PortCast worker boundary and can appear in
+# metadata-only audit records. Keep both sets closed so target text, exception
+# text, and credentials cannot become diagnostic fields.
+PORTCAST_FAILURE_STAGES = frozenset(
+    {
+        "alternate_destination_control",
+        "connected_ack",
+        "deadline_before_target_open",
+        "evidence_seal",
+        "inventory",
+        "ipc",
+        "session_cleanup",
+        "session_open",
+        "target_open",
+        "wire_exchange",
+    }
+)
+PORTCAST_RESULT_LIMITATIONS = frozenset(
+    {
+        "audit_failure",
+        "capture_incomplete",
+        "certificate_mismatch",
+        "response_truncated",
+        "stop_latched",
+        "timeout",
+        "transport_interrupted",
+        "unexpected_response",
+    }
+)
+
 
 def _exact_dict(value: Any, expected: frozenset[str]) -> dict[str, Any]:
     if not isinstance(value, dict) or frozenset(value) != expected:

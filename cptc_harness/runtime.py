@@ -52,8 +52,11 @@ def initialize(root: Path, policy_path: Path, *, recipient: str, age_binary: Pat
 
 class Runtime:
     def __init__(self, root: Path, *, ledger_root: Path | None = None,
+                 ledger_directory: Path | None = None,
                  profile_wire_broker=None, verified_release=None,
-                 profile_channel_provider=_UNSET):
+                 profile_channel_provider=_UNSET, clock_service=None):
+        if ledger_root is not None and ledger_directory is not None:
+            raise PolicyError("ledger_root and ledger_directory are mutually exclusive")
         if profile_channel_provider is not _UNSET:
             raise PolicyError(
                 "profile_channel_provider was removed; use the isolated profile wire broker"
@@ -66,7 +69,16 @@ class Runtime:
             raise PolicyError("invalid runtime configuration")
         if hashlib.sha256(Path(config["age_binary"]).read_bytes()).hexdigest() != config["age_sha256"]:
             raise PolicyError("age executable differs from initialized deployment pin")
-        self.ledger_root = private_directory((ledger_root or device_root()) / self.policy.engagement_id, create=True)
+        if ledger_directory is not None:
+            try:
+                self.ledger_root = private_directory(ledger_directory)
+            except OSError:
+                raise PolicyError("trusted ledger directory is unavailable") from None
+        else:
+            self.ledger_root = private_directory(
+                (ledger_root or device_root()) / self.policy.engagement_id,
+                create=True,
+            )
         self.ledger = Ledger(self.ledger_root, self.policy.engagement_id, self.policy.device_id, policy_revision=self.policy.revision)
         self.audit = AuditService(
             self.root / "audit",
@@ -74,6 +86,7 @@ class Runtime:
             age_binary=config["age_binary"],
             age_recipient=config["age_recipient"],
             verified_release=verified_release,
+            clock_service=clock_service,
         )
         self.clock = self.audit.clock
         try:
@@ -90,7 +103,12 @@ class Runtime:
                 from .audit_control import required_emit
                 required_emit(self.audit, self.ledger, AuditEvent("assessment_recovery", data={
                     "items": [to_json(claim) for claim in recovered], "status": "uncertain", "automatic_retry": False}))
-            self.ledger.enroll_workspace(self.policy.workspace_id, self.audit.origin_id, hashlib.sha256(str(self.root).encode()).hexdigest())
+            if ledger_directory is None:
+                self.ledger.enroll_workspace(
+                    self.policy.workspace_id,
+                    self.audit.origin_id,
+                    hashlib.sha256(str(self.root).encode()).hexdigest(),
+                )
             self.publications = Publications(self.root, self.audit, self.ledger)
             self.publications.recover()
         except Exception:

@@ -119,6 +119,38 @@ def test_empty_seal_is_idempotent_and_later_export_can_log(tmp_path):
     audit.close()
 
 
+def test_profile_inspection_snapshot_never_probes_write_access(tmp_path):
+    tmp_path.chmod(0o700)
+    audit = AuditWriter(tmp_path, policy())
+    before = {
+        path.relative_to(tmp_path).as_posix(): (
+            path.lstat().st_mode,
+            path.lstat().st_mtime_ns,
+            path.lstat().st_ctime_ns,
+        )
+        for path in tmp_path.rglob("*")
+    }
+    audit.ready = lambda: pytest.fail("inspection called the write probe")
+
+    assert audit.profile_inspection_snapshot("synthetic-action") == {
+        "action_history": [],
+        "cleanup_receipt": None,
+        "has_result_receipt": False,
+        "wire_failure_stage": None,
+        "wire_receipt": None,
+    }
+    after = {
+        path.relative_to(tmp_path).as_posix(): (
+            path.lstat().st_mode,
+            path.lstat().st_mtime_ns,
+            path.lstat().st_ctime_ns,
+        )
+        for path in tmp_path.rglob("*")
+    }
+    assert after == before
+    audit.close()
+
+
 @pytest.mark.parametrize("failure", ["cap", "classification", "encryption", "allocation"])
 def test_capture_failure_remains_stopped_after_reopen(tmp_path, monkeypatch, failure):
     tmp_path.chmod(0o700)

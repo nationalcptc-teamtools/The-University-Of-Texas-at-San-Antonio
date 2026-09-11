@@ -77,7 +77,7 @@ def _property_readback(module, run_id, deny="any"):
         "BindPaths": " ".join(
             (
                 f"{worker}:/acceptance:rbind",
-                f"{audit}:/var/lib/cptc-harness/portcast-live-v1/runtime/audit:rbind",
+                f"{audit}:/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit:rbind",
             )
         ),
         "BindReadOnlyPaths": " ".join(

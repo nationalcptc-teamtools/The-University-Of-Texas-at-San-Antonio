@@ -11,7 +11,7 @@ import socket
 import struct
 import subprocess
 import threading
-from .clockcheck import ClockService
+from .clockcheck import ClockService, attested_clock, current_clock
 from .contracts import AuditSeal, AuditVerification, EvidenceRef, PolicyError, canonical_json, to_json
 from .integrity import verified_executable, verified_worker
 from .storage import private_directory
@@ -74,10 +74,24 @@ def receive(channel, count):
 
 
 class AuditService:
-    def __init__(self, root, policy, *, age_binary, age_recipient, verified_release=None):
+    def __init__(self, root, policy, *, age_binary, age_recipient, verified_release=None, clock_service=None):
         self.root = private_directory(Path(root), create=True)
         self.path, self.transcript_path = self.root / "audit.jsonl", self.root / "transcript.log"
-        self.clock = ClockService()
+        if clock_service is not None and not callable(clock_service):
+            raise PolicyError("clock service is invalid")
+        production_clock = False
+        if verified_release is not None:
+            from .integrity import VerifiedRelease
+
+            production_clock = (
+                type(verified_release) is VerifiedRelease
+                and verified_release.release_root == Path("/app")
+                and verified_release.launcher_path
+                == Path("/app/deployment/portcast-bootstrap")
+            )
+        self.clock = clock_service or ClockService(
+            source=attested_clock if production_clock else current_clock
+        )
         self._lock = threading.Lock()
         self._closed = False
         self.channel = None
@@ -220,6 +234,9 @@ class AuditService:
 
     def profile_action_history(self, action_id):
         return self._request("profile_action_history", action_id=action_id)
+
+    def profile_inspection_snapshot(self, action_id):
+        return self._request("profile_inspection_snapshot", action_id=action_id)
 
     def publication_receipts(self):
         return self._request("publication_receipts")

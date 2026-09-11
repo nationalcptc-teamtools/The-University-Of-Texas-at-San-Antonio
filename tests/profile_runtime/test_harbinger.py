@@ -115,6 +115,10 @@ def synthetic_open_window_plan(monkeypatch):
     now = datetime.now(timezone.utc)
     plan = replace(
         live.load_frozen_portcast_plan(),
+        # These tests exercise Harbinger export behavior after one synthetic
+        # action. Production schema v2 requires the real durable predecessor,
+        # which is outside this fixture's purpose.
+        schema_version=1,
         window_start=(now - timedelta(minutes=5)).strftime(
             "%Y-%m-%dT%H:%M:%S.%fZ"
         ),

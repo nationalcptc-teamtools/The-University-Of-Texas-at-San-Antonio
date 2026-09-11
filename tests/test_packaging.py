@@ -102,6 +102,7 @@ def test_reviewed_checkout_inputs_are_complete_and_ai_only():
     assert "cptc_harness/resources/bounded-profiles-v1.json" in contents["runtime"]
     assert "cptc_harness/profile_runtime/catalog.py" in contents["runtime"]
     assert "cptc_harness/profile_runtime/service_client.py" in contents["runtime"]
+    assert "cptc_harness/audit_readonly.py" in contents["runtime"]
     assert "cptc_harness/profiles/common_mysql/catalog.json" in contents["runtime"]
     assert "cptc_harness/profiles/common_tls/catalog.json" in contents["runtime"]
     assert "cptc_harness/host_profile_catalog.py" in contents["runtime"]
@@ -110,6 +111,8 @@ def test_reviewed_checkout_inputs_are_complete_and_ai_only():
     assert "cptc_harness/scanner_results.py" in contents["runtime"]
     assert "testing/cptc11_lab/transport.py" in contents["source"]
     assert "testing/cptc11_lab/portcast_service.py" in contents["source"]
+    assert "testing/cptc11_lab/portcast-live-plan-v2.json" in contents["source"]
+    assert "testing/cptc11_lab/portcast-live-plan-v3.json" in contents["source"]
     assert "deployment/portcast-live-v1.service" in contents["source"]
     assert "deployment/portcast-live-v1-acceptance@.service" in contents["source"]
     assert "deployment/portcast-live-v1.sysusers" in contents["source"]
@@ -136,7 +139,12 @@ def test_reviewed_checkout_inputs_are_complete_and_ai_only():
     assert "recursive-include cptc11_readonly_wave_v1 *.py *.json" in source_manifest
     assert "include cptc_harness/resources/portcast-bootstrap-v1.sha256" in source_manifest
     assert "include cptc_harness/resources/portcast-cpython-runtime-v1.json" in source_manifest
-    assert "include testing/cptc11_lab/README.md testing/cptc11_lab/portcast-live-plan-v1.json" in source_manifest
+    assert (
+        "include testing/cptc11_lab/README.md "
+        "testing/cptc11_lab/portcast-live-plan-v1.json "
+        "testing/cptc11_lab/portcast-live-plan-v2.json"
+        " testing/cptc11_lab/portcast-live-plan-v3.json"
+    ) in source_manifest
     attributes = (ROOT / ".gitattributes").read_text()
     assert "vendor/** -text -whitespace" in attributes
     assert "deployment/portcast-bootstrap -text" in attributes
