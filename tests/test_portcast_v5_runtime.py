@@ -87,7 +87,7 @@ def test_v5_loader_accepts_a_synthetic_copied_document(tmp_path, monkeypatch):
     monkeypatch.setattr(live, "_V5_PLAN_PATH", path)
     monkeypatch.setattr(live, "_PLAN_PATH", path)
 
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
 
     assert plan.schema_version == 5
     assert plan.action_id == live._V5_SUCCESSOR_ACTION_ID
@@ -100,7 +100,7 @@ def test_v5_loader_accepts_a_synthetic_copied_document(tmp_path, monkeypatch):
 
 
 def test_v5_runtime_uses_a_fresh_current_engagement_ledger(tmp_path, monkeypatch):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     root = tmp_path / "v5"
     root.mkdir(mode=0o700)
     (root / "runtime").mkdir(mode=0o700)
@@ -118,7 +118,7 @@ def test_v5_runtime_uses_a_fresh_current_engagement_ledger(tmp_path, monkeypatch
 
 
 def test_v5_predecessor_proof_precedes_runtime_creation(tmp_path, monkeypatch):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     release = VerifiedRelease(
         plan.release_id,
         "3" * 64,
@@ -148,7 +148,7 @@ def test_v5_predecessor_proof_precedes_runtime_creation(tmp_path, monkeypatch):
 
 
 def test_v5_success_then_replay_never_creates_a_second_broker(tmp_path, monkeypatch):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     release = _synthetic_v5_release(plan)
     events = []
 
@@ -195,7 +195,7 @@ def test_v5_success_then_replay_never_creates_a_second_broker(tmp_path, monkeypa
 
 
 def test_v5_stale_release_is_rejected_before_broker_factory(tmp_path, monkeypatch):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     release = _synthetic_v5_release(plan)
     stale = replace(release, manifest_sha256="4" * 64)
     called = []
@@ -209,7 +209,7 @@ def test_v5_stale_release_is_rejected_before_broker_factory(tmp_path, monkeypatc
             lambda *_args: called.append(True),
         )
 
-    with pytest.raises(PolicyError, match="release binding"):
+    with pytest.raises(PolicyError, match="frozen plan"):
         live.run_prepared_portcast_action(
             SimpleNamespace(_portcast_verified_release=release),
             plan,
@@ -222,7 +222,7 @@ def test_v5_stale_release_is_rejected_before_broker_factory(tmp_path, monkeypatc
 
 
 def test_v5_uncertain_replay_cannot_retry_the_worker(tmp_path, monkeypatch):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     release = _synthetic_v5_release(plan)
     called = []
     monkeypatch.setattr(live, "validate_current_release", lambda _plan: release)
@@ -243,7 +243,7 @@ def test_v5_uncertain_replay_cannot_retry_the_worker(tmp_path, monkeypatch):
 
 
 def test_v5_unbound_runtime_is_rejected_before_broker_factory(tmp_path, monkeypatch):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     release = _synthetic_v5_release(plan)
     called = []
     monkeypatch.setattr(live, "validate_current_release", lambda _plan: release)
@@ -258,7 +258,7 @@ def test_v5_unbound_runtime_is_rejected_before_broker_factory(tmp_path, monkeypa
 
 
 def test_v5_open_does_not_record_a_continuation(tmp_path, monkeypatch):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     release = VerifiedRelease(
         plan.release_id,
         "3" * 64,
@@ -308,7 +308,7 @@ def test_v5_open_does_not_record_a_continuation(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("mutation, expected", (("layout", "layout"), ("lock", "provision lock"), ("policy", "policy|unknown")))
 def test_v5_rejects_outer_v4_state_mutation(tmp_path, monkeypatch, mutation, expected):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v5()
     v4 = live.load_frozen_portcast_plan_v4()
     root = tmp_path / "v4"
     root.mkdir(mode=0o700)
@@ -412,7 +412,7 @@ def test_v5_loader_rejects_fixed_v4_startup_fact_drift(tmp_path, monkeypatch):
     monkeypatch.setattr(live, "_PLAN_PATH", path)
 
     with pytest.raises(PolicyError, match="failure stage"):
-        live.load_frozen_portcast_plan()
+        live.load_frozen_portcast_plan_v5()
 
 
 def test_v5_client_accepts_only_the_v5_action():

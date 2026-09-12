@@ -84,7 +84,23 @@ def _create_synthetic_v3_runtime(root: Path) -> Path:
     runtime = root / "portcast-live-v3/runtime"
     runtime.mkdir(parents=True, mode=0o700)
     (root / "portcast-live-v4/runtime").mkdir(parents=True, mode=0o700)
+    _create_synthetic_v5_state(root)
     return runtime
+
+
+def _create_synthetic_v5_state(root: Path) -> Path:
+    parent = root / "portcast-live-v5"
+    parent.mkdir(mode=0o755, exist_ok=True)
+    runtime = parent / "runtime"
+    runtime.mkdir(mode=0o700, exist_ok=True)
+    admission = parent / "admission"
+    admission.mkdir(mode=0o700, exist_ok=True)
+    marker = admission / deployment._V5_MARKER_NAME
+    marker.write_bytes(deployment._V5_MARKER_PAYLOAD)
+    marker.chmod(0o600)
+    projection = parent / "admission-projection"
+    projection.mkdir(mode=0o755, exist_ok=True)
+    return parent
 
 
 def _legacy_v2_service_request_for_test(
@@ -148,6 +164,24 @@ def test_service_result_v4_validator_is_distinct_and_strict():
     assert service_client.validate_portcast_result_v4(value) == value
     with pytest.raises(PolicyError, match="invalid metadata"):
         service_client.validate_portcast_result(value)
+
+
+def test_service_result_v5_validator_remains_historical_and_strict():
+    value = _complete_service_result(
+        "cptc11-portcast-public-identity-action-v5"
+    )
+    assert service_client.validate_portcast_result_v5(value) == value
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        service_client.validate_portcast_result(value)
+
+
+def test_service_result_v6_validator_is_current_and_strict():
+    value = _complete_service_result(
+        "cptc11-portcast-public-identity-action-v6"
+    )
+    assert service_client.validate_portcast_result_v6(value) == value
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        service_client.validate_portcast_result_v5(value)
 
 
 def test_service_result_validator_accepts_only_fixed_failure_stage_metadata():
@@ -475,7 +509,7 @@ def test_deployment_unit_exposes_only_the_authenticated_fixed_socket():
     assert "BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json" in unit
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust\n" not in unit
     assert "BindPaths=/run/cptc-harness" in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5" in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v6" in unit
     assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK\n" in unit
     assert "AF_INET6" not in unit
     assert "IPAddressDeny=any" in unit
@@ -502,10 +536,15 @@ def test_sysusers_and_units_require_the_dedicated_nonroot_service_identity():
         assert "CapabilityBoundingSet=\n" in unit
         assert "AmbientCapabilities=\n" in unit
         assert "User=root\n" not in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v6\n" in service_unit
     assert "ExecStartPre=+/app/deployment/portcast-bootstrap --admit-start\n" in service_unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v5/admission:/var/lib/cptc-harness/portcast-live-v1/admission\n" in service_unit
-    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/admission:/var/lib/cptc-harness/portcast-live-v1/admission\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v6/predecessors/v5/receipt.json:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/receipt.json\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v6/predecessors/v5:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5\n" not in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5-predecessor\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission-projection:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission-projection\n" in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4\n" in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor\n" in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation\n" in service_unit
@@ -654,27 +693,27 @@ def test_deployment_creates_only_the_service_owned_runtime_subtree(tmp_path, mon
     before = state.stat()
     identity = deployment.ServiceIdentity("_cptc-portcast", os.getuid(), os.getgid())
     monkeypatch.setattr(deployment, "STATE_PATH", state)
-    v5_parent = tmp_path / "portcast-live-v5"
-    monkeypatch.setattr(deployment, "V5_STATE_PATH", v5_parent)
-    monkeypatch.setattr(deployment, "V5_RUNTIME_PATH", v5_parent / "runtime")
+    v6_parent = tmp_path / "portcast-live-v6"
+    monkeypatch.setattr(deployment, "V6_STATE_PATH", v6_parent)
+    monkeypatch.setattr(deployment, "V6_RUNTIME_PATH", v6_parent / "runtime")
     monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
     monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
 
     runtime = deployment._prepare_runtime_subtree(identity)
 
-    assert runtime == v5_parent / "runtime"
+    assert runtime == v6_parent / "runtime"
     assert stat.S_IMODE(state.stat().st_mode) == 0o700
     assert (state.stat().st_uid, state.stat().st_gid) == (before.st_uid, before.st_gid)
-    assert stat.S_IMODE(v5_parent.stat().st_mode) == 0o755
-    assert (v5_parent.stat().st_uid, v5_parent.stat().st_gid) == (
+    assert stat.S_IMODE(v6_parent.stat().st_mode) == 0o755
+    assert (v6_parent.stat().st_uid, v6_parent.stat().st_gid) == (
         deployment.ROOT_UID,
         deployment.ROOT_GID,
     )
     assert (runtime.stat().st_uid, runtime.stat().st_gid) == (identity.uid, identity.gid)
     assert stat.S_IMODE(runtime.stat().st_mode) == 0o700
     admission, projection = deployment._prepare_start_admission()
-    assert admission == v5_parent / "admission"
-    assert projection == v5_parent / "admission-projection"
+    assert admission == v6_parent / "admission"
+    assert projection == v6_parent / "admission-projection"
     assert stat.S_IMODE(admission.stat().st_mode) == 0o700
     assert (admission.stat().st_uid, admission.stat().st_gid) == (
         deployment.ROOT_UID,
@@ -682,8 +721,8 @@ def test_deployment_creates_only_the_service_owned_runtime_subtree(tmp_path, mon
     )
     assert stat.S_IMODE(projection.stat().st_mode) == 0o755
     admission, projection = deployment._prepare_start_admission()
-    assert admission == v5_parent / "admission"
-    assert projection == v5_parent / "admission-projection"
+    assert admission == v6_parent / "admission"
+    assert projection == v6_parent / "admission-projection"
     assert (admission.stat().st_uid, admission.stat().st_gid) == (
         deployment.ROOT_UID,
         deployment.ROOT_GID,
@@ -696,6 +735,48 @@ def test_deployment_creates_only_the_service_owned_runtime_subtree(tmp_path, mon
     assert stat.S_IMODE(projection.stat().st_mode) == 0o755
 
 
+def test_deployment_creates_exact_immutable_v5_predecessor_receipt(tmp_path, monkeypatch):
+    state = tmp_path / "portcast-live-v1"
+    state.mkdir(mode=0o700)
+    identity = deployment.ServiceIdentity("_cptc-portcast", os.getuid(), os.getgid())
+    monkeypatch.setattr(deployment, "STATE_PATH", state)
+    monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
+    deployment._prepare_runtime_subtree(identity)
+
+    receipt = deployment._prepare_v5_receipt()
+    assert receipt.read_bytes() == deployment._V5_RECEIPT_BYTES
+    assert hashlib.sha256(receipt.read_bytes()).hexdigest() == deployment._V5_RECEIPT_SHA256
+    assert stat.S_IMODE(receipt.stat().st_mode) == 0o444
+    assert stat.S_IMODE(receipt.parent.stat().st_mode) == 0o555
+    assert deployment._prepare_v5_receipt() == receipt
+
+    receipt.chmod(0o644)
+    with pytest.raises(deployment.DeploymentError, match="metadata"):
+        deployment._prepare_v5_receipt()
+
+
+@pytest.mark.parametrize("mutation", ("runtime", "marker", "projection"))
+def test_deployment_rejects_any_v5_predecessor_mutation(tmp_path, monkeypatch, mutation):
+    state = tmp_path / "portcast-live-v1"
+    state.mkdir(mode=0o700)
+    _create_synthetic_historical_inputs(state)
+    _create_synthetic_v3_runtime(tmp_path)
+    identity = deployment.ServiceIdentity("_cptc-portcast", os.getuid(), os.getgid())
+    monkeypatch.setattr(deployment, "STATE_PATH", state)
+    monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
+    v5 = tmp_path / "portcast-live-v5"
+    if mutation == "runtime":
+        (v5 / "runtime/unexpected").write_text("x")
+    elif mutation == "marker":
+        (v5 / "admission/v5-start.marker").write_bytes(b"changed")
+    else:
+        (v5 / "admission-projection/unexpected").write_text("x")
+    with pytest.raises(deployment.DeploymentError, match="v5"):
+        deployment._validate_historical_inputs(identity)
+
+
 def test_deployment_requires_existing_predecessor_runtimes_without_mutation(
     tmp_path, monkeypatch
 ):
@@ -706,6 +787,7 @@ def test_deployment_requires_existing_predecessor_runtimes_without_mutation(
     v4_predecessor = tmp_path / "portcast-live-v4/runtime"
     predecessor.mkdir(parents=True, mode=0o700)
     v4_predecessor.mkdir(parents=True, mode=0o700)
+    _create_synthetic_v5_state(tmp_path)
     identity = deployment.ServiceIdentity("_cptc-portcast", os.getuid(), os.getgid())
     monkeypatch.setattr(deployment, "STATE_PATH", state)
     monkeypatch.setattr(deployment, "V3_STATE_PATH", predecessor.parent)
@@ -1157,9 +1239,14 @@ def test_deployment_helper_plan_is_no_target_and_requires_reviewed_release():
     assert result["v5_admission_projection_path"].endswith(
         "/portcast-live-v5/admission-projection"
     )
-    assert result["v5_admission_path"].endswith("/portcast-live-v5/admission")
-    assert result["v5_admission_projection_path"].endswith(
-        "/portcast-live-v5/admission-projection"
+    assert result["v6_state_path"].endswith("/portcast-live-v6")
+    assert result["v6_runtime_path"].endswith("/portcast-live-v6/runtime")
+    assert result["v6_admission_path"].endswith("/portcast-live-v6/admission")
+    assert result["v6_admission_projection_path"].endswith(
+        "/portcast-live-v6/admission-projection"
+    )
+    assert result["v6_v5_receipt_path"].endswith(
+        "/portcast-live-v6/predecessors/v5/receipt.json"
     )
     helper = root / "deployment/manage-portcast-service.py"
     assert not os.access(helper, os.X_OK)

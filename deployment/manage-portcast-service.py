@@ -40,16 +40,21 @@ SYSUSERS_SOURCE = Path("deployment/portcast-live-v1.sysusers")
 SYSUSERS_PATH = Path("/usr/lib/sysusers.d/cptc-harness-portcast.conf")
 ANCHOR_PATH = Path("/etc/cptc-harness/trust/portcast-live-v1.sha256")
 STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v1")
-# Keep the failed v3 and v4 runtimes as immutable predecessor inputs. The
-# current admission owns a separate v5 runtime.
+# Keep the failed v3 through v5 states as immutable predecessor inputs. The
+# current admission owns a separate v6 state.
 V3_STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v3")
 V4_STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v4")
 V5_STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v5")
+V6_STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v6")
 V3_RUNTIME_PATH = V3_STATE_PATH / "runtime"
 V4_RUNTIME_PATH = V4_STATE_PATH / "runtime"
 V5_RUNTIME_PATH = V5_STATE_PATH / "runtime"
 V5_ADMISSION_PATH = V5_STATE_PATH / "admission"
 V5_ADMISSION_PROJECTION_PATH = V5_STATE_PATH / "admission-projection"
+V6_RUNTIME_PATH = V6_STATE_PATH / "runtime"
+V6_ADMISSION_PATH = V6_STATE_PATH / "admission"
+V6_ADMISSION_PROJECTION_PATH = V6_STATE_PATH / "admission-projection"
+V6_V5_RECEIPT_PATH = V6_STATE_PATH / "predecessors/v5/receipt.json"
 OLD_LEDGER_PATH = STATE_PATH / "runtime/ledger/cptc11-dell-validation"
 OLD_AUDIT_PATH = STATE_PATH / "runtime/runtime/audit"
 OLD_RESULT_PATH = STATE_PATH / (
@@ -90,6 +95,48 @@ _EXECUTABLE_FILES = frozenset(
 _ROOTFS_ANCHOR = "/etc/cptc-harness/trust/portcast-live-v1.sha256"
 _ROOTFS_DEPLOYMENT_LOCK = "/var/lib/cptc-harness/portcast-live-v1/deployment.lock"
 _CLOCK_OFFSET = re.compile(r"Offset:\s*([+-]?[0-9.]+)\s*(ns|us|µs|ms|s)\b")
+_V5_MARKER_NAME = "v5-start.marker"
+_V5_MARKER_PAYLOAD = (
+    b"PORTCAST-START-V1\n"
+    b"release 4c9db1a159d7b1ca2ef38170458f32a2a17a6cd56d7c19e912a187cac138b918\n"
+    b"plan dcb908436af15c0945926cabd16d12df1a78064bb85b2d0d675682da5164d08b\n"
+    b"action cptc11-portcast-public-identity-action-v5\n"
+)
+_V5_RECEIPT = {
+    "action_id": "cptc11-portcast-public-identity-action-v5",
+    "admission_marker_present": True,
+    "admission_marker_sha256": "6d4a1c0f18116b063bd7758e63cf3a33ca2f50f77137dbbcc7703a0126e718b5",
+    "application_credentials_loaded": False,
+    "broker_socket_opened": False,
+    "broker_worker_sha256": "0a3a61a1e25d5381013d88938b573e7e4a3a7a2076b984ad8391a216e4fde983",
+    "charged_tcp_connects": 0,
+    "engagement_id": "cptc11-dell-validation-portcast-v5",
+    "exec_start_pre_exit_status": 126,
+    "failure_at": "2026-09-12T08:20:07.741362Z",
+    "failure_stage": "start-admission-projection-write",
+    "first_byte_observed": False,
+    "launcher_sha256": "15deb8743ea56f07d7df0b4f98775ef7f050bf01f7aa15181ee95eaf44bd9fb0",
+    "main_process_started": False,
+    "plan_file_sha256": "dcb908436af15c0945926cabd16d12df1a78064bb85b2d0d675682da5164d08b",
+    "plan_sha256": "8c519372e6a10b748c8dcffa128bdb00b03558594f5cd504ddd1e23f6f569ee9",
+    "possible_tcp_connects": 0,
+    "profile_worker_sha256": "472620e6112b00882f480ea4a0209e8dcdab9e0c54ba98ae2bef86c07342f400",
+    "projection_marker_present": False,
+    "release_manifest_sha256": "4c9db1a159d7b1ca2ef38170458f32a2a17a6cd56d7c19e912a187cac138b918",
+    "request_sha256": "2de0bde4095f7832f225d8940d2006e83676f048f585f38c8af386c4f598c2c0",
+    "result_present": False,
+    "runtime_tree": [{"kind": "directory", "mode": 0o700, "path": "."}],
+    "schema": "portcast-v5-predecessor-state-v1",
+    "service_unit_sha256": "259ac6be5da2a11913266310fc2bd56e8d8371f392cd67db3b2757632b908f2e",
+    "stop_reason": "service pre-start failed after private admission marker before projection",
+    "target_capability_created": False,
+    "target_sha256": "3f1663098809eddcb0187999789b7442220f6a8204d091d088b7cd2871e9eef3",
+    "target_traffic": False,
+}
+_V5_RECEIPT_BYTES = json.dumps(
+    _V5_RECEIPT, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+).encode("ascii")
+_V5_RECEIPT_SHA256 = "42fdd74d5b0c99a00a3f2761c1efcc3e3a579c86caf30c85bf01d34cf9400ffe"
 
 
 class DeploymentError(RuntimeError):
@@ -151,6 +198,36 @@ def _v5_admission_projection_path() -> Path:
     if STATE_PATH == _DEFAULT_STATE_PATH:
         return V5_ADMISSION_PROJECTION_PATH
     return _v5_state_path() / "admission-projection"
+
+
+def _v6_state_path() -> Path:
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V6_STATE_PATH
+    return STATE_PATH.parent / "portcast-live-v6"
+
+
+def _v6_runtime_path() -> Path:
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V6_RUNTIME_PATH
+    return _v6_state_path() / "runtime"
+
+
+def _v6_admission_path() -> Path:
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V6_ADMISSION_PATH
+    return _v6_state_path() / "admission"
+
+
+def _v6_admission_projection_path() -> Path:
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V6_ADMISSION_PROJECTION_PATH
+    return _v6_state_path() / "admission-projection"
+
+
+def _v6_v5_receipt_path() -> Path:
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V6_V5_RECEIPT_PATH
+    return _v6_state_path() / "predecessors/v5/receipt.json"
 
 
 def _historical_paths() -> tuple[Path, Path, Path]:
@@ -501,6 +578,55 @@ def _service_metadata(
     return info
 
 
+def _root_metadata(path: Path, *, directory: bool, mode: int) -> os.stat_result:
+    try:
+        info = path.lstat()
+    except OSError:
+        raise DeploymentError(f"required root-owned path is unavailable: {path}") from None
+    correct_type = stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)
+    if (
+        not correct_type
+        or info.st_uid != ROOT_UID
+        or info.st_gid != ROOT_GID
+        or stat.S_IMODE(info.st_mode) != mode
+        or not directory and info.st_nlink != 1
+    ):
+        raise DeploymentError(f"root-owned path metadata differs: {path}")
+    return info
+
+
+def _directory_names(path: Path) -> list[str]:
+    try:
+        return sorted(entry.name for entry in os.scandir(path))
+    except OSError:
+        raise DeploymentError(f"directory cannot be inspected: {path}") from None
+
+
+def _read_exact(path: Path, maximum: int = 64 * 1024) -> bytes:
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except OSError:
+        raise DeploymentError(f"required file is unavailable: {path}") from None
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > maximum:
+            raise DeploymentError(f"required file differs: {path}")
+        chunks: list[bytes] = []
+        remaining = maximum + 1
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 65536))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        value = b"".join(chunks)
+        if len(value) > maximum:
+            raise DeploymentError(f"required file differs: {path}")
+        return value
+    finally:
+        os.close(descriptor)
+
+
 def _validate_historical_inputs(identity: ServiceIdentity) -> None:
     """Check exact predecessor inputs and never create or mutate them."""
 
@@ -518,12 +644,32 @@ def _validate_historical_inputs(identity: ServiceIdentity) -> None:
     _service_metadata(
         result, identity, directory=False, mode=0o600, allow_empty=False
     )
+    v5_parent = _v5_state_path()
+    _root_metadata(v5_parent, directory=True, mode=0o755)
+    v5_runtime = _v5_runtime_path()
+    _service_metadata(
+        v5_runtime, identity, directory=True, mode=0o700, allow_empty=True
+    )
+    if _directory_names(v5_runtime):
+        raise DeploymentError("PortCast v5 runtime is not empty")
+    v5_admission = _v5_admission_path()
+    _root_metadata(v5_admission, directory=True, mode=0o700)
+    if _directory_names(v5_admission) != [_V5_MARKER_NAME]:
+        raise DeploymentError("PortCast v5 admission state differs")
+    marker = v5_admission / _V5_MARKER_NAME
+    _root_metadata(marker, directory=False, mode=0o600)
+    if _read_exact(marker, 4096) != _V5_MARKER_PAYLOAD:
+        raise DeploymentError("PortCast v5 admission marker differs")
+    v5_projection = _v5_admission_projection_path()
+    _root_metadata(v5_projection, directory=True, mode=0o755)
+    if _directory_names(v5_projection):
+        raise DeploymentError("PortCast v5 admission projection differs")
 
 
 def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
-    """Create only the v5 service-writable subtree."""
+    """Create only the v6 service-writable subtree."""
 
-    parent = _v5_state_path()
+    parent = _v6_state_path()
     try:
         info = parent.lstat()
     except FileNotFoundError:
@@ -532,17 +678,17 @@ def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
             os.chown(parent, ROOT_UID, ROOT_GID)
             parent.chmod(0o755)
         except OSError:
-            raise DeploymentError("PortCast v5 state parent cannot be created") from None
+            raise DeploymentError("PortCast v6 state parent cannot be created") from None
         info = parent.lstat()
     except OSError:
-        raise DeploymentError("PortCast v5 state parent is unavailable") from None
+        raise DeploymentError("PortCast v6 state parent is unavailable") from None
     if (
         not stat.S_ISDIR(info.st_mode)
         or info.st_uid != ROOT_UID
         or info.st_gid != ROOT_GID
         or stat.S_IMODE(info.st_mode) != 0o755
     ):
-        raise DeploymentError("PortCast v5 state parent metadata differs")
+        raise DeploymentError("PortCast v6 state parent metadata differs")
     runtime = parent / "runtime"
     try:
         info = runtime.lstat()
@@ -553,16 +699,16 @@ def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
             runtime.chmod(0o700)
             info = runtime.lstat()
         except OSError:
-            raise DeploymentError("PortCast v5 service runtime cannot be created") from None
+            raise DeploymentError("PortCast v6 service runtime cannot be created") from None
     except OSError:
-        raise DeploymentError("PortCast v5 service runtime is unavailable") from None
+        raise DeploymentError("PortCast v6 service runtime is unavailable") from None
     if (
         not stat.S_ISDIR(info.st_mode)
         or info.st_uid != identity.uid
         or info.st_gid != identity.gid
         or stat.S_IMODE(info.st_mode) != 0o700
     ):
-        raise DeploymentError("PortCast v5 service runtime metadata differs")
+        raise DeploymentError("PortCast v6 service runtime metadata differs")
     return runtime
 
 
@@ -570,8 +716,8 @@ def _prepare_start_admission() -> tuple[Path, Path]:
     """Prepare root-only one-start state outside the service runtime."""
 
     paths = (
-        (_v5_admission_path(), 0o700, "PortCast v5 admission"),
-        (_v5_admission_projection_path(), 0o755, "PortCast v5 admission projection"),
+        (_v6_admission_path(), 0o700, "PortCast v6 admission"),
+        (_v6_admission_projection_path(), 0o755, "PortCast v6 admission projection"),
     )
     for path, mode, label in paths:
         try:
@@ -593,7 +739,50 @@ def _prepare_start_admission() -> tuple[Path, Path]:
             or stat.S_IMODE(info.st_mode) != mode
         ):
             raise DeploymentError(f"{label} metadata differs")
-    return _v5_admission_path(), _v5_admission_projection_path()
+    return _v6_admission_path(), _v6_admission_projection_path()
+
+
+def _prepare_v5_receipt() -> Path:
+    """Create one immutable v5 predecessor receipt in the fresh v6 state."""
+
+    if _digest(_V5_RECEIPT_BYTES) != _V5_RECEIPT_SHA256:
+        raise DeploymentError("PortCast v5 predecessor receipt constant differs")
+    receipt = _v6_v5_receipt_path()
+    parent = receipt.parent
+    grandparent = parent.parent
+    if receipt.exists() or receipt.is_symlink():
+        _root_metadata(grandparent, directory=True, mode=0o555)
+        _root_metadata(parent, directory=True, mode=0o555)
+        _root_metadata(receipt, directory=False, mode=0o444)
+        if (
+            _directory_names(grandparent) != [parent.name]
+            or _directory_names(parent) != [receipt.name]
+            or _read_exact(receipt) != _V5_RECEIPT_BYTES
+        ):
+            raise DeploymentError("PortCast v5 predecessor receipt differs")
+        return receipt
+    if grandparent.exists() or grandparent.is_symlink() or parent.exists() or parent.is_symlink():
+        raise DeploymentError("PortCast v5 predecessor receipt state is incomplete")
+    try:
+        grandparent.mkdir(mode=0o755)
+        os.chown(grandparent, ROOT_UID, ROOT_GID)
+        grandparent.chmod(0o755)
+        parent.mkdir(mode=0o755)
+        os.chown(parent, ROOT_UID, ROOT_GID)
+        parent.chmod(0o755)
+        _write(receipt, _V5_RECEIPT_BYTES, 0o444)
+        parent.chmod(0o555)
+        grandparent.chmod(0o555)
+        _fsync_parent(receipt)
+        _fsync_parent(parent)
+    except OSError:
+        raise DeploymentError("PortCast v5 predecessor receipt cannot be created") from None
+    _root_metadata(grandparent, directory=True, mode=0o555)
+    _root_metadata(parent, directory=True, mode=0o555)
+    _root_metadata(receipt, directory=False, mode=0o444)
+    if _read_exact(receipt) != _V5_RECEIPT_BYTES:
+        raise DeploymentError("PortCast v5 predecessor receipt differs")
+    return receipt
 
 
 def _prerequisites(identity: ServiceIdentity | None = None) -> ServiceIdentity:
@@ -606,6 +795,7 @@ def _prerequisites(identity: ServiceIdentity | None = None) -> ServiceIdentity:
     _validate_historical_inputs(identity)
     _prepare_runtime_subtree(identity)
     _prepare_start_admission()
+    _prepare_v5_receipt()
     return identity
 
 
@@ -981,10 +1171,13 @@ def _prepare_tree(path: Path, payloads: dict[str, bytes]) -> None:
         "var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit",
         "var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor",
         "var/lib/cptc-harness/portcast-live-v1/runtime/v4",
-        "var/lib/cptc-harness/portcast-live-v1/runtime/v5/runtime/audit",
-        "var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/v5-predecessor",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/v6/runtime/audit",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6",
         "var/lib/cptc-harness/portcast-live-v1/admission",
         "var/lib/cptc-harness/portcast-live-v1/admission-projection",
+        "var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission",
+        "var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission-projection",
         "var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation",
         "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit",
         "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results",
@@ -992,6 +1185,10 @@ def _prepare_tree(path: Path, payloads: dict[str, bytes]) -> None:
         "var/lib/cptc-harness/portcast-live-v5/runtime",
         "var/lib/cptc-harness/portcast-live-v5/admission",
         "var/lib/cptc-harness/portcast-live-v5/admission-projection",
+        "var/lib/cptc-harness/portcast-live-v6/runtime",
+        "var/lib/cptc-harness/portcast-live-v6/admission",
+        "var/lib/cptc-harness/portcast-live-v6/admission-projection",
+        "var/lib/cptc-harness/portcast-live-v6/predecessors/v5",
         "tmp",
     ):
         directory = path / relative
@@ -1045,6 +1242,11 @@ def plan(expected_manifest_sha256: str | None) -> dict[str, Any]:
         "v5_runtime_path": str(_v5_runtime_path()),
         "v5_admission_path": str(_v5_admission_path()),
         "v5_admission_projection_path": str(_v5_admission_projection_path()),
+        "v6_state_path": str(_v6_state_path()),
+        "v6_runtime_path": str(_v6_runtime_path()),
+        "v6_admission_path": str(_v6_admission_path()),
+        "v6_admission_projection_path": str(_v6_admission_projection_path()),
+        "v6_v5_receipt_path": str(_v6_v5_receipt_path()),
         "historical_ledger_path": str(_historical_paths()[0]),
         "historical_audit_path": str(_historical_paths()[1]),
         "historical_result_path": str(_historical_paths()[2]),

@@ -11,7 +11,7 @@
   "portcast-live-v1": {
     "bootstrap_manifest": {
       "path": "cptc_harness/resources/portcast-bootstrap-v1.sha256",
-      "sha256": "e399be70fa1657411cae80cc609e397ba9ae156d3b038f8975fd4094a197338f"
+      "sha256": "70e9d6ac105803f413ae0eb15ac41d131d3926ae216dc98ef5912f3a12d28a0d"
     },
     "compatible_profile_workers": {
       "web.http_jellyfin_public_identity": [
@@ -969,7 +969,7 @@
       "cptc_harness/elf.py": "9f92f3e29d4ae769c8b42d59a829314bd78458beb371953b8c9621b38fc2602c",
       "cptc_harness/exports.py": "677e50f4f3012f538b360d243a2cdfc3076347afb1663b6ba089b41352b36878",
       "cptc_harness/host_profile_catalog.py": "ad6616622bb175dc393c236664259a6ddd95f562515df07a4837c488f78743bc",
-      "cptc_harness/integrity.py": "13b3fbddf143dd615aa16d55ae96331bf0cfa510662fa8ee49e0bd29b2a5fe96",
+      "cptc_harness/integrity.py": "b82495f44cb146c969792d1ec301f6a6ee25a1128844310cab36aeb4bb60beb4",
       "cptc_harness/isolation.py": "81d8de118a8b93d364266fabd081c18b090be64f29cc08ccb689c7a52c6ba9f1",
       "cptc_harness/ledger.py": "60962ebabee7e9a7bada5fc2c2a1011bbd106c532e184bd09c8663a605f6f0e9",
       "cptc_harness/mcp_server.py": "a1a564aa02558435b644dfc8e4540ddb2ef13e30005183781f97cd8ee0688275",
@@ -992,14 +992,14 @@
       "cptc_harness/portcast_identity.py": "a365256cb27e22426f7d792861a069d90431dac93bdd8c25b8650818a0b76ada",
       "cptc_harness/preambles.py": "e17ba242b1c8e65a2df0adcfb382cf95785e64b44b52ae85a1af32edf0fdfaec",
       "cptc_harness/profile_runtime/__init__.py": "875be3c06de52aa1e231afddb6656b469929cb3d94fb54f15e4c60c5628ec30a",
-      "cptc_harness/profile_runtime/broker_ipc.py": "ff9c65d99ecfeb7915dcbcbba087489f42e794e8ea0f64cdc4125741dbbe115b",
+      "cptc_harness/profile_runtime/broker_ipc.py": "fcb98787b1be74eb038a91f8ea16f2a1002075d8eb3aaa1b0b631cdb817b31bf",
       "cptc_harness/profile_runtime/capability.py": "7990ee138e125da13e9f20bc99e93d935fad8558666d52747f58779db764f4eb",
       "cptc_harness/profile_runtime/catalog.py": "badc6f0e1fd596a29262a2eef94711f6bcba1272a8326177ac0ec5da5e62c52c",
       "cptc_harness/profile_runtime/contracts.py": "724960a54580c15d666d3728b3c78b3150cee6304e744eef1788861df9dd2428",
       "cptc_harness/profile_runtime/executor.py": "e04d8ffbe17e31c82420a12e7f2275e505d75dda77ee045864ac113ad7467c58",
       "cptc_harness/profile_runtime/harbinger.py": "023994e21d56386831300b68150c2a472aaa3647d1b0c4854d33a0626ccf46ce",
       "cptc_harness/profile_runtime/receipts.py": "145b8ede1823ccccfaa44c2a746fad3e52db39e2f4eb4fb8c85d163c539074d0",
-      "cptc_harness/profile_runtime/service_client.py": "de27816928efc4ecb66e6377f738871f47c352efeb902ec56c1b1240281e9322",
+      "cptc_harness/profile_runtime/service_client.py": "c37ea93feef0db2a9c40d5c215d1412d9e2f70c1695fcd2a6e5e8c33f6e1e0c4",
       "cptc_harness/profile_runtime/worker.py": "472620e6112b00882f480ea4a0209e8dcdab9e0c54ba98ae2bef86c07342f400",
       "cptc_harness/profiles/__init__.py": "f3c4239b29ecf8ce52c72e09645ca916ab28d043c86aab54010e8d1d3d0bb70b",
       "cptc_harness/profiles/common_mysql/__init__.py": "343769a38931fc76c1b8f7004477c1c1a434aa63550e2b556719be3e02662abf",
@@ -1012,7 +1012,7 @@
       "cptc_harness/registry.py": "7b0db7a9243457f73c4dbdbacd0afdfc4036368968b23fbaa4de1a1f3c5b114f",
       "cptc_harness/reporting.py": "7f085f3517da5914cf9c8024b4128667ef307361bce8a6c7739995c84dec3a25",
       "cptc_harness/resources/bounded-profiles-v1.json": "7aaaf2418f0d8b6749a683cbee6f8e4d66762cf6a64d42fdbfb0e2ecdc548ee1",
-      "cptc_harness/resources/portcast-bootstrap-v1.sha256": "e399be70fa1657411cae80cc609e397ba9ae156d3b038f8975fd4094a197338f",
+      "cptc_harness/resources/portcast-bootstrap-v1.sha256": "70e9d6ac105803f413ae0eb15ac41d131d3926ae216dc98ef5912f3a12d28a0d",
       "cptc_harness/resources/portcast-cpython-runtime-v1.json": "1cbd1948c3e88449aa25682679584060d91864187951eb58db659a812d0f476a",
       "cptc_harness/resources/portcast-python-runtime-v1.json": "7d62f74e159b1de534fa9ce3b7d36ca2f5724e09966778c5510d757d50ff2053",
       "cptc_harness/response_capture.py": "b5804d916d86752007c11c9a0210ad2ef6ad1514163581d96eeebe3e03dc1d4d",
@@ -1031,14 +1031,14 @@
       "cptc_harness/skills.py": "67760247ad120f7f272740e6554532b11b3c1945aac49fcc921d8e2ac45c0675",
       "cptc_harness/storage.py": "51a82453810f6759e0b46bf75d748593d09980e11efba06d9aaa81dcf4cc5141",
       "cptc_harness/tool_catalog.py": "ddcc4cd24be7d405f9267d3617034d10cb12854fc69e308fe0ebcd00dbff06f9",
-      "deployment/manage-portcast-service.py": "d950be64e69dcf91c138e16d515533c971b7af2c164398bf81ece36c9230a40a",
-      "deployment/portcast-bootstrap": "15deb8743ea56f07d7df0b4f98775ef7f050bf01f7aa15181ee95eaf44bd9fb0",
-      "deployment/portcast-bootstrap.go": "7c497cbb6863c96933f673cd3471d4fddfec6e7a1b8a98c788ed5b80b2c5b7a1",
+      "deployment/manage-portcast-service.py": "acd39218eb0c9da83e689f9730377084b29640f270566ceb6a2b1cba870a2d27",
+      "deployment/portcast-bootstrap": "f43832c3fbca7d0f33f24ce7d6c5f677ea35e73430c8bd75b42f76c053742014",
+      "deployment/portcast-bootstrap.go": "a84eb461250b83de6f303e12291a7affc757b0469017276e304a04bea9ea2326",
       "deployment/portcast-live-v1-acceptance@.service": "aa5c370bffb18d7d751ea2540ec43d63e353d67d03cd9229c237c8a4c4b08320",
-      "deployment/portcast-live-v1.service": "259ac6be5da2a11913266310fc2bd56e8d8371f392cd67db3b2757632b908f2e",
+      "deployment/portcast-live-v1.service": "7479ea9475f3c258787d459e853be03fb376a66c908fb1e059114907b5d978cb",
       "deployment/portcast-live-v1.sysusers": "c662bb97c8ae39a04e23cfaadde4ba8edc2d3fda475fb0f9b5aabea61b741ab8",
       "deployment/portcast-systemd-acceptance.py": "5eb61c4e5bd7ef62c57dff93748690e44c1fcc526ecd7c63961507d6ace790c4",
-      "docs/harness/PORTCAST-SERVICE-DEPLOYMENT.md": "5591c849ab0042a68af4a956db6538e413668fbce106d564939dbdfef3c8472a",
+      "docs/harness/PORTCAST-SERVICE-DEPLOYMENT.md": "1b39c2b10a75cdc3c1094267a2680a1221e23f7853dacef67afac6f85ae0f236",
       "docs/harness/THIRD-PARTY-INVENTORY.json": "81380f3a0b829726a5918de40b4a41260001368702d966727f2164f96a2e64e3",
       "docs/harness/THIRD-PARTY-LICENSES.md": "f5b359a5b3ae9aedda108f039e07b0190a73a2d5a2b2d7d2aed1162d998074cc",
       "testing/__init__.py": "6ecb080e8de58ef3fff8a6b72300cc01d0110773b3496205d02e0eac7ab1955b",
@@ -1049,11 +1049,12 @@
       "testing/cptc11_lab/portcast-live-plan-v3.json": "bea58da1b695dc6e3d4ff681b2f784ee5d31a8466ba4a858df49afc308e3f64c",
       "testing/cptc11_lab/portcast-live-plan-v4.json": "03aadcc20a8719f1ddfcc2f10434a9a0ec94cb1736cb94dbf5e22d1f1161648c",
       "testing/cptc11_lab/portcast-live-plan-v5.json": "dcb908436af15c0945926cabd16d12df1a78064bb85b2d0d675682da5164d08b",
+      "testing/cptc11_lab/portcast-live-plan-v6.json": "c2b4fad1f137d2c99a42a37f67773acdcfce9fe7a5983bf5d267082232120f71",
       "testing/cptc11_lab/portcast_acceptance.py": "a3c0a2d81078ff1ed5e5b59cd0863208a18d19b2541fe80544b1a8364c3cd5a4",
-      "testing/cptc11_lab/portcast_broker_worker.py": "0a3a61a1e25d5381013d88938b573e7e4a3a7a2076b984ad8391a216e4fde983",
-      "testing/cptc11_lab/portcast_live.py": "b9307054c8c9c360cff6b50de3a83c07bf499af75c4bb04562a8661b9db0580e",
+      "testing/cptc11_lab/portcast_broker_worker.py": "6986a92dc923dc3041a008ca47fd2607fdfbb838147fd2232e974abb8692c8a2",
+      "testing/cptc11_lab/portcast_live.py": "b6c3d5df4e130c76f2295ab751a60842e9a7a1981266db9c1c32bc8203ef2549",
       "testing/cptc11_lab/portcast_service.py": "dcc6900b7d702c73b67ed4412eff6180097431398730a277901781e894e30c51",
-      "testing/cptc11_lab/transport.py": "d9b6ad9d99eec75b1eb00fb8799018a397d0672fde3471bfd5589da0bb20a496"
+      "testing/cptc11_lab/transport.py": "4d3accd251943851ff40c6a22abf98a88c93ab01ac3199e66af2e03eaba16387"
     },
     "interpreter": {
       "path": "/app/vendor/portcast-rootfs-runtime/bin/python3.14",
@@ -1061,7 +1062,7 @@
     },
     "launcher": {
       "path": "deployment/portcast-bootstrap",
-      "sha256": "15deb8743ea56f07d7df0b4f98775ef7f050bf01f7aa15181ee95eaf44bd9fb0"
+      "sha256": "f43832c3fbca7d0f33f24ce7d6c5f677ea35e73430c8bd75b42f76c053742014"
     },
     "python_runtime": {
       "files": {

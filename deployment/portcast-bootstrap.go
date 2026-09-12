@@ -31,16 +31,29 @@ const (
 	loaderPath       = runtimeRoot + "/lib/ld-linux-x86-64.so.2"
 	pythonPath       = runtimeRoot + "/bin/python3.14"
 	lockPath         = "/var/lib/cptc-harness/portcast-live-v1/deployment.lock"
-	planPath         = "/app/testing/cptc11_lab/portcast-live-plan-v5.json"
+	planPath         = "/app/testing/cptc11_lab/portcast-live-plan-v6.json"
 	admissionPath    = "/var/lib/cptc-harness/portcast-live-v1/admission"
 	projectionPath   = "/var/lib/cptc-harness/portcast-live-v1/admission-projection"
-	admissionMarker  = "v5-start.marker"
-	expectedActionID = "cptc11-portcast-public-identity-action-v5"
+	admissionMarker  = "v6-start.marker"
+	expectedActionID = "cptc11-portcast-public-identity-action-v6"
+	v5AdmissionPath  = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission"
+	v5ProjectionPath = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission-projection"
+	v5RuntimePath    = "/var/lib/cptc-harness/portcast-live-v1/runtime/v5-predecessor"
+	v5ReceiptPath    = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/receipt.json"
+	v5MarkerName     = "v5-start.marker"
+	v5ReceiptSHA256  = "42fdd74d5b0c99a00a3f2761c1efcc3e3a579c86caf30c85bf01d34cf9400ffe"
+	mountReadOnly    = 1 // Linux ST_RDONLY; keep the static launcher dependency-free.
 )
+
+const v5MarkerPayload = "PORTCAST-START-V1\nrelease 4c9db1a159d7b1ca2ef38170458f32a2a17a6cd56d7c19e912a187cac138b918\nplan dcb908436af15c0945926cabd16d12df1a78064bb85b2d0d675682da5164d08b\naction cptc11-portcast-public-identity-action-v5\n"
 
 func fail() { os.Exit(126) }
 
 func trustedOpen(path string, directory bool) (*os.File, error) {
+	return trustedOpenWithOwner(path, directory, true)
+}
+
+func trustedOpenWithOwner(path string, directory bool, rootFinal bool) (*os.File, error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsRune(path, 0) {
 		return nil, errors.New("invalid absolute path")
 	}
@@ -74,13 +87,125 @@ func trustedOpen(path string, directory bool) (*os.File, error) {
 		if !last || directory {
 			kindOK = info.Mode&syscall.S_IFMT == syscall.S_IFDIR
 		}
-		if !kindOK || info.Uid != 0 || info.Mode&0022 != 0 {
+		if !kindOK || ((!last || rootFinal) && info.Uid != 0) || info.Mode&0022 != 0 {
 			syscall.Close(next)
 			return nil, errors.New("untrusted metadata")
 		}
 		current = next
 	}
 	return os.NewFile(uintptr(current), path), nil
+}
+
+func readDirectoryNames(directory *os.File) ([]string, error) {
+	if _, err := directory.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	return directory.Readdirnames(-1)
+}
+
+func requireReadOnlyMount(file *os.File) error {
+	var value syscall.Statfs_t
+	if err := syscall.Fstatfs(int(file.Fd()), &value); err != nil {
+		return err
+	}
+	if value.Flags&mountReadOnly == 0 {
+		return errors.New("predecessor mount is writable")
+	}
+	return nil
+}
+
+func verifyV5Predecessor() error {
+	admission, err := trustedOpen(v5AdmissionPath, true)
+	if err != nil {
+		return err
+	}
+	defer admission.Close()
+	if err := exactDirectory(admission, 0700); err != nil {
+		return err
+	}
+	if err := requireReadOnlyMount(admission); err != nil {
+		return err
+	}
+	names, err := readDirectoryNames(admission)
+	if err != nil || len(names) != 1 || names[0] != v5MarkerName {
+		return errors.New("v5 admission state differs")
+	}
+	marker, err := trustedOpen(v5AdmissionPath+"/"+v5MarkerName, false)
+	if err != nil {
+		return err
+	}
+	defer marker.Close()
+	info, err := marker.Stat()
+	if err != nil {
+		return err
+	}
+	statInfo, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || statInfo.Uid != 0 || statInfo.Gid != 0 || info.Mode().Perm() != 0600 || statInfo.Nlink != 1 {
+		return errors.New("v5 admission marker metadata differs")
+	}
+	actual, err := io.ReadAll(io.LimitReader(marker, 4097))
+	if err != nil || string(actual) != v5MarkerPayload {
+		return errors.New("v5 admission marker differs")
+	}
+
+	projection, err := trustedOpen(v5ProjectionPath, true)
+	if err != nil {
+		return err
+	}
+	defer projection.Close()
+	if err := exactDirectory(projection, 0755); err != nil {
+		return err
+	}
+	if err := requireReadOnlyMount(projection); err != nil {
+		return err
+	}
+	names, err = readDirectoryNames(projection)
+	if err != nil || len(names) != 0 {
+		return errors.New("v5 admission projection differs")
+	}
+
+	runtimeState, err := trustedOpenWithOwner(v5RuntimePath, true, false)
+	if err != nil {
+		return err
+	}
+	defer runtimeState.Close()
+	info, err = runtimeState.Stat()
+	if err != nil {
+		return err
+	}
+	statInfo, ok = info.Sys().(*syscall.Stat_t)
+	if !ok || !info.IsDir() || statInfo.Uid == 0 || statInfo.Gid == 0 || statInfo.Mode&07777 != 0700 {
+		return errors.New("v5 runtime metadata differs")
+	}
+	if err := requireReadOnlyMount(runtimeState); err != nil {
+		return err
+	}
+	names, err = readDirectoryNames(runtimeState)
+	if err != nil || len(names) != 0 {
+		return errors.New("v5 runtime state differs")
+	}
+
+	receipt, err := trustedOpen(v5ReceiptPath, false)
+	if err != nil {
+		return err
+	}
+	defer receipt.Close()
+	if err := requireReadOnlyMount(receipt); err != nil {
+		return err
+	}
+	info, err = receipt.Stat()
+	if err != nil {
+		return err
+	}
+	statInfo, ok = info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || statInfo.Uid != 0 || statInfo.Gid != 0 || info.Mode().Perm() != 0444 || statInfo.Nlink != 1 {
+		return errors.New("v5 predecessor receipt metadata differs")
+	}
+	hash := sha256.New()
+	if _, err := io.Copy(hash, io.LimitReader(receipt, 64*1024+1)); err != nil || info.Size() > 64*1024 || hex.EncodeToString(hash.Sum(nil)) != v5ReceiptSHA256 {
+		return errors.New("v5 predecessor receipt differs")
+	}
+	return nil
 }
 
 func digestFile(path string) (string, error) {
@@ -193,6 +318,9 @@ func writeExclusive(directory *os.File, name string, payload []byte, mode uint32
 }
 
 func createStartAdmission() error {
+	if err := verifyV5Predecessor(); err != nil {
+		return err
+	}
 	payload, err := startAdmissionPayload()
 	if err != nil {
 		return err
@@ -216,10 +344,10 @@ func createStartAdmission() error {
 	if err := writeExclusive(admission, admissionMarker, payload, 0600); err != nil {
 		return err
 	}
-	if err := writeExclusive(projection, admissionMarker, payload, 0444); err != nil {
+	if err := syscall.Fsync(int(admission.Fd())); err != nil {
 		return err
 	}
-	if err := syscall.Fsync(int(admission.Fd())); err != nil {
+	if err := writeExclusive(projection, admissionMarker, payload, 0444); err != nil {
 		return err
 	}
 	return syscall.Fsync(int(projection.Fd()))
@@ -495,16 +623,16 @@ func main() {
 	if len(arguments) == 1 && (arguments[0] == "--broker-worker" || arguments[0] == "--verify-startup-only") {
 		if arguments[0] == "--broker-worker" {
 			bwrap := runtimeRoot + "/bin/bwrap"
-			ledger := "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
+			ledger := "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6"
 			bwrapArgs := []string{loaderPath, "--inhibit-cache", "--library-path", runtimeRoot + "/lib", bwrap,
 				"--unshare-user", "--uid", "0", "--gid", "0", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--share-net",
 				"--die-with-parent", "--new-session", "--cap-drop", "ALL", "--clearenv",
 				"--ro-bind", "/app", "/app", "--dir", "/etc", "--dir", "/etc/cptc-harness", "--dir", "/etc/cptc-harness/trust",
 				"--ro-bind", anchorPath, anchorPath, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
 				"--dir", "/var", "--dir", "/var/lib", "--dir", "/var/lib/cptc-harness",
-				"--dir", "/var/lib/cptc-harness/portcast-live-v1", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger",
+				"--dir", "/var/lib/cptc-harness/portcast-live-v1", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v6", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger",
 				// The coordinator reserves the current action before starting
-				// this child. The broker owns only the fresh v5 ledger.
+				// this child. The broker owns only the fresh v6 ledger.
 				"--bind", ledger, ledger, "--chdir", ledger,
 			}
 			bwrapArgs = append(bwrapArgs, pythonArgs("/app/testing/cptc11_lab/portcast_service.py", "--broker-worker")...)
@@ -529,10 +657,10 @@ func main() {
 			"--unshare-user", "--uid", "0", "--gid", "0", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
 			"--die-with-parent", "--cap-drop", "ALL", "--clearenv",
 			"--ro-bind", "/app", "/app", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-			// New audit events belong to the v5 runtime. Predecessor audit
+			// New audit events belong to the v6 runtime. Predecessor audit
 			// state is mounted read-only by systemd and is verified by the
 			// coordinator.
-			"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/runtime/audit", "/audit",
+			"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/runtime/audit", "/audit",
 			"--ro-bind-data", strconv.Itoa(fd), "/config.json",
 		}
 		bwrapArgs = append(bwrapArgs, pythonArgs("/app/cptc_harness/audit_worker.py")...)

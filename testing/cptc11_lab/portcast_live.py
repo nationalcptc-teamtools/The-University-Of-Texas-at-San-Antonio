@@ -53,8 +53,10 @@ _V4_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v4.json")
 _V4_PLAN_CANONICAL_PATH = _V4_PLAN_PATH
 _V5_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v5.json")
 _V5_PLAN_CANONICAL_PATH = _V5_PLAN_PATH
+_V6_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v6.json")
+_V6_PLAN_CANONICAL_PATH = _V6_PLAN_PATH
 _V3_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v3.json")
-_PLAN_PATH = _V5_PLAN_PATH
+_PLAN_PATH = _V6_PLAN_PATH
 _V1_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v1.json")
 _V2_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v2.json")
 _PREDECESSOR_PLAN_PATH = _V2_PLAN_PATH
@@ -182,6 +184,41 @@ _V5_PREDECESSOR_FIELDS = frozenset(
     }
 )
 _V5_PLAN_FIELDS = _V4_PLAN_FIELDS | _V5_PREDECESSOR_FIELDS
+_V6_PREDECESSOR_FIELDS = frozenset(
+    {
+        "predecessor_v5_plan_file_sha256",
+        "predecessor_v5_plan_sha256",
+        "predecessor_v5_action_id",
+        "predecessor_v5_engagement_id",
+        "predecessor_v5_release_manifest_sha256",
+        "predecessor_v5_launcher_sha256",
+        "predecessor_v5_service_unit_sha256",
+        "predecessor_v5_worker_sha256",
+        "predecessor_v5_broker_worker_sha256",
+        "predecessor_v5_profile_worker_sha256",
+        "predecessor_v5_target_sha256",
+        "predecessor_v5_request_sha256",
+        "predecessor_v5_output_bytes",
+        "predecessor_v5_state_sha256",
+        "predecessor_v5_admission_marker_sha256",
+        "predecessor_v5_failure_at",
+        "predecessor_v5_failure_stage",
+        "predecessor_v5_stop_reason",
+        "predecessor_v5_exec_start_pre_exit_status",
+        "predecessor_v5_admission_marker_present",
+        "predecessor_v5_projection_marker_present",
+        "predecessor_v5_main_process_started",
+        "predecessor_v5_application_credentials_loaded",
+        "predecessor_v5_broker_socket_opened",
+        "predecessor_v5_target_capability_created",
+        "predecessor_v5_target_traffic",
+        "predecessor_v5_first_byte_observed",
+        "predecessor_v5_result_present",
+        "predecessor_v5_possible_tcp_connects",
+        "predecessor_v5_charged_tcp_connects",
+    }
+)
+_V6_PLAN_FIELDS = _V5_PLAN_FIELDS | _V6_PREDECESSOR_FIELDS
 _PREDECESSOR_ENGAGEMENT_ID = "cptc11-dell-validation"
 _PREDECESSOR_ACTION_ID = "cptc11-portcast-public-identity-action-v2"
 _PREDECESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v1"
@@ -197,6 +234,9 @@ _SUCCESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v4"
 _V5_SUCCESSOR_ENGAGEMENT_ID = "cptc11-dell-validation-portcast-v5"
 _V5_SUCCESSOR_ACTION_ID = "cptc11-portcast-public-identity-action-v5"
 _V5_SUCCESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v5"
+_V6_SUCCESSOR_ENGAGEMENT_ID = "cptc11-dell-validation-portcast-v6"
+_V6_SUCCESSOR_ACTION_ID = "cptc11-portcast-public-identity-action-v6"
+_V6_SUCCESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v6"
 _WORKFLOW_ID = "cptc11-portcast-public-identity-wave-v1"
 _V3_PLAN_FILE_SHA256 = (
     "bea58da1b695dc6e3d4ff681b2f784ee5d31a8466ba4a858df49afc308e3f64c"
@@ -227,6 +267,36 @@ _V5_PLAN_FILE_SHA256 = (
 _V5_PLAN_SHA256 = (
     "8c519372e6a10b748c8dcffa128bdb00b03558594f5cd504ddd1e23f6f569ee9"
 )
+_V5_RELEASE_MANIFEST_SHA256 = (
+    "4c9db1a159d7b1ca2ef38170458f32a2a17a6cd56d7c19e912a187cac138b918"
+)
+_V5_LAUNCHER_SHA256 = (
+    "15deb8743ea56f07d7df0b4f98775ef7f050bf01f7aa15181ee95eaf44bd9fb0"
+)
+_V5_SERVICE_UNIT_SHA256 = (
+    "259ac6be5da2a11913266310fc2bd56e8d8371f392cd67db3b2757632b908f2e"
+)
+_V5_ADMISSION_MARKER_SHA256 = (
+    "6d4a1c0f18116b063bd7758e63cf3a33ca2f50f77137dbbcc7703a0126e718b5"
+)
+_V5_FAILURE_AT = "2026-09-12T08:20:07.741362Z"
+_V5_FAILURE_STAGE = "start-admission-projection-write"
+_V5_STOP_REASON = (
+    "service pre-start failed after private admission marker before projection"
+)
+_V5_STATE_SHA256 = (
+    "42fdd74d5b0c99a00a3f2761c1efcc3e3a579c86caf30c85bf01d34cf9400ffe"
+)
+_V6_PLAN_FILE_SHA256 = (
+    "c2b4fad1f137d2c99a42a37f67773acdcfce9fe7a5983bf5d267082232120f71"
+)
+_V6_PLAN_SHA256 = (
+    "d21dd898329ca575f2d7848896776140c863a39d3473d4720f0c4a24352b066b"
+)
+_V6_REVIEWED_BY = "approved:daybreak-portcast-v6-release-review-r1"
+_V6_REVIEWED_AT = "2026-09-12T08:29:23.226576Z"
+_V6_WINDOW_START = "2026-09-12T06:00:00.000000Z"
+_V6_WINDOW_END = "2026-09-12T11:00:00.000000Z"
 
 
 def _canonical(value: Any) -> bytes:
@@ -373,6 +443,36 @@ class FrozenPortcastPlan:
     predecessor_v4_result_present: bool | None = None
     predecessor_v4_possible_tcp_connects: int | None = None
     predecessor_v4_charged_tcp_connects: int | None = None
+    predecessor_v5_plan_file_sha256: str | None = None
+    predecessor_v5_plan_sha256: str | None = None
+    predecessor_v5_action_id: str | None = None
+    predecessor_v5_engagement_id: str | None = None
+    predecessor_v5_release_manifest_sha256: str | None = None
+    predecessor_v5_launcher_sha256: str | None = None
+    predecessor_v5_service_unit_sha256: str | None = None
+    predecessor_v5_worker_sha256: str | None = None
+    predecessor_v5_broker_worker_sha256: str | None = None
+    predecessor_v5_profile_worker_sha256: str | None = None
+    predecessor_v5_target_sha256: str | None = None
+    predecessor_v5_request_sha256: str | None = None
+    predecessor_v5_output_bytes: int | None = None
+    predecessor_v5_state_sha256: str | None = None
+    predecessor_v5_admission_marker_sha256: str | None = None
+    predecessor_v5_failure_at: str | None = None
+    predecessor_v5_failure_stage: str | None = None
+    predecessor_v5_stop_reason: str | None = None
+    predecessor_v5_exec_start_pre_exit_status: int | None = None
+    predecessor_v5_admission_marker_present: bool | None = None
+    predecessor_v5_projection_marker_present: bool | None = None
+    predecessor_v5_main_process_started: bool | None = None
+    predecessor_v5_application_credentials_loaded: bool | None = None
+    predecessor_v5_broker_socket_opened: bool | None = None
+    predecessor_v5_target_capability_created: bool | None = None
+    predecessor_v5_target_traffic: bool | None = None
+    predecessor_v5_first_byte_observed: bool | None = None
+    predecessor_v5_result_present: bool | None = None
+    predecessor_v5_possible_tcp_connects: int | None = None
+    predecessor_v5_charged_tcp_connects: int | None = None
 
 
 def _load_continuation_plan(
@@ -566,9 +666,9 @@ def load_frozen_portcast_plan_v4() -> FrozenPortcastPlan:
 
 
 def load_frozen_portcast_plan_v5() -> FrozenPortcastPlan:
-    """Load the current immutable schema-v5 admission."""
+    """Load the immutable v5 plan only for history and predecessor checks."""
 
-    path = _V5_PLAN_PATH if _PLAN_PATH == _V5_PLAN_PATH else _PLAN_PATH
+    path = _V5_PLAN_PATH
     plan = _load_continuation_plan(
         path,
         _V5_PLAN_FIELDS,
@@ -667,10 +767,123 @@ def load_frozen_portcast_plan_v5() -> FrozenPortcastPlan:
     return plan
 
 
-def load_frozen_portcast_plan() -> FrozenPortcastPlan:
-    """Load the current immutable schema-v5 admission."""
+def load_frozen_portcast_plan_v6() -> FrozenPortcastPlan:
+    """Load the current immutable schema-v6 admission."""
 
-    return load_frozen_portcast_plan_v5()
+    path = _V6_PLAN_PATH
+    plan = _load_continuation_plan(
+        path,
+        _V6_PLAN_FIELDS,
+        schema_version=6,
+        engagement_id=_V6_SUCCESSOR_ENGAGEMENT_ID,
+        action_id=_V6_SUCCESSOR_ACTION_ID,
+        plan_id=_V6_SUCCESSOR_PLAN_ID,
+        raw_sha256=(
+            _V6_PLAN_FILE_SHA256 if path == _V6_PLAN_CANONICAL_PATH else None
+        ),
+    )
+    if (
+        path == _V6_PLAN_CANONICAL_PATH
+        and plan.plan_sha256 != _V6_PLAN_SHA256
+    ):
+        raise PolicyError("frozen PortCast v6 plan identity differs")
+    digest_fields = (
+        plan.predecessor_v5_plan_file_sha256,
+        plan.predecessor_v5_plan_sha256,
+        plan.predecessor_v5_release_manifest_sha256,
+        plan.predecessor_v5_launcher_sha256,
+        plan.predecessor_v5_service_unit_sha256,
+        plan.predecessor_v5_worker_sha256,
+        plan.predecessor_v5_broker_worker_sha256,
+        plan.predecessor_v5_profile_worker_sha256,
+        plan.predecessor_v5_target_sha256,
+        plan.predecessor_v5_request_sha256,
+        plan.predecessor_v5_state_sha256,
+        plan.predecessor_v5_admission_marker_sha256,
+    )
+    if any(
+        type(value) is not str or re.fullmatch(r"[0-9a-f]{64}", value) is None
+        for value in digest_fields
+    ):
+        raise PolicyError("frozen PortCast v5 predecessor digest differs")
+    if (
+        plan.predecessor_v5_plan_file_sha256 != _V5_PLAN_FILE_SHA256
+        or plan.predecessor_v5_plan_sha256 != _V5_PLAN_SHA256
+        or plan.predecessor_v5_action_id != _V5_SUCCESSOR_ACTION_ID
+        or plan.predecessor_v5_engagement_id != _V5_SUCCESSOR_ENGAGEMENT_ID
+        or plan.predecessor_v5_release_manifest_sha256
+        != _V5_RELEASE_MANIFEST_SHA256
+        or plan.predecessor_v5_launcher_sha256 != _V5_LAUNCHER_SHA256
+        or plan.predecessor_v5_service_unit_sha256 != _V5_SERVICE_UNIT_SHA256
+        or plan.predecessor_v5_state_sha256 != _V5_STATE_SHA256
+        or plan.predecessor_v5_admission_marker_sha256
+        != _V5_ADMISSION_MARKER_SHA256
+        or plan.predecessor_v5_failure_at != _V5_FAILURE_AT
+        or plan.predecessor_v5_failure_stage != _V5_FAILURE_STAGE
+        or plan.predecessor_v5_stop_reason != _V5_STOP_REASON
+        or plan.predecessor_v5_exec_start_pre_exit_status != 126
+        or plan.predecessor_v5_output_bytes != 16384
+        or plan.predecessor_v5_admission_marker_present is not True
+        or plan.predecessor_v5_projection_marker_present is not False
+        or plan.predecessor_v5_main_process_started is not False
+        or plan.predecessor_v5_application_credentials_loaded is not False
+        or plan.predecessor_v5_broker_socket_opened is not False
+        or plan.predecessor_v5_target_capability_created is not False
+        or plan.predecessor_v5_target_traffic is not False
+        or plan.predecessor_v5_first_byte_observed is not False
+        or plan.predecessor_v5_result_present is not False
+        or plan.predecessor_v5_possible_tcp_connects != 0
+        or plan.predecessor_v5_charged_tcp_connects != 0
+        or any(
+            type(value) is not int
+            for value in (
+                plan.predecessor_v5_exec_start_pre_exit_status,
+                plan.predecessor_v5_output_bytes,
+                plan.predecessor_v5_possible_tcp_connects,
+                plan.predecessor_v5_charged_tcp_connects,
+            )
+        )
+    ):
+        raise PolicyError("frozen PortCast v5 predecessor binding differs")
+    if (
+        plan.reviewed_by != _V6_REVIEWED_BY
+        or plan.reviewed_at != _V6_REVIEWED_AT
+        or plan.window_start != _V6_WINDOW_START
+        or plan.window_end != _V6_WINDOW_END
+    ):
+        raise PolicyError("frozen PortCast v6 approval differs")
+    v5 = load_frozen_portcast_plan_v5()
+    for field in (
+        "policy_revision", "workspace_id", "device_id", "operator_id",
+        "profile_id", "module_id", "target_id", "catalog_sha256",
+        "profile_sha256", "operation_sha256", "parser_sha256",
+        "runtime_pinset_sha256", "release_id", "evidence_recipient",
+        "workflow_id",
+    ):
+        if getattr(plan, field) != getattr(v5, field):
+            raise PolicyError("frozen PortCast v5 predecessor scope differs")
+    for field in (
+        "worker_sha256", "broker_worker_sha256", "profile_worker_sha256",
+        "target_sha256", "request_sha256",
+    ):
+        if getattr(plan, f"predecessor_v5_{field}") != getattr(v5, field):
+            raise PolicyError("frozen PortCast v5 predecessor release differs")
+    if (
+        plan.predecessor_charged_tcp_connects
+        + (plan.predecessor_v3_charged_tcp_connects or 0)
+        + (plan.predecessor_v4_charged_tcp_connects or 0)
+        + plan.predecessor_v5_charged_tcp_connects
+        + plan.tcp_connection_limit
+        != 2
+    ):
+        raise PolicyError("frozen PortCast cumulative TCP allowance differs")
+    return plan
+
+
+def load_frozen_portcast_plan() -> FrozenPortcastPlan:
+    """Load the current immutable schema-v6 admission."""
+
+    return load_frozen_portcast_plan_v6()
 
 
 def load_frozen_portcast_plan_v3() -> FrozenPortcastPlan:
@@ -879,7 +1092,7 @@ def _read_predecessor_plan(plan: FrozenPortcastPlan) -> dict[str, Any]:
     ):
         if v1[field] != v2[field] or v2[field] != getattr(plan, field):
             raise PolicyError("frozen PortCast predecessor scope differs")
-    if plan.schema_version in {4, 5}:
+    if plan.schema_version in {4, 5, 6}:
         v3 = read(
             _V3_PLAN_PATH,
             _V3_PLAN_FIELDS,
@@ -925,7 +1138,7 @@ def _read_predecessor_plan(plan: FrozenPortcastPlan) -> dict[str, Any]:
         ):
             if v3[field] != getattr(plan, field):
                 raise PolicyError("frozen PortCast v3 predecessor scope differs")
-    if plan.schema_version == 5:
+    if plan.schema_version in {5, 6}:
         v4 = read(
             _V4_PLAN_PATH,
             _V4_PLAN_FIELDS,
@@ -967,6 +1180,50 @@ def _read_predecessor_plan(plan: FrozenPortcastPlan) -> dict[str, Any]:
         ):
             if v4[field] != getattr(plan, field):
                 raise PolicyError("frozen PortCast v4 predecessor scope differs")
+    if plan.schema_version == 6:
+        v5 = read(
+            _V5_PLAN_PATH,
+            _V5_PLAN_FIELDS,
+            plan.predecessor_v5_plan_file_sha256 or "",
+        )
+        if (
+            v5["schema_version"] != 5
+            or v5["engagement_id"] != plan.predecessor_v5_engagement_id
+            or v5["action_id"] != plan.predecessor_v5_action_id
+            or v5["plan_sha256"] != plan.predecessor_v5_plan_sha256
+            or v5["worker_sha256"] != plan.predecessor_v5_worker_sha256
+            or v5["broker_worker_sha256"]
+            != plan.predecessor_v5_broker_worker_sha256
+            or v5["profile_worker_sha256"]
+            != plan.predecessor_v5_profile_worker_sha256
+            or v5["target_sha256"] != plan.predecessor_v5_target_sha256
+            or v5["request_sha256"] != plan.predecessor_v5_request_sha256
+            or v5["output_bytes"] != plan.predecessor_v5_output_bytes
+            or v5["predecessor_v4_plan_file_sha256"]
+            != plan.predecessor_v4_plan_file_sha256
+            or v5["predecessor_v4_plan_sha256"]
+            != plan.predecessor_v4_plan_sha256
+        ):
+            raise PolicyError("frozen PortCast v5 predecessor plan binding differs")
+        for field in (
+            "policy_revision",
+            "workspace_id",
+            "device_id",
+            "operator_id",
+            "profile_id",
+            "module_id",
+            "target_id",
+            "catalog_sha256",
+            "profile_sha256",
+            "operation_sha256",
+            "parser_sha256",
+            "runtime_pinset_sha256",
+            "release_id",
+            "evidence_recipient",
+            "workflow_id",
+        ):
+            if v5[field] != getattr(plan, field):
+                raise PolicyError("frozen PortCast v5 predecessor scope differs")
     return v2
 
 
@@ -1129,14 +1386,20 @@ def policy_for_plan(plan: FrozenPortcastPlan) -> PolicySnapshot:
         plan.predecessor_charged_tcp_connects
         + (
             plan.predecessor_v3_charged_tcp_connects
-            if plan.schema_version in {4, 5}
+            if plan.schema_version in {4, 5, 6}
             and type(plan.predecessor_v3_charged_tcp_connects) is int
             else 0
         )
         + (
             plan.predecessor_v4_charged_tcp_connects
-            if plan.schema_version == 5
+            if plan.schema_version in {5, 6}
             and type(plan.predecessor_v4_charged_tcp_connects) is int
+            else 0
+        )
+        + (
+            plan.predecessor_v5_charged_tcp_connects
+            if plan.schema_version == 6
+            and type(plan.predecessor_v5_charged_tcp_connects) is int
             else 0
         )
         + plan.tcp_connection_limit
@@ -1199,6 +1462,7 @@ _RUNTIME_DIRECTORIES = frozenset({"audit", "results", "reports", "policies"})
 _RUNTIME_FILES = frozenset({"policy.json", "runtime.json"})
 _V3_PREDECESSOR_DIRECTORY = "v3-predecessor"
 _V4_PREDECESSOR_RUNTIME = "v4"
+_V5_PREDECESSOR_RECEIPT = Path("predecessors/v5/receipt.json")
 _PORTCAST_SERVICE_SOCKET = Path("/run/cptc-harness/portcast-live-v1.sock")
 
 
@@ -1715,6 +1979,115 @@ def _verify_v5_predecessors(
     return v3, v4
 
 
+def _expected_v5_predecessor_receipt(
+    plan: FrozenPortcastPlan,
+) -> dict[str, Any]:
+    """Build the byte-exact root-manager receipt accepted by schema v6."""
+
+    return {
+        "action_id": plan.predecessor_v5_action_id,
+        "admission_marker_present": plan.predecessor_v5_admission_marker_present,
+        "admission_marker_sha256": plan.predecessor_v5_admission_marker_sha256,
+        "application_credentials_loaded": (
+            plan.predecessor_v5_application_credentials_loaded
+        ),
+        "broker_socket_opened": plan.predecessor_v5_broker_socket_opened,
+        "broker_worker_sha256": plan.predecessor_v5_broker_worker_sha256,
+        "charged_tcp_connects": plan.predecessor_v5_charged_tcp_connects,
+        "engagement_id": plan.predecessor_v5_engagement_id,
+        "exec_start_pre_exit_status": (
+            plan.predecessor_v5_exec_start_pre_exit_status
+        ),
+        "failure_at": plan.predecessor_v5_failure_at,
+        "failure_stage": plan.predecessor_v5_failure_stage,
+        "first_byte_observed": plan.predecessor_v5_first_byte_observed,
+        "launcher_sha256": plan.predecessor_v5_launcher_sha256,
+        "main_process_started": plan.predecessor_v5_main_process_started,
+        "plan_file_sha256": plan.predecessor_v5_plan_file_sha256,
+        "plan_sha256": plan.predecessor_v5_plan_sha256,
+        "possible_tcp_connects": plan.predecessor_v5_possible_tcp_connects,
+        "profile_worker_sha256": plan.predecessor_v5_profile_worker_sha256,
+        "projection_marker_present": plan.predecessor_v5_projection_marker_present,
+        "release_manifest_sha256": (
+            plan.predecessor_v5_release_manifest_sha256
+        ),
+        "request_sha256": plan.predecessor_v5_request_sha256,
+        "result_present": plan.predecessor_v5_result_present,
+        "runtime_tree": [{"kind": "directory", "mode": 0o700, "path": "."}],
+        "schema": "portcast-v5-predecessor-state-v1",
+        "service_unit_sha256": plan.predecessor_v5_service_unit_sha256,
+        "stop_reason": plan.predecessor_v5_stop_reason,
+        "target_capability_created": (
+            plan.predecessor_v5_target_capability_created
+        ),
+        "target_sha256": plan.predecessor_v5_target_sha256,
+        "target_traffic": plan.predecessor_v5_target_traffic,
+    }
+
+
+def _verify_v5_predecessor_receipt(
+    state_root: Path,
+    plan: FrozenPortcastPlan,
+) -> dict[str, Any]:
+    """Consume the immutable root-created v5 state receipt without mutation."""
+
+    if plan.schema_version != 6:
+        raise PolicyError("v5 predecessor receipt requires schema v6")
+    state_root = Path(state_root).absolute()
+    receipt_path = state_root.parent / _V5_PREDECESSOR_RECEIPT
+    receipt_root = receipt_path.parent
+    try:
+        for component in reversed(receipt_path.parents):
+            if component.is_symlink():
+                raise PolicyError("symlink in v5 predecessor receipt path")
+        root_info = receipt_root.lstat()
+        production = state_root == _PRODUCTION_RUNTIME_CONTAINER
+        expected_uid = _ROOT_UID if production else os.geteuid()
+        expected_gid = _ROOT_GID if production else os.getegid()
+        expected_root_mode = 0o555 if production else 0o700
+        expected_file_mode = 0o444 if production else 0o600
+        if (
+            not stat.S_ISDIR(root_info.st_mode)
+            or root_info.st_uid != expected_uid
+            or root_info.st_gid != expected_gid
+            or stat.S_IMODE(root_info.st_mode) != expected_root_mode
+        ):
+            raise PolicyError("PortCast v5 predecessor receipt directory differs")
+        if receipt_path.is_symlink():
+            raise PolicyError("PortCast v5 predecessor receipt symlink rejected")
+        descriptor = os.open(
+            receipt_path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+        )
+        try:
+            info = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != expected_uid
+                or info.st_gid != expected_gid
+                or stat.S_IMODE(info.st_mode) != expected_file_mode
+                or info.st_nlink != 1
+                or not 1 <= info.st_size <= _MAX_PLAN_BYTES
+            ):
+                raise PolicyError("PortCast v5 predecessor receipt metadata differs")
+            raw = os.read(descriptor, _MAX_PLAN_BYTES + 1)
+            if len(raw) != info.st_size:
+                raise PolicyError("PortCast v5 predecessor receipt changed")
+        finally:
+            os.close(descriptor)
+    except PolicyError:
+        raise
+    except OSError:
+        raise PolicyError("PortCast v5 predecessor receipt is unavailable") from None
+    expected = _expected_v5_predecessor_receipt(plan)
+    expected_raw = canonical_json(expected)
+    if (
+        raw != expected_raw
+        or hashlib.sha256(raw).hexdigest() != plan.predecessor_v5_state_sha256
+    ):
+        raise PolicyError("PortCast v5 predecessor state digest differs")
+    return expected
+
+
 def _aborted_v3_state_snapshot(
     predecessor_root: Path,
     ledger_directory: Path,
@@ -1899,7 +2272,7 @@ def _prepare_runtime(
     provision: bool = True,
 ) -> tuple[Path, Path]:
     root = Path(root).absolute()
-    if plan.schema_version in {3, 4, 5} and root == _PRODUCTION_RUNTIME_CONTAINER:
+    if plan.schema_version in {3, 4, 5, 6} and root == _PRODUCTION_RUNTIME_CONTAINER:
         for component in reversed((root, *root.parents)):
             if component.is_symlink():
                 raise PolicyError("symlink in protected storage path")
@@ -1913,7 +2286,7 @@ def _prepare_runtime(
             raise PolicyError("canonical runtime mount container differs")
     else:
         root = private_directory(root, create=provision)
-    if plan.schema_version in {3, 4, 5}:
+    if plan.schema_version in {3, 4, 5, 6}:
         version = f"v{plan.schema_version}"
         root = private_directory(root / version, create=provision)
         info = root.lstat()
@@ -1961,8 +2334,10 @@ def prepare_frozen_portcast_runtime_at_root(
         != _age_configuration(age_binary, age_recipient)["age_sha256"]
     ):
         raise PolicyError("canonical PortCast startup binding differs")
-    if plan.schema_version in {4, 5}:
-        if plan.schema_version == 5:
+    if plan.schema_version in {4, 5, 6}:
+        if plan.schema_version == 6:
+            _verify_v5_predecessor_receipt(state_root, plan)
+        elif plan.schema_version == 5:
             _verify_v5_predecessors(
                 state_root,
                 plan,
@@ -2238,7 +2613,7 @@ def _require_exact_loaded_plan(plan: FrozenPortcastPlan) -> None:
 
     if (
         type(plan) is not FrozenPortcastPlan
-        or plan.schema_version not in {2, 3, 4, 5}
+        or plan.schema_version not in {2, 3, 4, 5, 6}
         or plan != load_frozen_portcast_plan()
     ):
         raise PolicyError("canonical PortCast frozen plan differs")
@@ -2698,14 +3073,14 @@ def _require_prepared_runtime(
 ) -> Path:
     runtime_root = state_root / (
         f"v{plan.schema_version}/runtime"
-        if plan.schema_version in {3, 4, 5}
+        if plan.schema_version in {3, 4, 5, 6}
         else "runtime"
     )
     ledger_directory = (
         state_root / "ledger" / plan.predecessor_engagement_id
         if plan.schema_version in {3, 4}
         else state_root / f"v{plan.schema_version}" / "ledger" / plan.engagement_id
-        if plan.schema_version == 5
+        if plan.schema_version in {5, 6}
         else state_root / "ledger" / plan.engagement_id
     )
     if (
@@ -2796,7 +3171,27 @@ def _run_prepared_portcast_action_core(
         return replay
     if not callable(wire_broker_factory):
         raise PolicyError("canonical PortCast service broker factory is unavailable")
-    if plan.schema_version == 5:
+    if plan.schema_version == 6:
+        state_root = runtime_root.parents[1]
+        _verify_v5_predecessor_receipt(state_root, plan)
+        runtime.audit.emit(
+            AuditEvent(
+                "profile_predecessor_snapshot_bound",
+                plan.action_id,
+                {
+                    "predecessor_v5_state_sha256": (
+                        plan.predecessor_v5_state_sha256
+                    ),
+                    "predecessor_v5_admission_marker_sha256": (
+                        plan.predecessor_v5_admission_marker_sha256
+                    ),
+                    "predecessor_snapshot_sha256": (
+                        plan.predecessor_v5_state_sha256
+                    ),
+                },
+            )
+        )
+    elif plan.schema_version == 5:
         state_root = runtime_root.parents[1]
         old_ledger = state_root / "ledger" / plan.predecessor_engagement_id
         runtime_config = json.loads(
@@ -2890,7 +3285,9 @@ def _inspect_frozen_portcast_state_at_root(
     plan = load_frozen_portcast_plan()
     verified = validate_current_release(plan)
     _require_open_window(plan)
-    if plan.schema_version == 5:
+    if plan.schema_version == 6:
+        _verify_v5_predecessor_receipt(state_root, plan)
+    elif plan.schema_version == 5:
         _verify_v5_predecessors(
             state_root,
             plan,
@@ -2943,7 +3340,11 @@ def _run_frozen_portcast_action_at_root(
     plan = load_frozen_portcast_plan()
     verified = validate_current_release(plan)
     _require_open_window(plan)
-    if plan.schema_version == 5:
+    if plan.schema_version == 6:
+        if not isinstance(age_binary, Path) or not isinstance(age_recipient, str):
+            raise PolicyError("canonical PortCast predecessor verification is unavailable")
+        _verify_v5_predecessor_receipt(state_root, plan)
+    elif plan.schema_version == 5:
         if not isinstance(age_binary, Path) or not isinstance(age_recipient, str):
             raise PolicyError("canonical PortCast predecessor verification is unavailable")
         _verify_v5_predecessors(
@@ -3101,6 +3502,7 @@ __all__ = (
     "load_frozen_portcast_plan_v3",
     "load_frozen_portcast_plan_v4",
     "load_frozen_portcast_plan_v5",
+    "load_frozen_portcast_plan_v6",
     "policy_for_plan",
     "run_frozen_portcast_action",
     "run_frozen_portcast_session",

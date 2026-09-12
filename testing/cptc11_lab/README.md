@@ -96,10 +96,35 @@ only. Raw HTTP bytes remain in the encrypted Audit evidence store. The typed
 result identifies Jellyfin Server 10.10.7 as a component candidate. It does
 not confirm a vulnerability or a CVE.
 
-### Schema-v5 admission
+### Schema-v6 admission
+
+The current coordinator is schema v6. It uses action
+`cptc11-portcast-public-identity-action-v6` and the fresh host state
+`/var/lib/cptc-harness/portcast-live-v6`. Its audit and ledger use
+`runtime/v6`. It retains the same exact public Jellyfin identity request, one
+TCP connection, one protocol request, no authentication, and no retry.
+
+The v5 pre-start failed while it tried to publish its admission projection.
+It created the private v5 marker first. It did not start the application,
+load application credentials, create the broker, or send target traffic.
+Schema v6 treats that marker as consumed state. The deployment manager checks
+the exact marker, empty v5 projection, and empty v5 runtime. It then creates a
+root-owned canonical receipt in the v6 predecessor directory. The service
+reads that receipt through a read-only bind and validates it before runtime
+creation and before broker creation.
+
+The v6 pre-start publishes a new private marker and projection marker. Systemd
+binds only the two v6 directories as writable. Both directories stay
+root-owned. The service user can read the `0444` projection marker but cannot
+create, replace, rename, or delete it in its `0755` parent. The private marker
+is `0600`. Both writes use `O_CREAT|O_EXCL`, and the private marker directory is
+synced before the projection write. A failed v6 start consumes v6 and cannot be
+retried.
+
+### Historical schema-v5 admission
 
 The installed PortCast service keeps the release protocol name
-`portcast-live-v1`, but the current frozen coordinator is schema v5. Its new
+`portcast-live-v1`. Schema v5 is now a consumed predecessor. Its
 runtime is mounted at the logical path
 `/var/lib/cptc-harness/portcast-live-v1/runtime/v5` from the host path
 `/var/lib/cptc-harness/portcast-live-v5/runtime`. The failed v4 and v3 host

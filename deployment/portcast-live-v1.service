@@ -39,12 +39,18 @@ BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256
 BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json
 BindPaths=/run/cptc-harness
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/deployment.lock
-BindPaths=/var/lib/cptc-harness/portcast-live-v5/admission:/var/lib/cptc-harness/portcast-live-v1/admission
-BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection
-# The v5 coordinator owns the new runtime. Keep the historical v1 ledger and
+BindPaths=/var/lib/cptc-harness/portcast-live-v6/admission:/var/lib/cptc-harness/portcast-live-v1/admission
+# ExecStartPre publishes the root-owned 0444 marker here. The service account
+# can read it but cannot mutate its root:root 0755 parent.
+BindPaths=/var/lib/cptc-harness/portcast-live-v6/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v6/predecessors/v5/receipt.json:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/receipt.json
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission-projection:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission-projection
+# The v6 coordinator owns the new runtime. Keep the historical v1 ledger and
 # predecessor runtimes immutable inputs. Do not replace these entries with a
 # broad state bind.
-BindPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5
+BindPaths=/var/lib/cptc-harness/portcast-live-v6/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v6
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5-predecessor
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation

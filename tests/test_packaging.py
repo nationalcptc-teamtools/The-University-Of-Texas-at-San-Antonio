@@ -115,7 +115,9 @@ def test_reviewed_checkout_inputs_are_complete_and_ai_only():
     assert "testing/cptc11_lab/portcast-live-plan-v3.json" in contents["source"]
     assert "testing/cptc11_lab/portcast-live-plan-v4.json" in contents["source"]
     assert "testing/cptc11_lab/portcast-live-plan-v5.json" in contents["source"]
+    assert "testing/cptc11_lab/portcast-live-plan-v6.json" in contents["source"]
     assert "tests/test_portcast_v5_runtime.py" in contents["source"]
+    assert "tests/test_portcast_v6_runtime.py" in contents["source"]
     assert "deployment/portcast-live-v1.service" in contents["source"]
     assert "deployment/portcast-live-v1-acceptance@.service" in contents["source"]
     assert "deployment/portcast-live-v1.sysusers" in contents["source"]
@@ -149,6 +151,7 @@ def test_reviewed_checkout_inputs_are_complete_and_ai_only():
         " testing/cptc11_lab/portcast-live-plan-v3.json"
         " testing/cptc11_lab/portcast-live-plan-v4.json"
         " testing/cptc11_lab/portcast-live-plan-v5.json"
+        " testing/cptc11_lab/portcast-live-plan-v6.json"
     ) in source_manifest
     attributes = (ROOT / ".gitattributes").read_text()
     assert "vendor/** -text -whitespace" in attributes

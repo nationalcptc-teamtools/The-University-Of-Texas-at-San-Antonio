@@ -36,7 +36,7 @@ _PROFILE_ID = "web.http_jellyfin_public_identity"
 _TARGET_ID = "cptc11-prod-portcast"
 _MAX_PACKET = 64 * 1024
 _PRODUCTION_LEDGER_ROOT = Path(
-    "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6"
 )
 _SERVICE_AUTHORITY = object()
 

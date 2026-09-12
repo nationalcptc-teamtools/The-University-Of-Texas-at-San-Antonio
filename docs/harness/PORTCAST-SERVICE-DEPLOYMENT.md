@@ -20,24 +20,25 @@ Prepare these items before `apply`:
   release manifest.
 - `/var/lib/cptc-harness/portcast-live-v1` is an initialized `root:root`
   directory with mode `0700`. Keep the deployment lock, journal, release
-  history, trust records, and encrypted credentials root-owned. The schema-v5
-  admission uses `/var/lib/cptc-harness/portcast-live-v5` as a root-owned parent
+  history, trust records, and encrypted credentials root-owned. The schema-v6
+  admission uses `/var/lib/cptc-harness/portcast-live-v6` as a root-owned parent
   and creates its `runtime/` child, owned by `_cptc-portcast:cptc-harness`
   with mode `0700`, plus a root-owned `admission/` directory with mode `0700`
   and a read-only admission projection directory.
-- Keep `/var/lib/cptc-harness/portcast-live-v3/runtime` and
-  `/var/lib/cptc-harness/portcast-live-v4/runtime` unchanged. The service
-  mounts both read-only as failed admission records.
+- Keep the v3, v4, and v5 state trees unchanged. The service mounts their
+  required inputs read-only. The consumed v5 private marker must remain in
+  place. Its projection and runtime must remain empty.
 - The old v1 ledger at
   `/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation`
   is read-only. The old audit directory and v2 result are also read-only. The
-  fresh v5 ledger is
-  `/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5`
+  fresh v6 ledger is
+  `/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6`
   inside the service root. The service has no broad v1 runtime mount.
 - The start gate creates one root-owned `0600` marker in
-  `/var/lib/cptc-harness/portcast-live-v5/admission` with `O_CREAT|O_EXCL`.
-  It binds the anchored release, v5 plan, and v5 action. The nonroot service
-  reads only the root-owned read-only projection. A second start, a missing or
+  `/var/lib/cptc-harness/portcast-live-v6/admission` with `O_CREAT|O_EXCL`.
+  It binds the anchored release, v6 plan, and v6 action. The nonroot service
+  can read the root-owned projection but cannot change its `0755` parent or
+  `0444` marker. A second start, a missing or
   tampered marker, or a plan/action/release mismatch blocks startup.
 - The release contains the reviewed public `age` recipient. It does not contain
   the private identity. The service verifies the recipient and the sealed
@@ -195,8 +196,9 @@ runtime. It does not load credentials, open the service socket, start a broker,
 or connect to Dell, Kali, or a target.
 
 The service manager runs a privileged, bounded `--admit-start` pre-start gate
-before the nonroot service process. The gate verifies the anchored release and
-v5 plan, atomically creates the external one-start marker, and exits before it
+before the nonroot service process. The gate verifies the anchored release,
+v6 plan, and exact consumed v5 state. It atomically creates the external
+one-start marker and exits before it
 can load credentials, open the socket, or create the broker. A second start,
 missing or tampered marker projection, or a plan/action/release mismatch blocks
 the unit. The gate uses only fixed local paths and has no network access.
@@ -217,24 +219,26 @@ file, directory, or link blocks startup and is preserved. The service then
 opens the SQLite ledger and audit writer, performs recovery, checks SQLite and
 audit integrity, and retains that one runtime for the service lifetime. It
 does all of this before it loads target credentials or binds the socket.
-The v5 application runtime is the fixed logical path
-`/var/lib/cptc-harness/portcast-live-v1/runtime/v5/runtime`. Its host storage
-is `/var/lib/cptc-harness/portcast-live-v5/runtime`. The failed v4 and v3 host
-trees are mounted read-only at `runtime/v4` and `runtime/v3-predecessor`. The
-contained audit worker receives only the v5 `audit/` child. The current ledger
-is the fixed `runtime/v5/ledger/cptc11-dell-validation-portcast-v5`
-directory. Historical audit, result, ledger, v3, and v4 paths are read-only
+The v6 application runtime is the fixed logical path
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v6/runtime`. Its host storage
+is `/var/lib/cptc-harness/portcast-live-v6/runtime`. The failed v3 through v5
+inputs are mounted read-only. The contained audit worker receives only the v6
+`audit/` child. The current ledger is the fixed
+`runtime/v6/ledger/cptc11-dell-validation-portcast-v6` directory. Historical
+audit, result, ledger, v3, v4, and v5 paths are read-only
 inputs.
 
-The coordinator loads and hash-checks the v1 through v4 plans. It verifies the
+The coordinator loads and hash-checks the v1 through v5 plans. It verifies the
 v2 audit chain and result, the empty v3 and v4 output state, and the exact v4
 continuation row. It requires the predecessor mounts and historical ledger to
 be read-only. These checks run before credential loading, socket binding, or
-broker creation. It uses the v5 runtime for new audit, ledger, and result
-records. A changed, missing, or writable historical input blocks startup. The
-v2, v3, and v4 actions are never retried.
+broker creation. It uses the v6 runtime for new audit, ledger, and result
+records. It also validates the root-produced canonical v5 predecessor receipt
+before runtime creation and before broker creation. A changed, missing, or
+writable historical input blocks startup. The v2 through v5 actions are never
+retried.
 
-A restart is blocked by the external one-start marker, even if the writable v5
+A restart is blocked by the external one-start marker, even if the writable v6
 runtime, audit directory, or ledger is deleted or replaced. The service does
 not repair or replace a partial final runtime or a corrupt ledger or audit
 chain. Incomplete staging
