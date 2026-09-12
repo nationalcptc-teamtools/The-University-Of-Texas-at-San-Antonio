@@ -1006,7 +1006,7 @@ def test_scan_portcast_cli_uses_frozen_session_runner_and_writes_no_target_artif
     def runner():
         calls.append(True)
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v3",
+            "action_id": "cptc11-portcast-public-identity-action-v4",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": "passed",
@@ -1038,7 +1038,7 @@ def test_scan_portcast_cli_uses_frozen_session_runner_and_writes_no_target_artif
     result = json.loads(output.getvalue())
     run_path = Path(result["run_directory"])
     assert status == 0 and result["status"] == "passed"
-    assert result["action_id"] == "cptc11-portcast-public-identity-action-v3"
+    assert result["action_id"] == "cptc11-portcast-public-identity-action-v4"
     assert result["receipt_outcome"] == "complete"
     assert result["cleanup_status"] == "passed"
     assert result["execution"] == {
@@ -1099,7 +1099,7 @@ def test_scan_portcast_cli_rejects_extra_raw_result_without_disclosing_it(tmp_pa
 
     def runner():
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v3",
+            "action_id": "cptc11-portcast-public-identity-action-v4",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": "passed",
@@ -1144,7 +1144,7 @@ def test_scan_portcast_cli_does_not_render_missing_counters_as_zero(tmp_path):
 
     def runner():
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v3",
+            "action_id": "cptc11-portcast-public-identity-action-v4",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": None,
@@ -1188,7 +1188,7 @@ def test_scan_portcast_cli_reports_only_the_fixed_failure_stage(tmp_path):
 
     def runner():
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v3",
+            "action_id": "cptc11-portcast-public-identity-action-v4",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": "passed",

@@ -96,20 +96,26 @@ only. Raw HTTP bytes remain in the encrypted Audit evidence store. The typed
 result identifies Jellyfin Server 10.10.7 as a component candidate. It does
 not confirm a vulnerability or a CVE.
 
-### v3 continuation
+### Schema-v4 admission
 
 The installed PortCast service keeps the release protocol name
-`portcast-live-v1`, but the current frozen coordinator is schema v3. Its new
+`portcast-live-v1`, but the current frozen coordinator is schema v4. Its new
 runtime is mounted at the logical path
-`/var/lib/cptc-harness/portcast-live-v1/runtime/v3` from the host path
-`/var/lib/cptc-harness/portcast-live-v3/runtime`.
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v4` from the host path
+`/var/lib/cptc-harness/portcast-live-v4/runtime`. The prior v3 host tree is
+mounted read-only at `runtime/v3-predecessor`.
 
 At startup it verifies the exact v2 audit and result files. It records one
 continuation proof in the historical ledger and then performs at most one new
 connection and one request. It does not retry the uncertain v2 action. The v2
-audit and result are read-only inputs; v3 audit and result files are written in
+audit and result are read-only inputs; current audit and result files are written in
 the new runtime. A missing, changed, or writable historical input blocks the
 run before target access.
+
+Before it creates the target broker, schema v4 also checks the exact v3 plan,
+the empty v3 audit and result directories, the absence of a v3 ledger action,
+and the absence of the service socket. The recorded v3 startup failed before
+credential loading. Its target counters are zero.
 
 Use the deployment helper to inspect this layout. It reports the v3 state,
 historical ledger, historical audit, and historical result paths. It never
@@ -192,9 +198,9 @@ repair, replace, or reopen it. A recipient, path, hash, policy, ownership,
 mode, layout, SQLite, or audit-integrity mismatch blocks the service before
 target access.
 
-The production v3 application runtime is fixed at the logical path
-`/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime`; its host storage
-is `/var/lib/cptc-harness/portcast-live-v3/runtime`. Its audit worker sees only
+The production v4 application runtime is fixed at the logical path
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v4/runtime`; its host storage
+is `/var/lib/cptc-harness/portcast-live-v4/runtime`. Its audit worker sees only
 the `audit/` child. Durable request accounting uses the separate fixed
 historical `runtime/ledger/cptc11-dell-validation` directory. The historical
 v2 audit and result are read-only continuation inputs.

@@ -49,7 +49,9 @@ from cptc_harness.storage import (
 )
 
 
-_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v3.json")
+_V4_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v4.json")
+_V3_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v3.json")
+_PLAN_PATH = _V4_PLAN_PATH
 _V1_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v1.json")
 _V2_PLAN_PATH = Path(__file__).with_name("portcast-live-plan-v2.json")
 _PREDECESSOR_PLAN_PATH = _V2_PLAN_PATH
@@ -123,17 +125,55 @@ _V3_FIELDS = frozenset(
         "predecessor_charged_tcp_connects",
     }
 )
-_PLAN_FIELDS = (_V2_PLAN_FIELDS - {"predecessor_reason_code"}) | _V3_FIELDS
+_V3_PLAN_FIELDS = (_V2_PLAN_FIELDS - {"predecessor_reason_code"}) | _V3_FIELDS
+_V4_PREDECESSOR_FIELDS = frozenset(
+    {
+        "predecessor_v3_plan_file_sha256",
+        "predecessor_v3_plan_sha256",
+        "predecessor_v3_action_id",
+        "predecessor_v3_engagement_id",
+        "predecessor_v3_release_manifest_sha256",
+        "predecessor_v3_worker_sha256",
+        "predecessor_v3_broker_worker_sha256",
+        "predecessor_v3_profile_worker_sha256",
+        "predecessor_v3_target_sha256",
+        "predecessor_v3_request_sha256",
+        "predecessor_v3_output_bytes",
+        "predecessor_v3_state_sha256",
+        "predecessor_v3_failure_stage",
+        "predecessor_v3_stop_reason",
+        "predecessor_v3_broker_socket_opened",
+        "predecessor_v3_credentials_loaded",
+        "predecessor_v3_target_traffic",
+        "predecessor_v3_first_byte_observed",
+        "predecessor_v3_result_present",
+        "predecessor_v3_possible_tcp_connects",
+        "predecessor_v3_charged_tcp_connects",
+    }
+)
+_V4_PLAN_FIELDS = _V3_PLAN_FIELDS | _V4_PREDECESSOR_FIELDS
 _PREDECESSOR_ENGAGEMENT_ID = "cptc11-dell-validation"
 _PREDECESSOR_ACTION_ID = "cptc11-portcast-public-identity-action-v2"
 _PREDECESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v1"
 _PREDECESSOR_RECONCILIATION_REASON = "clock-source-unavailable"
 _PREDECESSOR_REASON = "clock is not safe for active work"
 _PREDECESSOR_STOP_REASON = "transport outcome uncertain"
-_SUCCESSOR_ENGAGEMENT_ID = "cptc11-dell-validation-portcast-v3"
-_SUCCESSOR_ACTION_ID = "cptc11-portcast-public-identity-action-v3"
-_SUCCESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v3"
+_V3_SUCCESSOR_ENGAGEMENT_ID = "cptc11-dell-validation-portcast-v3"
+_V3_SUCCESSOR_ACTION_ID = "cptc11-portcast-public-identity-action-v3"
+_V3_SUCCESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v3"
+_SUCCESSOR_ENGAGEMENT_ID = "cptc11-dell-validation-portcast-v4"
+_SUCCESSOR_ACTION_ID = "cptc11-portcast-public-identity-action-v4"
+_SUCCESSOR_PLAN_ID = "cptc11-portcast-public-identity-wave-v4"
 _WORKFLOW_ID = "cptc11-portcast-public-identity-wave-v1"
+_V3_PLAN_FILE_SHA256 = (
+    "bea58da1b695dc6e3d4ff681b2f784ee5d31a8466ba4a858df49afc308e3f64c"
+)
+_V3_PLAN_SHA256 = (
+    "cb057ddfe09076b781fecb84f3172294ff3aa7409ee2544e52f30043a0dbe936"
+)
+_V4_REVIEWED_BY = "approved:luna-portcast-v4-release-review-r1"
+_V4_WINDOW_START = "2026-09-12T05:00:00.000000Z"
+_V4_WINDOW_END = "2026-09-12T11:00:00.000000Z"
 
 
 def _canonical(value: Any) -> bytes:
@@ -151,11 +191,14 @@ def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _read_plan_file() -> dict[str, Any]:
-    if _PLAN_PATH.is_symlink():
+def _read_plan_file(
+    path: Path = _PLAN_PATH,
+    fields: frozenset[str] = _V4_PLAN_FIELDS,
+) -> tuple[dict[str, Any], bytes]:
+    if path.is_symlink():
         raise PolicyError("frozen PortCast plan symlink rejected")
     try:
-        descriptor = os.open(_PLAN_PATH, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
     except OSError:
         raise PolicyError("frozen PortCast plan is unavailable") from None
     try:
@@ -171,9 +214,9 @@ def _read_plan_file() -> dict[str, Any]:
         value = json.loads(raw, object_pairs_hook=_pairs)
     except (UnicodeDecodeError, ValueError, RecursionError):
         raise PolicyError("frozen PortCast plan JSON is invalid") from None
-    if not isinstance(value, dict) or frozenset(value) != _PLAN_FIELDS:
+    if not isinstance(value, dict) or frozenset(value) != fields:
         raise PolicyError("frozen PortCast plan fields differ")
-    return value
+    return value, raw
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,10 +277,42 @@ class FrozenPortcastPlan:
     predecessor_charged_tcp_connects: int
     plan_sha256: str
     predecessor_reason_code: str | None = None
+    predecessor_v3_plan_file_sha256: str | None = None
+    predecessor_v3_plan_sha256: str | None = None
+    predecessor_v3_action_id: str | None = None
+    predecessor_v3_engagement_id: str | None = None
+    predecessor_v3_release_manifest_sha256: str | None = None
+    predecessor_v3_worker_sha256: str | None = None
+    predecessor_v3_broker_worker_sha256: str | None = None
+    predecessor_v3_profile_worker_sha256: str | None = None
+    predecessor_v3_target_sha256: str | None = None
+    predecessor_v3_request_sha256: str | None = None
+    predecessor_v3_output_bytes: int | None = None
+    predecessor_v3_state_sha256: str | None = None
+    predecessor_v3_failure_stage: str | None = None
+    predecessor_v3_stop_reason: str | None = None
+    predecessor_v3_broker_socket_opened: bool | None = None
+    predecessor_v3_credentials_loaded: bool | None = None
+    predecessor_v3_target_traffic: bool | None = None
+    predecessor_v3_first_byte_observed: bool | None = None
+    predecessor_v3_result_present: bool | None = None
+    predecessor_v3_possible_tcp_connects: int | None = None
+    predecessor_v3_charged_tcp_connects: int | None = None
 
 
-def load_frozen_portcast_plan() -> FrozenPortcastPlan:
-    value = _read_plan_file()
+def _load_continuation_plan(
+    path: Path,
+    fields: frozenset[str],
+    *,
+    schema_version: int,
+    engagement_id: str,
+    action_id: str,
+    plan_id: str,
+    raw_sha256: str | None = None,
+) -> FrozenPortcastPlan:
+    value, raw = _read_plan_file(path, fields)
+    if raw_sha256 is not None and hashlib.sha256(raw).hexdigest() != raw_sha256:
+        raise PolicyError("frozen PortCast plan file hash differs")
     supplied_hash = value["plan_sha256"]
     unsigned = dict(value)
     unsigned.pop("plan_sha256")
@@ -248,7 +323,7 @@ def load_frozen_portcast_plan() -> FrozenPortcastPlan:
         plan = FrozenPortcastPlan(**value)
     except TypeError:
         raise PolicyError("frozen PortCast plan fields differ") from None
-    if plan.schema_version != 3 or any(
+    if plan.schema_version != schema_version or any(
         type(getattr(plan, name)) is not str or not getattr(plan, name)
         for name in (
             "plan_id",
@@ -304,9 +379,9 @@ def load_frozen_portcast_plan() -> FrozenPortcastPlan:
     if _AGE_RECIPIENT.fullmatch(plan.evidence_recipient) is None:
         raise PolicyError("frozen PortCast evidence recipient differs")
     if (
-        plan.engagement_id != _SUCCESSOR_ENGAGEMENT_ID
-        or plan.action_id != _SUCCESSOR_ACTION_ID
-        or plan.plan_id != _SUCCESSOR_PLAN_ID
+        plan.engagement_id != engagement_id
+        or plan.action_id != action_id
+        or plan.plan_id != plan_id
         or plan.workflow_id != _WORKFLOW_ID
         or plan.predecessor_engagement_id != _PREDECESSOR_ENGAGEMENT_ID
         or plan.predecessor_action_id != _PREDECESSOR_ACTION_ID
@@ -339,6 +414,86 @@ def load_frozen_portcast_plan() -> FrozenPortcastPlan:
     _read_predecessor_plan(plan)
     _expected_predecessor_identity(plan)
     _require_successor_request_binding(plan)
+    return plan
+
+
+def load_frozen_portcast_plan() -> FrozenPortcastPlan:
+    """Load the current immutable schema-v4 admission."""
+
+    plan = _load_continuation_plan(
+        _PLAN_PATH,
+        _V4_PLAN_FIELDS,
+        schema_version=4,
+        engagement_id=_SUCCESSOR_ENGAGEMENT_ID,
+        action_id=_SUCCESSOR_ACTION_ID,
+        plan_id=_SUCCESSOR_PLAN_ID,
+    )
+    if (
+        plan.reviewed_by != _V4_REVIEWED_BY
+        or plan.window_start != _V4_WINDOW_START
+        or plan.window_end != _V4_WINDOW_END
+    ):
+        raise PolicyError("frozen PortCast v4 approval differs")
+    digest_fields = (
+        plan.predecessor_v3_plan_file_sha256,
+        plan.predecessor_v3_plan_sha256,
+        plan.predecessor_v3_release_manifest_sha256,
+        plan.predecessor_v3_worker_sha256,
+        plan.predecessor_v3_broker_worker_sha256,
+        plan.predecessor_v3_profile_worker_sha256,
+        plan.predecessor_v3_target_sha256,
+        plan.predecessor_v3_request_sha256,
+        plan.predecessor_v3_state_sha256,
+    )
+    if any(
+        type(value) is not str or re.fullmatch(r"[0-9a-f]{64}", value) is None
+        for value in digest_fields
+    ):
+        raise PolicyError("frozen PortCast v3 predecessor digest differs")
+    if (
+        plan.predecessor_v3_plan_file_sha256 != _V3_PLAN_FILE_SHA256
+        or plan.predecessor_v3_plan_sha256 != _V3_PLAN_SHA256
+        or plan.predecessor_v3_action_id != _V3_SUCCESSOR_ACTION_ID
+        or plan.predecessor_v3_engagement_id != _V3_SUCCESSOR_ENGAGEMENT_ID
+        or plan.predecessor_v3_output_bytes != 16384
+        or plan.predecessor_v3_failure_stage
+        != "continuation-verification-before-credential-load"
+        or plan.predecessor_v3_stop_reason
+        != "service startup failed before target capability creation"
+        or plan.predecessor_v3_broker_socket_opened is not False
+        or plan.predecessor_v3_credentials_loaded is not False
+        or plan.predecessor_v3_target_traffic is not False
+        or plan.predecessor_v3_first_byte_observed is not False
+        or plan.predecessor_v3_result_present is not False
+        or plan.predecessor_v3_possible_tcp_connects != 0
+        or plan.predecessor_v3_charged_tcp_connects != 0
+        or any(
+            type(value) is not int
+            for value in (
+                plan.predecessor_v3_output_bytes,
+                plan.predecessor_v3_possible_tcp_connects,
+                plan.predecessor_v3_charged_tcp_connects,
+            )
+        )
+    ):
+        raise PolicyError("frozen PortCast v3 predecessor binding differs")
+    return plan
+
+
+def load_frozen_portcast_plan_v3() -> FrozenPortcastPlan:
+    """Load the immutable v3 plan only for history and predecessor checks."""
+
+    plan = _load_continuation_plan(
+        _V3_PLAN_PATH,
+        _V3_PLAN_FIELDS,
+        schema_version=3,
+        engagement_id=_V3_SUCCESSOR_ENGAGEMENT_ID,
+        action_id=_V3_SUCCESSOR_ACTION_ID,
+        plan_id=_V3_SUCCESSOR_PLAN_ID,
+        raw_sha256=_V3_PLAN_FILE_SHA256,
+    )
+    if plan.plan_sha256 != _V3_PLAN_SHA256:
+        raise PolicyError("frozen PortCast v3 plan identity differs")
     return plan
 
 
@@ -441,7 +596,7 @@ def load_frozen_portcast_plan_v2() -> FrozenPortcastPlan:
 
 
 def _read_predecessor_plan(plan: FrozenPortcastPlan) -> dict[str, Any]:
-    """Read and cross-bind the immutable v1 and v2 plan files."""
+    """Read and cross-bind every immutable predecessor plan file."""
 
     def read(path: Path, fields: frozenset[str], expected_sha256: str) -> dict[str, Any]:
         if path.is_symlink():
@@ -531,13 +686,59 @@ def _read_predecessor_plan(plan: FrozenPortcastPlan) -> dict[str, Any]:
     ):
         if v1[field] != v2[field] or v2[field] != getattr(plan, field):
             raise PolicyError("frozen PortCast predecessor scope differs")
+    if plan.schema_version == 4:
+        v3 = read(
+            _V3_PLAN_PATH,
+            _V3_PLAN_FIELDS,
+            plan.predecessor_v3_plan_file_sha256 or "",
+        )
+        if (
+            v3["schema_version"] != 3
+            or v3["engagement_id"] != plan.predecessor_v3_engagement_id
+            or v3["action_id"] != plan.predecessor_v3_action_id
+            or v3["plan_sha256"] != plan.predecessor_v3_plan_sha256
+            or v3["worker_sha256"] != plan.predecessor_v3_worker_sha256
+            or v3["broker_worker_sha256"]
+            != plan.predecessor_v3_broker_worker_sha256
+            or v3["profile_worker_sha256"]
+            != plan.predecessor_v3_profile_worker_sha256
+            or v3["target_sha256"] != plan.predecessor_v3_target_sha256
+            or v3["request_sha256"] != plan.predecessor_v3_request_sha256
+            or v3["output_bytes"] != plan.predecessor_v3_output_bytes
+            or v3["predecessor_v1_plan_file_sha256"]
+            != plan.predecessor_v1_plan_file_sha256
+            or v3["predecessor_v2_plan_file_sha256"]
+            != plan.predecessor_v2_plan_file_sha256
+            or v3["predecessor_action_id"] != v2["action_id"]
+            or v3["predecessor_plan_sha256"] != v2["plan_sha256"]
+        ):
+            raise PolicyError("frozen PortCast v3 predecessor plan binding differs")
+        for field in (
+            "policy_revision",
+            "workspace_id",
+            "device_id",
+            "operator_id",
+            "profile_id",
+            "module_id",
+            "target_id",
+            "catalog_sha256",
+            "profile_sha256",
+            "operation_sha256",
+            "parser_sha256",
+            "runtime_pinset_sha256",
+            "release_id",
+            "evidence_recipient",
+            "workflow_id",
+        ):
+            if v3[field] != getattr(plan, field):
+                raise PolicyError("frozen PortCast v3 predecessor scope differs")
     return v2
 
 
 def _expected_predecessor_identity(
     plan: FrozenPortcastPlan,
 ) -> ExpectedProfileContinuationIdentity:
-    """Build the exact v2 audit verifier identity from the frozen v3 plan."""
+    """Build the exact v2 audit verifier identity from a continuation plan."""
 
     predecessor = _read_predecessor_plan(plan)
     target = to_json(_target())
@@ -689,6 +890,16 @@ def _target() -> TargetRef:
 
 def policy_for_plan(plan: FrozenPortcastPlan) -> PolicySnapshot:
     target = _target()
+    cumulative_tcp_ceiling = (
+        plan.predecessor_charged_tcp_connects
+        + (
+            plan.predecessor_v3_charged_tcp_connects
+            if plan.schema_version == 4
+            and type(plan.predecessor_v3_charged_tcp_connects) is int
+            else 0
+        )
+        + plan.tcp_connection_limit
+    )
     workflow_limits = tuple(
         BudgetLimit("workflow", plan.workflow_id, counter, ceiling)
         for counter, ceiling in (
@@ -703,7 +914,7 @@ def policy_for_plan(plan: FrozenPortcastPlan) -> PolicySnapshot:
         )
     )
     tcp_limits = tuple(
-        BudgetLimit(scope, key, "tcp_connects", 2)
+        BudgetLimit(scope, key, "tcp_connects", cumulative_tcp_ceiling)
         for scope, key in (
             ("engagement", plan.engagement_id),
             ("device", plan.device_id),
@@ -745,6 +956,8 @@ def policy_for_plan(plan: FrozenPortcastPlan) -> PolicySnapshot:
 
 _RUNTIME_DIRECTORIES = frozenset({"audit", "results", "reports", "policies"})
 _RUNTIME_FILES = frozenset({"policy.json", "runtime.json"})
+_V3_PREDECESSOR_DIRECTORY = "v3-predecessor"
+_PORTCAST_SERVICE_SOCKET = Path("/run/cptc-harness/portcast-live-v1.sock")
 
 
 def _fsync_directory(path: Path) -> None:
@@ -894,6 +1107,215 @@ def _validate_runtime_tree(
         raise PolicyError("canonical PortCast evidence encryption differs")
 
 
+def _tree_snapshot(
+    root: Path,
+    *,
+    expected_uid: int | None = None,
+    expected_gid: int | None = None,
+) -> list[dict[str, Any]]:
+    """Hash one already-validated private tree without following links."""
+
+    expected_uid = os.geteuid() if expected_uid is None else expected_uid
+    expected_gid = os.getegid() if expected_gid is None else expected_gid
+    records: list[dict[str, Any]] = []
+    items = [root, *sorted(root.rglob("*"), key=lambda item: item.as_posix())]
+    if len(items) > 100:
+        raise PolicyError("aborted PortCast v3 state exceeds allowance")
+    for item in items:
+        info = item.lstat()
+        if info.st_uid != expected_uid or info.st_gid != expected_gid:
+            raise PolicyError("aborted PortCast v3 state ownership differs")
+        relative = "." if item == root else item.relative_to(root).as_posix()
+        if stat.S_ISDIR(info.st_mode):
+            if stat.S_IMODE(info.st_mode) != 0o700:
+                raise PolicyError("aborted PortCast v3 state mode differs")
+            records.append({"kind": "directory", "mode": 0o700, "path": relative})
+            continue
+        if not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o600:
+            raise PolicyError("aborted PortCast v3 state type differs")
+        if info.st_nlink != 1 or info.st_size > _MAX_PLAN_BYTES:
+            raise PolicyError("aborted PortCast v3 state file differs")
+        try:
+            descriptor = os.open(
+                item, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+            )
+            try:
+                opened = os.fstat(descriptor)
+                if (
+                    opened.st_dev,
+                    opened.st_ino,
+                    opened.st_mode,
+                    opened.st_size,
+                    opened.st_uid,
+                    opened.st_gid,
+                ) != (
+                    info.st_dev,
+                    info.st_ino,
+                    info.st_mode,
+                    info.st_size,
+                    info.st_uid,
+                    info.st_gid,
+                ):
+                    raise PolicyError("aborted PortCast v3 state changed")
+                raw = os.read(descriptor, _MAX_PLAN_BYTES + 1)
+                if len(raw) != info.st_size:
+                    raise PolicyError("aborted PortCast v3 state changed")
+            finally:
+                os.close(descriptor)
+        except PolicyError:
+            raise
+        except OSError:
+            raise PolicyError("aborted PortCast v3 state changed") from None
+        records.append(
+            {
+                "kind": "file",
+                "mode": 0o600,
+                "path": relative,
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size": len(raw),
+            }
+        )
+    return records
+
+
+def _ledger_action_counts(ledger_directory: Path, action_id: str) -> dict[str, int]:
+    """Count any durable reference to one action through a read-only database."""
+
+    database = ledger_directory / "ledger.sqlite3"
+    try:
+        connection = sqlite3.connect(
+            database.resolve(strict=True).as_uri() + "?mode=ro",
+            uri=True,
+            timeout=1,
+        )
+        try:
+            if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                raise PolicyError("aborted PortCast v3 ledger integrity differs")
+            tables = [
+                row[0]
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+                )
+            ]
+            if len(tables) > 64 or any(
+                re.fullmatch(r"[a-z][a-z0-9_]{0,63}", name) is None
+                for name in tables
+            ):
+                raise PolicyError("aborted PortCast v3 ledger schema differs")
+            action_columns = {
+                "request_id",
+                "action_id",
+                "predecessor_action_id",
+                "predecessor_reconciled_action_id",
+                "successor_action_id",
+            }
+            counts: dict[str, int] = {}
+            for table in tables:
+                columns = [
+                    row[1]
+                    for row in connection.execute(f'PRAGMA table_info("{table}")')
+                ]
+                selected = sorted(action_columns.intersection(columns))
+                if not selected:
+                    continue
+                where = " OR ".join(f'"{column}"=?' for column in selected)
+                count = connection.execute(
+                    f'SELECT COUNT(*) FROM "{table}" WHERE {where}',
+                    (action_id,) * len(selected),
+                ).fetchone()[0]
+                counts[table] = int(count)
+            return counts
+        finally:
+            connection.close()
+    except PolicyError:
+        raise
+    except (OSError, sqlite3.Error):
+        raise PolicyError("aborted PortCast v3 ledger integrity differs") from None
+
+
+def _aborted_v3_state_snapshot(
+    predecessor_root: Path,
+    ledger_directory: Path,
+    *,
+    age_binary: Path,
+    age_recipient: str,
+    socket_path: Path,
+) -> dict[str, Any]:
+    """Build the deterministic, read-only v3 startup-failure snapshot."""
+
+    predecessor_root = private_directory(predecessor_root)
+    if predecessor_root == _PRODUCTION_RUNTIME_CONTAINER / _V3_PREDECESSOR_DIRECTORY:
+        try:
+            if not os.statvfs(predecessor_root).f_flag & os.ST_RDONLY:
+                raise PolicyError("aborted PortCast v3 state is writable")
+        except OSError:
+            raise PolicyError("aborted PortCast v3 mount state is unavailable") from None
+    v3 = load_frozen_portcast_plan_v3()
+    expected_top = {".provision.lock", "policy-source.json", "runtime"}
+    if {item.name for item in predecessor_root.iterdir()} != expected_top:
+        raise PolicyError("aborted PortCast v3 state layout differs")
+    if read_private(predecessor_root / ".provision.lock", 1) != b"":
+        raise PolicyError("aborted PortCast v3 provision lock differs")
+    if load_policy(predecessor_root / "policy-source.json") != policy_for_plan(v3):
+        raise PolicyError("aborted PortCast v3 policy source differs")
+    runtime_root = predecessor_root / "runtime"
+    _validate_runtime_tree(
+        runtime_root,
+        policy_for_plan(v3),
+        age_binary=age_binary,
+        age_recipient=age_recipient,
+    )
+    for name in ("audit", "results", "reports"):
+        if any((runtime_root / name).iterdir()):
+            raise PolicyError("aborted PortCast v3 output state is not empty")
+    counts = _ledger_action_counts(ledger_directory, v3.action_id)
+    if any(counts.values()):
+        raise PolicyError("aborted PortCast v3 has durable action state")
+    if socket_path.exists() or socket_path.is_symlink():
+        raise PolicyError("aborted PortCast v3 broker socket is present")
+    return {
+        "schema": "portcast-aborted-v3-state-v1",
+        "plan_file_sha256": _V3_PLAN_FILE_SHA256,
+        "plan_sha256": _V3_PLAN_SHA256,
+        "runtime_tree": _tree_snapshot(predecessor_root),
+        "ledger_action_counts": counts,
+        "broker_socket_present": False,
+        "credentials_loaded": False,
+        "target_traffic": False,
+        "first_byte_observed": False,
+        "result_present": False,
+        "possible_tcp_connects": 0,
+        "charged_tcp_connects": 0,
+    }
+
+
+def _verify_aborted_v3_state(
+    state_root: Path,
+    ledger_directory: Path,
+    plan: FrozenPortcastPlan,
+    *,
+    age_binary: Path,
+    age_recipient: str,
+    socket_path: Path = _PORTCAST_SERVICE_SOCKET,
+) -> dict[str, Any]:
+    """Require the exact empty v3 admission before schema-v4 mutation."""
+
+    if plan.schema_version != 4:
+        raise PolicyError("aborted PortCast v3 proof requires schema v4")
+    snapshot = _aborted_v3_state_snapshot(
+        Path(state_root) / _V3_PREDECESSOR_DIRECTORY,
+        ledger_directory,
+        age_binary=age_binary,
+        age_recipient=age_recipient,
+        socket_path=socket_path,
+    )
+    digest = hashlib.sha256(canonical_json(snapshot)).hexdigest()
+    if digest != plan.predecessor_v3_state_sha256:
+        raise PolicyError("aborted PortCast v3 state digest differs")
+    return snapshot
+
+
 def _initialize_runtime_atomically(
     runtime_root: Path,
     policy_source: Path,
@@ -948,7 +1370,7 @@ def _prepare_runtime_unlocked(
     runtime_root = root / "runtime"
     ledger_root = (
         root.parent / "ledger" / plan.predecessor_engagement_id
-        if plan.schema_version == 3
+        if plan.schema_version in {3, 4}
         else root / "ledger"
     )
     policy = policy_for_plan(plan)
@@ -980,7 +1402,7 @@ def _prepare_runtime_unlocked(
         raise PolicyError("canonical PortCast runtime is not provisioned")
     ledger_root = private_directory(
         ledger_root,
-        create=provision and plan.schema_version != 3,
+        create=provision and plan.schema_version not in {3, 4},
     )
     if provision:
         _fsync_directory(root)
@@ -996,7 +1418,7 @@ def _prepare_runtime(
     provision: bool = True,
 ) -> tuple[Path, Path]:
     root = Path(root).absolute()
-    if plan.schema_version == 3 and root == _PRODUCTION_RUNTIME_CONTAINER:
+    if plan.schema_version in {3, 4} and root == _PRODUCTION_RUNTIME_CONTAINER:
         for component in reversed((root, *root.parents)):
             if component.is_symlink():
                 raise PolicyError("symlink in protected storage path")
@@ -1010,8 +1432,9 @@ def _prepare_runtime(
             raise PolicyError("canonical runtime mount container differs")
     else:
         root = private_directory(root, create=provision)
-    if plan.schema_version == 3:
-        root = private_directory(root / "v3", create=provision)
+    if plan.schema_version in {3, 4}:
+        version = f"v{plan.schema_version}"
+        root = private_directory(root / version, create=provision)
         info = root.lstat()
         if (
             not stat.S_ISDIR(info.st_mode)
@@ -1019,7 +1442,7 @@ def _prepare_runtime(
             or info.st_gid != os.getegid()
             or stat.S_IMODE(info.st_mode) != 0o700
         ):
-            raise PolicyError("canonical v3 runtime directory differs")
+            raise PolicyError(f"canonical {version} runtime directory differs")
     if provision:
         with exclusive(root / ".provision.lock"):
             return _prepare_runtime_unlocked(
@@ -1057,6 +1480,18 @@ def prepare_frozen_portcast_runtime_at_root(
         != _age_configuration(age_binary, age_recipient)["age_sha256"]
     ):
         raise PolicyError("canonical PortCast startup binding differs")
+    if plan.schema_version == 4:
+        ledger_directory = (
+            Path(state_root) / "ledger" / plan.predecessor_engagement_id
+        )
+        _validate_existing_ledger(ledger_directory, plan)
+        _verify_aborted_v3_state(
+            state_root,
+            ledger_directory,
+            plan,
+            age_binary=age_binary,
+            age_recipient=age_recipient,
+        )
     return _prepare_runtime(
         state_root,
         plan,
@@ -1082,7 +1517,7 @@ def _validate_existing_ledger(
         raise PolicyError("canonical PortCast ledger metadata differs")
     engagement_root = (
         ledger_root
-        if plan.schema_version == 3
+        if plan.schema_version in {3, 4}
         else ledger_root / plan.engagement_id
     )
     if not engagement_root.exists() and not engagement_root.is_symlink():
@@ -1123,7 +1558,7 @@ def _validate_existing_ledger(
                 raise PolicyError("canonical PortCast ledger metadata differs")
         database = engagement_root / "ledger.sqlite3"
         if not database.exists():
-            if entries or plan.schema_version == 3:
+            if entries or plan.schema_version in {3, 4}:
                 raise PolicyError("canonical PortCast ledger database is missing")
             return
         info = database.lstat()
@@ -1314,7 +1749,7 @@ def _require_exact_loaded_plan(plan: FrozenPortcastPlan) -> None:
 
     if (
         type(plan) is not FrozenPortcastPlan
-        or plan.schema_version not in {2, 3}
+        or plan.schema_version not in {2, 3, 4}
         or plan != load_frozen_portcast_plan()
     ):
         raise PolicyError("canonical PortCast frozen plan differs")
@@ -1329,7 +1764,7 @@ def open_frozen_portcast_runtime_at_root(
     age_recipient: str,
     clock_service: Any = None,
 ) -> Runtime:
-    """Open the production authority only for the exact frozen v3 plan."""
+    """Open the production authority only for the exact current plan."""
 
     _require_exact_loaded_plan(plan)
     return _open_frozen_portcast_runtime_at_root_core(
@@ -1362,14 +1797,14 @@ def _open_frozen_portcast_runtime_at_root_core(
         age_recipient=age_recipient,
     )
     _validate_existing_ledger(ledger_root, plan)
-    if plan.schema_version == 3:
+    if plan.schema_version in {3, 4}:
         _record_profile_continuation(state_root, ledger_root, plan)
     try:
         runtime = Runtime(
             runtime_root,
             **(
                 {"ledger_directory": ledger_root}
-                if plan.schema_version == 3
+                if plan.schema_version in {3, 4}
                 else {"ledger_root": ledger_root}
             ),
             verified_release=verified_release,
@@ -1385,7 +1820,7 @@ def _open_frozen_portcast_runtime_at_root_core(
             raise PolicyError("canonical PortCast ledger integrity differs")
         if not runtime.audit.ready() or not runtime.audit.verify().valid:
             raise PolicyError("canonical PortCast audit is not ready")
-        if plan.schema_version == 3:
+        if plan.schema_version in {3, 4}:
             _require_existing_profile_continuation(runtime, state_root, plan)
         elif plan.schema_version == 2:
             _reconcile_predecessor(runtime, plan, runtime_root)
@@ -1772,11 +2207,13 @@ def _require_prepared_runtime(
     state_root: Path,
 ) -> Path:
     runtime_root = state_root / (
-        "v3/runtime" if plan.schema_version == 3 else "runtime"
+        f"v{plan.schema_version}/runtime"
+        if plan.schema_version in {3, 4}
+        else "runtime"
     )
     ledger_directory = (
         state_root / "ledger" / plan.predecessor_engagement_id
-        if plan.schema_version == 3
+        if plan.schema_version in {3, 4}
         else state_root / "ledger" / plan.engagement_id
     )
     if (
@@ -1795,7 +2232,7 @@ def inspect_prepared_portcast_state(
     plan: FrozenPortcastPlan,
     state_root: Path,
 ) -> dict[str, Any] | None:
-    """Inspect production state only for the exact frozen v3 plan."""
+    """Inspect production state only for the exact current plan."""
 
     _require_exact_loaded_plan(plan)
     return _inspect_prepared_portcast_state_core(runtime, plan, state_root)
@@ -1810,7 +2247,7 @@ def _inspect_prepared_portcast_state_core(
 
     _require_open_window(plan)
     runtime_root = _require_prepared_runtime(runtime, plan, state_root)
-    if plan.schema_version == 3:
+    if plan.schema_version in {3, 4}:
         _require_existing_profile_continuation(runtime, state_root, plan)
     elif plan.schema_version == 2:
         _require_existing_predecessor_reconciliation(runtime, plan)
@@ -1838,7 +2275,7 @@ def run_prepared_portcast_action(
         raise PolicyError("canonical PortCast audit is not ready")
     if not runtime.clock.valid_for(12.0):
         raise PolicyError("clock is not safe for the complete bounded action")
-    if plan.schema_version == 3:
+    if plan.schema_version in {3, 4}:
         _require_existing_profile_continuation(runtime, state_root, plan)
     elif plan.schema_version == 2:
         _reconcile_predecessor(runtime, plan, runtime_root)
@@ -1914,19 +2351,19 @@ def _inspect_frozen_portcast_state_at_root(
         provision=provision,
     )
     _validate_existing_ledger(ledger_root, plan)
-    if plan.schema_version == 3:
+    if plan.schema_version in {3, 4}:
         _record_profile_continuation(state_root, ledger_root, plan)
     runtime = Runtime(
         runtime_root,
         **(
             {"ledger_directory": ledger_root}
-            if plan.schema_version == 3
+            if plan.schema_version in {3, 4}
             else {"ledger_root": ledger_root}
         ),
         verified_release=verified,
     )
     try:
-        if plan.schema_version == 3:
+        if plan.schema_version in {3, 4}:
             _require_existing_profile_continuation(runtime, state_root, plan)
         elif plan.schema_version == 2:
             _reconcile_predecessor(runtime, plan, runtime_root)
@@ -1960,13 +2397,13 @@ def _run_frozen_portcast_action_at_root(
         provision=provision,
     )
     _validate_existing_ledger(ledger_root, plan)
-    if plan.schema_version == 3:
+    if plan.schema_version in {3, 4}:
         _record_profile_continuation(state_root, ledger_root, plan)
     runtime = Runtime(
         runtime_root,
         **(
             {"ledger_directory": ledger_root}
-            if plan.schema_version == 3
+            if plan.schema_version in {3, 4}
             else {"ledger_root": ledger_root}
         ),
         verified_release=verified,
@@ -1974,7 +2411,7 @@ def _run_frozen_portcast_action_at_root(
     if clock_override is not None:
         runtime.broker.clock = clock_override
     try:
-        if plan.schema_version == 3:
+        if plan.schema_version in {3, 4}:
             _require_existing_profile_continuation(runtime, state_root, plan)
         elif plan.schema_version == 2:
             _reconcile_predecessor(runtime, plan, runtime_root)

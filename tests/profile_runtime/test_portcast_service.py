@@ -80,6 +80,12 @@ def _create_synthetic_historical_inputs(state: Path) -> None:
     result.chmod(0o600)
 
 
+def _create_synthetic_v3_runtime(root: Path) -> Path:
+    runtime = root / "portcast-live-v3/runtime"
+    runtime.mkdir(parents=True, mode=0o700)
+    return runtime
+
+
 def _legacy_v2_service_request_for_test(
     socket_path: Path, method: str, release_id: str
 ):
@@ -98,9 +104,11 @@ def _legacy_v2_service_request_for_test(
     return response["result"]
 
 
-def _complete_service_result() -> dict:
+def _complete_service_result(
+    action_id: str = "cptc11-portcast-public-identity-action-v3",
+) -> dict:
     return {
-        "action_id": "cptc11-portcast-public-identity-action-v3",
+        "action_id": action_id,
         "audit_verified": True,
         "automatic_retry": False,
         "cleanup_status": "passed",
@@ -129,6 +137,16 @@ def test_service_result_validator_accepts_only_proven_complete_metadata():
     value = _complete_service_result()
 
     assert service_client.validate_portcast_result(value) == value
+
+
+def test_service_result_v4_validator_is_distinct_and_strict():
+    value = _complete_service_result(
+        "cptc11-portcast-public-identity-action-v4"
+    )
+
+    assert service_client.validate_portcast_result_v4(value) == value
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        service_client.validate_portcast_result(value)
 
 
 def test_service_result_validator_accepts_only_fixed_failure_stage_metadata():
@@ -483,7 +501,8 @@ def test_sysusers_and_units_require_the_dedicated_nonroot_service_identity():
         assert "CapabilityBoundingSet=\n" in unit
         assert "AmbientCapabilities=\n" in unit
         assert "User=root\n" not in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor\n" in service_unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation\n" in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit\n" in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results\n" in service_unit
@@ -630,24 +649,54 @@ def test_deployment_creates_only_the_service_owned_runtime_subtree(tmp_path, mon
     before = state.stat()
     identity = deployment.ServiceIdentity("_cptc-portcast", os.getuid(), os.getgid())
     monkeypatch.setattr(deployment, "STATE_PATH", state)
-    v3_parent = tmp_path / "portcast-live-v3"
-    monkeypatch.setattr(deployment, "V3_STATE_PATH", v3_parent)
-    monkeypatch.setattr(deployment, "V3_RUNTIME_PATH", v3_parent / "runtime")
+    v4_parent = tmp_path / "portcast-live-v4"
+    monkeypatch.setattr(deployment, "V4_STATE_PATH", v4_parent)
+    monkeypatch.setattr(deployment, "V4_RUNTIME_PATH", v4_parent / "runtime")
     monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
     monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
 
     runtime = deployment._prepare_runtime_subtree(identity)
 
-    assert runtime == v3_parent / "runtime"
+    assert runtime == v4_parent / "runtime"
     assert stat.S_IMODE(state.stat().st_mode) == 0o700
     assert (state.stat().st_uid, state.stat().st_gid) == (before.st_uid, before.st_gid)
-    assert stat.S_IMODE(v3_parent.stat().st_mode) == 0o755
-    assert (v3_parent.stat().st_uid, v3_parent.stat().st_gid) == (
+    assert stat.S_IMODE(v4_parent.stat().st_mode) == 0o755
+    assert (v4_parent.stat().st_uid, v4_parent.stat().st_gid) == (
         deployment.ROOT_UID,
         deployment.ROOT_GID,
     )
     assert (runtime.stat().st_uid, runtime.stat().st_gid) == (identity.uid, identity.gid)
     assert stat.S_IMODE(runtime.stat().st_mode) == 0o700
+
+
+def test_deployment_requires_existing_v3_predecessor_runtime_without_mutation(
+    tmp_path, monkeypatch
+):
+    state = tmp_path / "portcast-live-v1"
+    state.mkdir(mode=0o700)
+    _create_synthetic_historical_inputs(state)
+    predecessor = tmp_path / "portcast-live-v3/runtime"
+    predecessor.mkdir(parents=True, mode=0o700)
+    identity = deployment.ServiceIdentity("_cptc-portcast", os.getuid(), os.getgid())
+    monkeypatch.setattr(deployment, "STATE_PATH", state)
+    monkeypatch.setattr(deployment, "V3_STATE_PATH", predecessor.parent)
+    monkeypatch.setattr(deployment, "V3_RUNTIME_PATH", predecessor)
+    monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
+    before = predecessor.stat()
+
+    deployment._validate_historical_inputs(identity)
+
+    after = predecessor.stat()
+    assert (after.st_uid, after.st_gid, stat.S_IMODE(after.st_mode)) == (
+        before.st_uid,
+        before.st_gid,
+        0o700,
+    )
+
+    predecessor.chmod(0o750)
+    with pytest.raises(deployment.DeploymentError, match="historical path metadata"):
+        deployment._validate_historical_inputs(identity)
 
 
 def test_service_requires_exact_dynamic_identity_and_service_owned_credentials(monkeypatch):
@@ -1058,6 +1107,10 @@ def test_deployment_helper_plan_is_no_target_and_requires_reviewed_release():
     assert result["service_start_requested"] is False
     assert result["target_traffic"] is False
     assert result["state_preserved"] is True
+    assert result["v3_state_path"].endswith("/portcast-live-v3")
+    assert result["v3_runtime_path"].endswith("/portcast-live-v3/runtime")
+    assert result["v4_state_path"].endswith("/portcast-live-v4")
+    assert result["v4_runtime_path"].endswith("/portcast-live-v4/runtime")
     helper = root / "deployment/manage-portcast-service.py"
     assert not os.access(helper, os.X_OK)
     direct = subprocess.run(
@@ -1133,6 +1186,7 @@ def test_deployment_helper_apply_verify_and_rollback_preserve_state(
     state.chmod(0o700)
     marker = state / "preserved-state"
     marker.write_text("unchanged")
+    _create_synthetic_v3_runtime(state.parent)
     # The production helper validates the exact v2 continuation inputs. Keep
     # this lifecycle test self-contained with service-owned synthetic inputs.
     historical_ledger = state / "runtime/ledger/cptc11-dell-validation"
@@ -1266,6 +1320,7 @@ def test_deployment_helper_retires_verified_previous_generation_idempotently(
     state.mkdir(parents=True)
     state.chmod(0o700)
     _create_synthetic_historical_inputs(state)
+    _create_synthetic_v3_runtime(state.parent)
     marker = state / "preserved-state"
     marker.write_text("unchanged")
     release.mkdir(parents=True)
@@ -1360,6 +1415,7 @@ def test_deployment_helper_refuses_partial_or_unreviewed_previous_generation(
     state = tmp_path / "state"
     state.mkdir(mode=0o700)
     _create_synthetic_historical_inputs(state)
+    _create_synthetic_v3_runtime(state.parent)
     release.mkdir(mode=0o555)
     release.with_name(release.name + ".previous").mkdir(mode=0o555)
     unit.write_text("current")
@@ -1775,6 +1831,7 @@ def test_no_target_startup_smoke_does_not_mount_engagement_state(tmp_path, monke
     assert not any(
         value.startswith(str(state / "runtime"))
         or value.startswith("/var/lib/cptc-harness/portcast-live-v3")
+        or value.startswith("/var/lib/cptc-harness/portcast-live-v4")
         for value in arguments
     )
     assert captured["kwargs"]["env"] == {}

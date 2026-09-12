@@ -20,10 +20,12 @@ Prepare these items before `apply`:
   release manifest.
 - `/var/lib/cptc-harness/portcast-live-v1` is an initialized `root:root`
   directory with mode `0700`. Keep the deployment lock, journal, release
-  history, trust records, and encrypted credentials root-owned. The v3
-  continuation uses `/var/lib/cptc-harness/portcast-live-v3` as a root-owned
-  parent and creates only its `runtime/` child, owned by
+  history, trust records, and encrypted credentials root-owned. The schema-v4
+  admission uses `/var/lib/cptc-harness/portcast-live-v4` as a root-owned parent
+  and creates only its `runtime/` child, owned by
   `_cptc-portcast:cptc-harness` with mode `0700`.
+- Keep `/var/lib/cptc-harness/portcast-live-v3/runtime` unchanged. The service
+  mounts it read-only as the failed v3 admission record.
 - The old v1 ledger at
   `/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation`
   is the only historical path that remains writable. The old audit directory
@@ -200,18 +202,21 @@ file, directory, or link blocks startup and is preserved. The service then
 opens the SQLite ledger and audit writer, performs recovery, checks SQLite and
 audit integrity, and retains that one runtime for the service lifetime. It
 does all of this before it loads target credentials or binds the socket.
-The v3 application runtime is the fixed logical path
-`/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime`. Its host storage
-is `/var/lib/cptc-harness/portcast-live-v3/runtime`. The contained audit
-worker receives only the v3 `audit/` child. The historical ledger is the
+The v4 application runtime is the fixed logical path
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v4/runtime`. Its host storage
+is `/var/lib/cptc-harness/portcast-live-v4/runtime`. The failed v3 host tree is
+mounted read-only at the logical `runtime/v3-predecessor` path. The contained
+audit worker receives only the v4 `audit/` child. The historical ledger is the
 separate fixed `runtime/ledger/cptc11-dell-validation` directory. The old
 audit and result paths are read-only inputs for continuation verification.
 
-The coordinator loads the v2 plan and verifies the old audit chain and result
-before it reserves v3 state. It records the continuation proof in the old
-ledger, then uses the v3 runtime for new audit and result records. A changed,
-missing, or writable historical input blocks startup. The v2 action is never
-retried.
+The coordinator loads and hash-checks v1, v2, and v3 plans. It verifies the v2
+audit chain and result. It also requires the v3 runtime to contain no audit,
+result, or ledger action state and requires its bind mount to be read-only.
+These checks run before credential loading, socket binding, or broker creation.
+It records the v2 continuation proof in the old ledger, then uses the v4 runtime
+for new audit and result records. A changed, missing, or writable historical
+input blocks startup. The v2 and v3 actions are never retried.
 
 A restart reuses that exact runtime. It does not repair or replace a partial
 final runtime or a corrupt ledger or audit chain. Incomplete staging

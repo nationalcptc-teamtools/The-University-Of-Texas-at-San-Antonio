@@ -27,6 +27,7 @@ from cptc_harness.integrity import VerifiedRelease
 from cptc_harness.profile_runtime.service_client import (
     PortcastServiceClient,
     validate_portcast_result,
+    validate_portcast_result_v4,
 )
 from cptc_harness.registry import build_registry
 from tests import test_audit_readonly as audit_fixtures
@@ -36,9 +37,6 @@ from tests import test_profile_reconciliation as ledger_fixtures
 V1_FILE_SHA256 = "1de39a00a6ccbbc9d8bf7a4c8f1711d7989532b19dec99a93d808e5354147256"
 V2_FILE_SHA256 = "1ebe09e1db61a573abd840d90a2fbf52d6315e7d3bdd68ea8a32a7c1b1f023ce"
 V3_PLAN_SHA256 = "cb057ddfe09076b781fecb84f3172294ff3aa7409ee2544e52f30043a0dbe936"
-CURRENT_MODULE_SOURCE_SHA256 = (
-    "777c73f83563d261b6b88acf84fb7be915a1a6f357e4fc3cb29992c83d50ab4c"
-)
 
 
 def _complete_metadata(action_id: str) -> dict[str, object]:
@@ -70,7 +68,7 @@ def _complete_metadata(action_id: str) -> dict[str, object]:
 
 
 def test_v3_plan_binds_fixed_successor_and_exact_v2_workflow():
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
 
     assert plan.schema_version == 3
     assert plan.engagement_id == "cptc11-dell-validation-portcast-v3"
@@ -83,14 +81,10 @@ def test_v3_plan_binds_fixed_successor_and_exact_v2_workflow():
     assert plan.tcp_connection_limit == 1
     assert plan.output_bytes == 16384
     assert plan.plan_sha256 == V3_PLAN_SHA256
-    assert plan.module_source_sha256 == CURRENT_MODULE_SOURCE_SHA256
-    assert build_registry().get(plan.module_id).source_hash == (
-        CURRENT_MODULE_SOURCE_SHA256
-    )
 
 
 def test_reviewed_v3_plan_keeps_approval_and_window_fail_closed():
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
 
     assert plan.reviewed_by == "approved:daybreak-portcast-v3-release-review-r2"
     assert plan.window_start == "2026-09-11T05:20:00.000000Z"
@@ -112,7 +106,7 @@ def test_v3_plan_preserves_and_binds_exact_v1_v2_file_bytes():
         path: path.read_bytes()
         for path in (live._V1_PLAN_PATH, live._V2_PLAN_PATH)
     }
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
 
     assert hashlib.sha256(before[live._V1_PLAN_PATH]).hexdigest() == V1_FILE_SHA256
     assert hashlib.sha256(before[live._V2_PLAN_PATH]).hexdigest() == V2_FILE_SHA256
@@ -141,7 +135,7 @@ def test_v3_plan_preserves_and_binds_exact_v1_v2_file_bytes():
 def test_plan_binding_drift_fails_before_dispatch(
     tmp_path, monkeypatch, field, value
 ):
-    document = json.loads(live._PLAN_PATH.read_bytes())
+    document = json.loads(live._V3_PLAN_PATH.read_bytes())
     document[field] = value
     unsigned = dict(document)
     unsigned.pop("plan_sha256")
@@ -150,16 +144,16 @@ def test_plan_binding_drift_fails_before_dispatch(
     ).hexdigest()
     changed = tmp_path / "changed-plan.json"
     changed.write_bytes(live._canonical(document))
-    monkeypatch.setattr(live, "_PLAN_PATH", changed)
+    monkeypatch.setattr(live, "_V3_PLAN_PATH", changed)
 
     with pytest.raises(PolicyError):
-        live.load_frozen_portcast_plan()
+        live.load_frozen_portcast_plan_v3()
 
 
 def test_removed_successor_manifest_field_is_rejected_as_unknown(
     tmp_path, monkeypatch
 ):
-    document = json.loads(live._PLAN_PATH.read_bytes())
+    document = json.loads(live._V3_PLAN_PATH.read_bytes())
     document["release_manifest_sha256"] = "0" * 64
     unsigned = dict(document)
     unsigned.pop("plan_sha256")
@@ -168,10 +162,10 @@ def test_removed_successor_manifest_field_is_rejected_as_unknown(
     ).hexdigest()
     changed = tmp_path / "plan-with-unknown-field.json"
     changed.write_bytes(live._canonical(document))
-    monkeypatch.setattr(live, "_PLAN_PATH", changed)
+    monkeypatch.setattr(live, "_V3_PLAN_PATH", changed)
 
     with pytest.raises(PolicyError, match="fields differ"):
-        live.load_frozen_portcast_plan()
+        live.load_frozen_portcast_plan_v3()
 
 
 @pytest.mark.parametrize(
@@ -213,7 +207,7 @@ def test_successor_release_binding_drift_fails_before_dispatch(
 
 
 def test_v3_plan_builds_exact_read_only_v2_audit_identity():
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
     expected = live._expected_predecessor_identity(plan)
 
     assert expected.engagement_id == "cptc11-dell-validation"
@@ -238,7 +232,7 @@ def test_predecessor_proof_verification_does_not_change_old_audit_or_result(
 ):
     fixture = audit_fixtures._build_fixture(tmp_path)
     plan = replace(
-        live.load_frozen_portcast_plan(),
+        live.load_frozen_portcast_plan_v3(),
         predecessor_engagement_id=fixture.expected.engagement_id,
         predecessor_action_id=fixture.expected.action_id,
         predecessor_plan_id=fixture.expected.plan_id,
@@ -292,7 +286,7 @@ def test_predecessor_proof_verification_does_not_change_old_audit_or_result(
 def test_exact_v2_audit_and_ledger_record_v3_continuation_read_only(
     tmp_path, monkeypatch
 ):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
     expected = live._expected_predecessor_identity(plan)
     predecessor_plan = live._read_predecessor_plan(plan)
     predecessor_policy = PolicySnapshot(
@@ -474,7 +468,7 @@ def test_continuation_uses_shared_sqlite_and_carries_one_possible_connection(
     )
     unused_successor._db.close()
     plan = replace(
-        live.load_frozen_portcast_plan(),
+        live.load_frozen_portcast_plan_v3(),
         workspace_id=ledger_fixtures.WORKSPACE,
         target_id=ledger_fixtures.TARGET,
         workflow_id=ledger_fixtures.WORKFLOW,
@@ -574,7 +568,7 @@ def test_continuation_uses_shared_sqlite_and_carries_one_possible_connection(
 def test_v3_provisions_separate_runtime_and_returns_exact_old_ledger_directory(
     tmp_path
 ):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
     state_root = tmp_path / "state"
     state_root.mkdir(mode=0o700)
     (state_root / "ledger").mkdir(mode=0o700)
@@ -609,7 +603,7 @@ def test_v3_provisions_separate_runtime_and_returns_exact_old_ledger_directory(
 def test_v3_accepts_only_the_exact_read_only_production_mount_container(
     tmp_path, monkeypatch
 ):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
     container = tmp_path / "runtime-container"
     container.mkdir(mode=0o700)
     (container / "v3").mkdir(mode=0o700)
@@ -647,7 +641,7 @@ def test_v3_accepts_only_the_exact_read_only_production_mount_container(
 def test_v3_rejects_special_bits_on_the_service_runtime_directory(
     tmp_path, monkeypatch, mode
 ):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
     container = tmp_path / "runtime-container"
     container.mkdir(mode=0o700)
     runtime = container / "v3"
@@ -674,7 +668,7 @@ def test_v3_rejects_special_bits_on_the_service_runtime_directory(
 def test_startup_records_continuation_before_runtime_credentials_or_listener(
     tmp_path, monkeypatch
 ):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
     events: list[str] = []
 
     class Database:
@@ -757,7 +751,7 @@ def test_startup_records_continuation_before_runtime_credentials_or_listener(
     )
 
 def test_v3_policy_has_one_action_and_two_connection_cumulative_ceilings():
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v3()
     policy = live.policy_for_plan(plan)
     tcp = {
         (limit.scope, limit.key): limit.ceiling
@@ -775,13 +769,20 @@ def test_v3_policy_has_one_action_and_two_connection_cumulative_ceilings():
     assert policy.targets[0].request_limit == 1
 
 
-def test_client_accepts_only_v3_metadata_and_has_no_target_or_path_inputs():
+def test_client_accepts_only_current_metadata_and_has_no_target_or_path_inputs():
     assert validate_portcast_result(
         _complete_metadata("cptc11-portcast-public-identity-action-v3")
+    )["status"] == "complete"
+    assert validate_portcast_result_v4(
+        _complete_metadata("cptc11-portcast-public-identity-action-v4")
     )["status"] == "complete"
     with pytest.raises(PolicyError, match="invalid metadata"):
         validate_portcast_result(
             _complete_metadata("cptc11-portcast-public-identity-action-v2")
+        )
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        validate_portcast_result_v4(
+            _complete_metadata("cptc11-portcast-public-identity-action-v3")
         )
 
     assert tuple(inspect.signature(PortcastServiceClient).parameters) == ()
@@ -804,7 +805,7 @@ def test_service_rejects_extra_wire_request_fields_before_dispatch(
         verified_release=SimpleNamespace(release_id="portcast-live-v1"),
         wire_broker_factory=lambda *_args: None,
         age_binary=tmp_path / "age",
-        age_recipient=live.load_frozen_portcast_plan().evidence_recipient,
+        age_recipient=live.load_frozen_portcast_plan_v3().evidence_recipient,
     )
 
     with pytest.raises(RuntimeError, match="invalid canonical.*request"):

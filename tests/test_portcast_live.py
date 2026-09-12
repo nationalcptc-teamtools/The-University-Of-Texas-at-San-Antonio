@@ -182,10 +182,13 @@ def _use_synthetic_open_window(monkeypatch):
 
 def test_legacy_v2_plan_uses_an_explicit_immutable_loader():
     current = live.load_frozen_portcast_plan()
+    historical_v3 = live.load_frozen_portcast_plan_v3()
     legacy = live.load_frozen_portcast_plan_v2()
 
-    assert current.schema_version == 3
-    assert current.action_id == "cptc11-portcast-public-identity-action-v3"
+    assert current.schema_version == 4
+    assert current.action_id == "cptc11-portcast-public-identity-action-v4"
+    assert historical_v3.schema_version == 3
+    assert historical_v3.action_id == "cptc11-portcast-public-identity-action-v3"
     assert legacy.schema_version == 2
     assert legacy.action_id == "cptc11-portcast-public-identity-action-v2"
     assert legacy.plan_sha256 == (
@@ -215,8 +218,8 @@ def test_frozen_plan_binds_one_exact_admitted_action_and_release(
     assert plan.operation_sha256 == profile.operation.sha256
     assert plan.runtime_pinset_sha256 == profile.runtime_pinset_sha256
     assert plan.request_count == 1
-    assert plan.schema_version == 3
-    assert plan.action_id == "cptc11-portcast-public-identity-action-v3"
+    assert plan.schema_version == 4
+    assert plan.action_id == "cptc11-portcast-public-identity-action-v4"
     assert plan.predecessor_action_id == (
         "cptc11-portcast-public-identity-action-v2"
     )

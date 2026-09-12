@@ -38,10 +38,11 @@ BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256
 BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json
 BindPaths=/run/cptc-harness
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/deployment.lock
-# The v3 coordinator owns the new runtime. Keep the historical v1 ledger
-# writable for its one-time continuation and expose the old evidence only as
+# The v4 coordinator owns the new runtime. Keep the historical v1 ledger
+# writable for its one-time continuation and expose the old v3 runtime only as
 # immutable input. Do not replace these entries with a broad runtime bind.
-BindPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3
+BindPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor
 BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit
 # The continuation verifier opens the result through its parent directory to

@@ -100,14 +100,16 @@ def _invalid_metadata() -> None:
     raise PolicyError("canonical PortCast service returned invalid metadata")
 
 
-def validate_portcast_result(value: Any) -> dict[str, Any]:
-    """Validate the fixed metadata-only one-shot service result."""
+def _validate_portcast_result(
+    value: Any, expected_action_id: str
+) -> dict[str, Any]:
+    """Validate a fixed metadata-only one-shot service result."""
 
     if (
         type(value) is not dict
         or not _RESULT_FIELDS <= set(value)
         or set(value) - _RESULT_FIELDS - _OPTIONAL_RESULT_FIELDS
-        or value.get("action_id") != "cptc11-portcast-public-identity-action-v3"
+        or value.get("action_id") != expected_action_id
         or value.get("profile_id") != "web.http_jellyfin_public_identity"
         or value.get("automatic_retry") is not False
         or type(value.get("audit_verified")) is not bool
@@ -209,8 +211,24 @@ def validate_portcast_result(value: Any) -> dict[str, Any]:
     return normalized
 
 
+def validate_portcast_result(value: Any) -> dict[str, Any]:
+    """Validate the strict v3 metadata contract."""
+
+    return _validate_portcast_result(
+        value, "cptc11-portcast-public-identity-action-v3"
+    )
+
+
+def validate_portcast_result_v4(value: Any) -> dict[str, Any]:
+    """Validate the strict v4 metadata contract."""
+
+    return _validate_portcast_result(
+        value, "cptc11-portcast-public-identity-action-v4"
+    )
+
+
 def _validate_result(value: Any) -> dict[str, Any]:
-    return validate_portcast_result(value)
+    return validate_portcast_result_v4(value)
 
 
 class PortcastServiceClient:
@@ -270,4 +288,5 @@ __all__ = (
     "PORTCAST_SERVICE_SOCKET",
     "PortcastServiceClient",
     "validate_portcast_result",
+    "validate_portcast_result_v4",
 )

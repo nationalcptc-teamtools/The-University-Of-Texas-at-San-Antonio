@@ -40,10 +40,12 @@ SYSUSERS_SOURCE = Path("deployment/portcast-live-v1.sysusers")
 SYSUSERS_PATH = Path("/usr/lib/sysusers.d/cptc-harness-portcast.conf")
 ANCHOR_PATH = Path("/etc/cptc-harness/trust/portcast-live-v1.sha256")
 STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v1")
-# v3 state is deliberately outside the historical v1 tree. systemd mounts
-# only this child at the logical v1/runtime/v3 path.
+# Keep the failed v3 runtime as an immutable predecessor input. The current
+# admission owns a separate v4 runtime.
 V3_STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v3")
+V4_STATE_PATH = Path("/var/lib/cptc-harness/portcast-live-v4")
 V3_RUNTIME_PATH = V3_STATE_PATH / "runtime"
+V4_RUNTIME_PATH = V4_STATE_PATH / "runtime"
 OLD_LEDGER_PATH = STATE_PATH / "runtime/ledger/cptc11-dell-validation"
 OLD_AUDIT_PATH = STATE_PATH / "runtime/runtime/audit"
 OLD_RESULT_PATH = STATE_PATH / (
@@ -94,11 +96,31 @@ ServiceIdentity = namedtuple("ServiceIdentity", "account uid gid")
 
 
 def _v3_state_path() -> Path:
-    """Resolve the fixed v3 sibling for the selected deployment state root."""
+    """Resolve the fixed historical v3 sibling for the selected state root."""
 
     if STATE_PATH == _DEFAULT_STATE_PATH:
         return V3_STATE_PATH
     return STATE_PATH.parent / "portcast-live-v3"
+
+
+def _v4_state_path() -> Path:
+    """Resolve the fixed current v4 sibling for the selected state root."""
+
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V4_STATE_PATH
+    return STATE_PATH.parent / "portcast-live-v4"
+
+
+def _v3_runtime_path() -> Path:
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V3_RUNTIME_PATH
+    return _v3_state_path() / "runtime"
+
+
+def _v4_runtime_path() -> Path:
+    if STATE_PATH == _DEFAULT_STATE_PATH:
+        return V4_RUNTIME_PATH
+    return _v4_state_path() / "runtime"
 
 
 def _historical_paths() -> tuple[Path, Path, Path]:
@@ -450,9 +472,12 @@ def _service_metadata(
 
 
 def _validate_historical_inputs(identity: ServiceIdentity) -> None:
-    """Check the exact v1 continuation inputs and never create or mutate them."""
+    """Check exact predecessor inputs and never create or mutate them."""
 
     ledger, audit, result = _historical_paths()
+    _service_metadata(
+        _v3_runtime_path(), identity, directory=True, mode=0o700, allow_empty=True
+    )
     _service_metadata(
         ledger, identity, directory=True, mode=0o700, allow_empty=True
     )
@@ -465,9 +490,9 @@ def _validate_historical_inputs(identity: ServiceIdentity) -> None:
 
 
 def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
-    """Create only the v3 service-writable subtree."""
+    """Create only the v4 service-writable subtree."""
 
-    parent = _v3_state_path()
+    parent = _v4_state_path()
     try:
         info = parent.lstat()
     except FileNotFoundError:
@@ -476,17 +501,17 @@ def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
             os.chown(parent, ROOT_UID, ROOT_GID)
             parent.chmod(0o755)
         except OSError:
-            raise DeploymentError("PortCast v3 state parent cannot be created") from None
+            raise DeploymentError("PortCast v4 state parent cannot be created") from None
         info = parent.lstat()
     except OSError:
-        raise DeploymentError("PortCast v3 state parent is unavailable") from None
+        raise DeploymentError("PortCast v4 state parent is unavailable") from None
     if (
         not stat.S_ISDIR(info.st_mode)
         or info.st_uid != ROOT_UID
         or info.st_gid != ROOT_GID
         or stat.S_IMODE(info.st_mode) != 0o755
     ):
-        raise DeploymentError("PortCast v3 state parent metadata differs")
+        raise DeploymentError("PortCast v4 state parent metadata differs")
     runtime = parent / "runtime"
     try:
         info = runtime.lstat()
@@ -497,16 +522,16 @@ def _prepare_runtime_subtree(identity: ServiceIdentity) -> Path:
             runtime.chmod(0o700)
             info = runtime.lstat()
         except OSError:
-            raise DeploymentError("PortCast v3 service runtime cannot be created") from None
+            raise DeploymentError("PortCast v4 service runtime cannot be created") from None
     except OSError:
-        raise DeploymentError("PortCast v3 service runtime is unavailable") from None
+        raise DeploymentError("PortCast v4 service runtime is unavailable") from None
     if (
         not stat.S_ISDIR(info.st_mode)
         or info.st_uid != identity.uid
         or info.st_gid != identity.gid
         or stat.S_IMODE(info.st_mode) != 0o700
     ):
-        raise DeploymentError("PortCast v3 service runtime metadata differs")
+        raise DeploymentError("PortCast v4 service runtime metadata differs")
     return runtime
 
 
@@ -892,10 +917,12 @@ def _prepare_tree(path: Path, payloads: dict[str, bytes]) -> None:
         "etc/cptc-harness/trust", "run/cptc-harness",
         "run/cptc-harness-clock",
         "var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor",
+        "var/lib/cptc-harness/portcast-live-v1/runtime/v4",
         "var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation",
         "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit",
         "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/results",
-        "var/lib/cptc-harness/portcast-live-v3/runtime",
+        "var/lib/cptc-harness/portcast-live-v4/runtime",
         "tmp",
     ):
         directory = path / relative
@@ -942,7 +969,9 @@ def plan(expected_manifest_sha256: str | None) -> dict[str, Any]:
         "clock_attestation_ttl_seconds": CLOCK_ATTESTATION_TTL_NS // 1_000_000_000,
         "state_path": str(STATE_PATH),
         "v3_state_path": str(_v3_state_path()),
-        "v3_runtime_path": str(_v3_state_path() / "runtime"),
+        "v3_runtime_path": str(_v3_runtime_path()),
+        "v4_state_path": str(_v4_state_path()),
+        "v4_runtime_path": str(_v4_runtime_path()),
         "historical_ledger_path": str(_historical_paths()[0]),
         "historical_audit_path": str(_historical_paths()[1]),
         "historical_result_path": str(_historical_paths()[2]),

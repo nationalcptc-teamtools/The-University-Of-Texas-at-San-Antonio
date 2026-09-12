@@ -157,7 +157,8 @@ def test_service_unit_enters_private_root_and_has_no_host_runtime_fallback():
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256" in unit
     assert "BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json" in unit
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust\n" not in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3" in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4" in unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor" in unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation" in unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit" in unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime\n" not in unit
