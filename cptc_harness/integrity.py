@@ -156,6 +156,7 @@ testing/cptc11_lab/portcast-live-plan-v1.json
 testing/cptc11_lab/portcast-live-plan-v2.json
 testing/cptc11_lab/portcast-live-plan-v3.json
 testing/cptc11_lab/portcast-live-plan-v4.json
+testing/cptc11_lab/portcast-live-plan-v5.json
 testing/cptc11_lab/portcast_broker_worker.py
 testing/cptc11_lab/portcast_acceptance.py
 testing/cptc11_lab/portcast_live.py

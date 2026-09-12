@@ -34,6 +34,8 @@ _SAFE = re.compile(r"^[A-Za-z0-9._-]{1,96}$")
 _SECRET = {"password", "passwd", "secret", "token", "cookie", "authorization", "private_key", "credential"}
 _RAW = {"raw", "body", "response", "headers", "request", "path", "url", "ciphertext"}
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_F_GET_SEALS = getattr(fcntl, "F_GET_SEALS", 1034)
+_READONLY_SEALS = 0x0001 | 0x0002 | 0x0004 | 0x0008
 
 
 def _utc() -> str:
@@ -327,9 +329,7 @@ class ReadonlyAuditWriter:
             if not stat.S_ISREG(before.st_mode) or before.st_size != expected_length: raise AuditError("descriptor is not a regular bounded file")
             flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             if flags & os.O_ACCMODE != os.O_RDONLY: raise AuditError("descriptor must be read-only")
-            get_seals = getattr(fcntl, "F_GET_SEALS", None)
-            required = getattr(fcntl, "F_SEAL_WRITE", 0) | getattr(fcntl, "F_SEAL_GROW", 0) | getattr(fcntl, "F_SEAL_SHRINK", 0) | getattr(fcntl, "F_SEAL_SEAL", 0)
-            if get_seals is None or required == 0 or (fcntl.fcntl(fd, get_seals) & required) != required: raise AuditError("descriptor is not a sealed memfd")
+            if (fcntl.fcntl(fd, _F_GET_SEALS) & _READONLY_SEALS) != _READONLY_SEALS: raise AuditError("descriptor is not a sealed memfd")
             chunks = []; offset = 0
             while offset < expected_length:
                 chunk = os.pread(fd, min(65536, expected_length - offset), offset)

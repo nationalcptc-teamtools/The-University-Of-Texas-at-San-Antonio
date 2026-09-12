@@ -31,6 +31,7 @@ def test_traefik_rejects_noncanonical_json(body):
 @pytest.mark.parametrize(
     "body",
     (b'{"x":1e999}', b'{"x":' + b"9" * 200 + b"}", b'{"x":' + b"9" * 5000 + b"}"),
+    ids=("exponent-overflow", "200-digit-integer", "5000-digit-integer"),
 )
 def test_strict_json_rejects_overflow_and_huge_numbers_as_parser_errors(body):
     with pytest.raises(ParserError):

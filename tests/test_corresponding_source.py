@@ -83,7 +83,14 @@ def nested_bytes(entries, archive_format):
 
 def write_outer(path, entries):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(gzip.compress(tar_bytes([(name, data, "file") for name, data in sorted(entries.items())]), mtime=0))
+    path.write_bytes(gzip_bytes(tar_bytes([(name, data, "file") for name, data in sorted(entries.items())])))
+
+
+def gzip_bytes(data):
+    output = io.BytesIO()
+    with gzip.GzipFile(filename="", fileobj=output, mode="wb", mtime=0) as stream:
+        stream.write(data)
+    return output.getvalue()
 
 
 def _locks(root, files):
@@ -531,7 +538,7 @@ def test_outer_tar_gz_rejects_junk_after_logical_eof(tmp_path):
     inventory, contents, _, _ = fixture(tmp_path)
     source = inventory["components"][0]["corresponding_source"]
     archive = tmp_path / source["archive"]
-    archive.write_bytes(gzip.compress(gzip.decompress(archive.read_bytes()) + b"JUNK", mtime=0))
+    archive.write_bytes(gzip_bytes(gzip.decompress(archive.read_bytes()) + b"JUNK"))
     source["sha256"] = sha(archive.read_bytes())
     source["bytes"] = archive.stat().st_size
     with pytest.raises(ValueError, match="trailing|canonical"):
@@ -542,7 +549,7 @@ def test_outer_tar_gz_rejects_extra_zero_padding_records(tmp_path):
     inventory, contents, _, _ = fixture(tmp_path)
     source = inventory["components"][0]["corresponding_source"]
     archive = tmp_path / source["archive"]
-    archive.write_bytes(gzip.compress(gzip.decompress(archive.read_bytes()) + b"\0" * 10240, mtime=0))
+    archive.write_bytes(gzip_bytes(gzip.decompress(archive.read_bytes()) + b"\0" * 10240))
     source["sha256"] = sha(archive.read_bytes())
     source["bytes"] = archive.stat().st_size
     with pytest.raises(ValueError, match="canonical"):

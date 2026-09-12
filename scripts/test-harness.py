@@ -147,7 +147,7 @@ def run(output, timeout, maximum):
         reserve = (output / ".reserved-space").open("xb")
         os.posix_fallocate(reserve.fileno(), 0, maximum)
         readfd, writefd = os.pipe()
-        bootstrap = ("import sys;sys.path.insert(0," + repr(str(ROOT))
+        bootstrap = ("import os,sys;os.umask(0o022);sys.path.insert(0," + repr(str(ROOT))
                      + ");import pytest;raise SystemExit(pytest.main(sys.argv[1:]))")
         command = [sys.executable, "-B", "-I", "-c", bootstrap, "-q", "--capture=fd", "-rA",
                    "-p", "testing.pytest_plugin", "--junitxml=" + str(output / "junit.xml"), "tests"]

@@ -10,6 +10,7 @@ import subprocess
 import re
 import importlib.util
 from dataclasses import asdict
+import shutil
 import socket
 import struct
 import time
@@ -52,20 +53,34 @@ def _rootfs(tmp_path: Path) -> tuple[Path, dict, Path]:
     anchor.parent.mkdir(parents=True)
     digest = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     anchor.write_bytes(deployment._anchor_payload(manifest, digest))
-    audit = (
-        rootfs
-        / "var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit"
-    )
+    plan_path = rootfs / "app/testing/cptc11_lab/portcast-live-plan-v5.json"
+    plan = json.loads(plan_path.read_text())
+    audit = rootfs / "var/lib/cptc-harness/portcast-live-v1/runtime/v5/runtime/audit"
     audit.mkdir(parents=True)
-    (
-        rootfs
-        / "var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
-    ).mkdir(parents=True)
-    (audit.parents[2] / "deployment.lock").write_bytes(b"")
+    old_ledger = rootfs / "var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
+    old_ledger.mkdir(parents=True)
+    v5_ledger = rootfs / "var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
+    v5_ledger.mkdir(parents=True)
+    admission = rootfs / "var/lib/cptc-harness/portcast-live-v1/admission"
+    projection = rootfs / "var/lib/cptc-harness/portcast-live-v1/admission-projection"
+    admission.mkdir(parents=True)
+    projection.mkdir(parents=True)
+    (projection / "v5-start.marker").write_bytes(
+        (
+            "PORTCAST-START-V1\n"
+            f"release {digest}\n"
+            f"plan {hashlib.sha256(plan_path.read_bytes()).hexdigest()}\n"
+            f"action {plan['action_id']}\n"
+        ).encode()
+    )
+    (audit.parents[3] / "deployment.lock").write_bytes(b"")
     for relative in ("run/cptc-harness", "proc", "dev", "tmp"):
         (rootfs / relative).mkdir(parents=True, exist_ok=True)
+    writable = {audit, v5_ledger, *audit.parents, *v5_ledger.parents}
     for item in rootfs.rglob("*"):
-        item.chmod(0o700 if item.is_dir() and (item == audit or audit in item.parents) else 0o555 if item.is_dir() or item.name in {"portcast-bootstrap", "python3.14", "bwrap", "age", "ld-linux-x86-64.so.2"} else 0o444)
+        item.chmod(0o700 if item.is_dir() and item in writable else 0o555 if item.is_dir() or item.name in {"portcast-bootstrap", "python3.14", "bwrap", "age", "ld-linux-x86-64.so.2"} else 0o444)
+    admission.chmod(0o700)
+    projection.chmod(0o755)
     rootfs.chmod(0o555)
     return rootfs, manifest, audit
 
@@ -157,9 +172,10 @@ def test_service_unit_enters_private_root_and_has_no_host_runtime_fallback():
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256" in unit
     assert "BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json" in unit
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust\n" not in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4" in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5" in unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4" in unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor" in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation" in unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation" in unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit" in unit
     assert "BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime\n" not in unit
     assert "BindPaths=/run/cptc-harness" in unit
@@ -188,6 +204,158 @@ def test_service_unit_enters_private_root_and_has_no_host_runtime_fallback():
     assert "RestrictSUIDSGID=no" in unit
     assert "SystemCallArchitectures=native" in unit
     assert "RestrictRealtime=yes" in unit
+
+
+def test_v5_start_gate_is_root_prestart_and_projection_is_read_only():
+    unit = (ROOT / "deployment/portcast-live-v1.service").read_text()
+    launcher = (ROOT / "deployment/portcast-bootstrap.go").read_text()
+    assert "ExecStartPre=+/app/deployment/portcast-bootstrap --admit-start\n" in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v5/admission:/var/lib/cptc-harness/portcast-live-v1/admission\n" in unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection\n" in unit
+    assert 'arguments[0] == "--admit-start"' in launcher
+    assert "createStartAdmission()" in launcher
+    assert "verifyStartProjection()" in launcher
+    assert "syscall.O_CREAT|syscall.O_EXCL" in launcher
+    assert "writeExclusive(admission, admissionMarker, payload, 0600)" in launcher
+    assert "writeExclusive(projection, admissionMarker, payload, 0444)" in launcher
+    assert "exactDirectory(admission, 0700)" in launcher
+    gate = launcher.split('arguments[0] == "--admit-start"', 1)[1].split(
+        'if len(arguments) == 0', 1
+    )[0]
+    assert "credentials" not in gate
+    assert "SOCK" not in gate
+    assert "--unshare-net" not in gate
+    assert "runtime.LockOSThread()" in launcher
+    assert "os.Clearenv()" in launcher
+    assert "syscall.Unshare(syscall.CLONE_NEWNET)" in launcher
+
+
+def test_v5_start_gate_is_one_shot_outside_writable_runtime(tmp_path):
+    rootfs, _manifest, _audit = _rootfs(tmp_path)
+    # The checked-in release metadata is sealed by the parent release task.
+    # Make this isolated launcher exercise self-consistent after rebuilding the
+    # binary locally, without changing the repository's integrity artifacts.
+    launcher = rootfs / "app/deployment/portcast-bootstrap"
+    bootstrap_path = rootfs / "app/cptc_harness/resources/portcast-bootstrap-v1.sha256"
+    bootstrap_lines = bootstrap_path.read_text().splitlines()
+    bootstrap_entries = {
+        line.split("  ", 1)[1]: line.split("  ", 1)[0]
+        for line in bootstrap_lines[1:]
+    }
+    bootstrap_path.chmod(0o644)
+    bootstrap_path.write_text(
+        "PORTCAST-BOOTSTRAP-V1\n"
+        + "\n".join(
+            f"{hashlib.sha256((rootfs / 'app' / relative).read_bytes()).hexdigest()}  {relative}"
+            for relative in bootstrap_entries
+        )
+        + "\n"
+    )
+    bootstrap_path.chmod(0o444)
+    release_path = rootfs / "app/cptc_harness/resources/release-integrity.json"
+    release = json.loads(release_path.read_text())
+    release["portcast-live-v1"]["bootstrap_manifest"]["sha256"] = hashlib.sha256(
+        bootstrap_path.read_bytes()
+    ).hexdigest()
+    release["portcast-live-v1"]["launcher"]["sha256"] = hashlib.sha256(
+        launcher.read_bytes()
+    ).hexdigest()
+    release_path.chmod(0o644)
+    release_path.write_text(json.dumps(release, indent=2) + "\n")
+    release_path.chmod(0o444)
+    release_digest = hashlib.sha256(release_path.read_bytes()).hexdigest()
+    anchor = rootfs / "etc/cptc-harness/trust/portcast-live-v1.sha256"
+    anchor.chmod(0o644)
+    anchor.write_bytes(deployment._anchor_payload(release, release_digest))
+    anchor.chmod(0o444)
+    admission = rootfs / "var/lib/cptc-harness/portcast-live-v1/admission"
+    projection = rootfs / "var/lib/cptc-harness/portcast-live-v1/admission-projection"
+    runtime = rootfs / "var/lib/cptc-harness/portcast-live-v1/runtime/v5"
+    projection_marker = projection / "v5-start.marker"
+    projection_marker.unlink()
+    trace = tmp_path / "gate.strace"
+
+    def run_gate():
+        if os.geteuid() == 0:
+            command = (
+                "/usr/sbin/strace", "-f", "-qq", "-e", "trace=unshare", "-o", str(trace),
+                "/usr/bin/chroot", str(rootfs),
+                "/app/deployment/portcast-bootstrap", "--admit-start",
+            )
+        else:
+            command = (
+                "/usr/sbin/strace", "-f", "-qq", "-e", "trace=unshare", "-o", str(trace),
+                "/usr/sbin/bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
+                "--die-with-parent",
+                "--ro-bind", str(rootfs), "/",
+                "--bind", str(admission), "/var/lib/cptc-harness/portcast-live-v1/admission",
+                "--bind", str(projection), "/var/lib/cptc-harness/portcast-live-v1/admission-projection",
+                "--proc", "/proc", "--dev", "/dev",
+                "/app/deployment/portcast-bootstrap", "--admit-start",
+            )
+        return subprocess.run(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=30,
+        )
+
+    first = run_gate()
+    trace_text = trace.read_text() if trace.exists() else ""
+    if first.returncode != 0 and (
+        b"Operation not permitted" in first.stderr
+        or ("unshare(CLONE_NEWNET)" in trace_text and "EPERM" in trace_text)
+    ):
+        pytest.skip("test host forbids the namespace required by the root start gate")
+    assert first.returncode == 0, first.stderr.decode("utf-8", "replace")
+    assert re.search(r"unshare\(CLONE_NEWNET\)\s+= 0", trace_text)
+    marker = admission / "v5-start.marker"
+    assert marker.stat().st_mode & 0o777 == 0o600
+    assert projection_marker.stat().st_mode & 0o777 == 0o444
+    shutil.rmtree(runtime)
+    second = run_gate()
+    assert second.returncode != 0
+
+
+@pytest.mark.parametrize("mutation", ("missing", "tampered"))
+def test_broker_worker_requires_start_projection_before_worker_channel(tmp_path, mutation):
+    rootfs, _manifest, _audit = _rootfs(tmp_path)
+    projection_marker = rootfs / "var/lib/cptc-harness/portcast-live-v1/admission-projection/v5-start.marker"
+    if mutation == "missing":
+        projection_marker.unlink()
+    else:
+        projection_marker.chmod(0o644)
+        projection_marker.write_bytes(b"tampered\n")
+        projection_marker.chmod(0o444)
+    parent, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    process = subprocess.Popen(
+        (
+            "/usr/sbin/bwrap", "--unshare-user", "--uid", "0", "--gid", "0",
+            "--die-with-parent", "--new-session", "--ro-bind", str(rootfs), "/",
+            "--proc", "/proc", "--dev", "/dev",
+            "/app/deployment/portcast-bootstrap", "--broker-worker",
+        ),
+        stdin=child,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        close_fds=True,
+    )
+    child.close()
+    try:
+        parent.settimeout(5)
+        try:
+            packet = parent.recv(65536)
+        except (ConnectionResetError, TimeoutError):
+            packet = b""
+        assert packet == b""
+        assert process.wait(timeout=10) != 0
+    finally:
+        parent.close()
+        if process.poll() is None:
+            process.kill()
+            process.wait()
 
 
 def test_unprivileged_user_namespace_starts_with_zero_capabilities():
@@ -252,6 +420,37 @@ def test_service_and_audit_workers_enforce_verified_maps_and_zero_network_child(
     assert "Nlink != 1" in launcher
 
 
+def test_production_launcher_and_unit_use_v5_audit_and_ledger_paths():
+    launcher = (ROOT / "deployment/portcast-bootstrap.go").read_text()
+    unit = (ROOT / "deployment/portcast-live-v1.service").read_text()
+    broker = launcher.split('arguments[0] == "--broker-worker"', 1)[1].split(
+        "if syscall.Exec(loaderPath, bwrapArgs", 1
+    )[0]
+    audit = launcher.split('arguments[0] == "--audit-worker"', 1)[1].split(
+        "if syscall.Exec(loaderPath, bwrapArgs", 1
+    )[0]
+    v5_ledger = "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
+    v5_audit = "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/runtime/audit"
+    assert f'ledger := "{v5_ledger}"' in broker
+    assert "verifyStartProjection()" in broker
+    assert f'"--bind", ledger, ledger' in broker
+    assert f'"--bind", "{v5_audit}", "/audit"' in audit
+    assert "/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit" not in audit
+    assert "/var/lib/cptc-harness/portcast-live-v1/runtime/v4/runtime/audit" not in audit
+    assert (
+        "BindPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:"
+        "/var/lib/cptc-harness/portcast-live-v1/runtime/v5"
+    ) in unit
+    assert (
+        "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:"
+        "/var/lib/cptc-harness/portcast-live-v1/runtime/v4"
+    ) in unit
+    assert (
+        "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:"
+        "/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor"
+    ) in unit
+
+
 def test_child_launchers_close_their_own_deployment_lock_before_bwrap_exec():
     source = (ROOT / "deployment/portcast-bootstrap.go").read_text()
     broker = source.split('arguments[0] == "--broker-worker"', 1)[1].split(
@@ -304,7 +503,7 @@ def test_production_root_audit_worker_encrypts_inside_private_network_namespace(
         (
             "/usr/sbin/bwrap", "--unshare-all", "--share-net", "--unshare-user", "--uid", "0", "--gid", "0",
             "--die-with-parent", "--new-session",
-            "--ro-bind", str(rootfs), "/", "--bind", str(audit.parents[2]), "/var/lib/cptc-harness/portcast-live-v1",
+            "--ro-bind", str(rootfs), "/", "--bind", str(audit.parents[3]), "/var/lib/cptc-harness/portcast-live-v1",
             "--proc", "/proc", "--dev", "/dev",
             "/app/deployment/portcast-bootstrap", "--audit-worker", str(config),
         ),
@@ -387,7 +586,7 @@ def test_production_shaped_broker_has_zero_capabilities_and_rejects_adversarial_
 
 def test_real_broker_bwrap_has_fixed_mounts_fds_and_zero_capabilities(tmp_path):
     rootfs, _manifest, _audit = _rootfs(tmp_path)
-    ledger = rootfs / "var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
+    ledger = rootfs / "var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
     runtime = ROOT / json.loads(RUNTIME_LOCK.read_text())["root"]
     parent, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
     process = subprocess.Popen(
@@ -404,10 +603,13 @@ def test_real_broker_bwrap_has_fixed_mounts_fds_and_zero_capabilities(tmp_path):
             "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
             "--dir", "/var", "--dir", "/var/lib", "--dir", "/var/lib/cptc-harness",
             "--dir", "/var/lib/cptc-harness/portcast-live-v1",
+            "--ro-bind", str(rootfs / "var/lib/cptc-harness/portcast-live-v1/admission-projection"),
+            "/var/lib/cptc-harness/portcast-live-v1/admission-projection",
             "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime",
-            "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger",
-            "--ro-bind", str(ledger), "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation",
-            "--chdir", "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation",
+            "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5",
+            "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger",
+            "--bind", str(ledger), "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5",
+            "--chdir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5",
             "/app/vendor/portcast-rootfs-runtime/lib/ld-linux-x86-64.so.2",
             "--inhibit-cache", "--library-path", "/app/vendor/portcast-rootfs-runtime/lib",
             "/app/vendor/portcast-rootfs-runtime/bin/python3.14", "-I", "-S", "-B",

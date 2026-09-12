@@ -31,7 +31,7 @@ def _fake_age(tmp_path: Path) -> Path:
 
 
 def _seed_aborted_v3(tmp_path: Path):
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v4()
     v3 = live.load_frozen_portcast_plan_v3()
     age = _fake_age(tmp_path)
     predecessor = tmp_path / live._V3_PREDECESSOR_DIRECTORY
@@ -76,7 +76,7 @@ def test_v4_plan_binds_all_prior_plans_and_exact_single_request():
         path: path.read_bytes()
         for path in (live._V1_PLAN_PATH, live._V2_PLAN_PATH, live._V3_PLAN_PATH)
     }
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v4()
     v3 = live.load_frozen_portcast_plan_v3()
 
     assert plan.schema_version == 4
@@ -93,7 +93,7 @@ def test_v4_plan_binds_all_prior_plans_and_exact_single_request():
 
 
 def test_v4_plan_carries_zero_v3_traffic_and_two_total_tcp_connections():
-    plan = live.load_frozen_portcast_plan()
+    plan = live.load_frozen_portcast_plan_v4()
     policy = live.policy_for_plan(plan)
 
     assert plan.predecessor_charged_tcp_connects == 1
@@ -130,10 +130,10 @@ def test_v4_plan_rejects_recomputed_approval_or_window_drift(
     ).hexdigest()
     changed = tmp_path / "changed-plan.json"
     changed.write_text(json.dumps(document))
-    monkeypatch.setattr(live, "_PLAN_PATH", changed)
+    monkeypatch.setattr(live, "_V4_PLAN_PATH", changed)
 
     with pytest.raises(PolicyError, match="v4 approval differs"):
-        live.load_frozen_portcast_plan()
+        live.load_frozen_portcast_plan_v4()
 
 
 def test_aborted_v3_snapshot_verifies_without_changing_predecessor(tmp_path):

@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,15 +22,20 @@ import (
 var heldDeploymentLock *os.File
 
 const (
-	appRoot       = "/app"
-	anchorPath    = "/etc/cptc-harness/trust/portcast-live-v1.sha256"
-	releasePath   = "/app/cptc_harness/resources/release-integrity.json"
-	bootstrapPath = "/app/cptc_harness/resources/portcast-bootstrap-v1.sha256"
-	launcherPath  = "/app/deployment/portcast-bootstrap"
-	runtimeRoot   = "/app/vendor/portcast-rootfs-runtime"
-	loaderPath    = runtimeRoot + "/lib/ld-linux-x86-64.so.2"
-	pythonPath    = runtimeRoot + "/bin/python3.14"
-	lockPath      = "/var/lib/cptc-harness/portcast-live-v1/deployment.lock"
+	appRoot          = "/app"
+	anchorPath       = "/etc/cptc-harness/trust/portcast-live-v1.sha256"
+	releasePath      = "/app/cptc_harness/resources/release-integrity.json"
+	bootstrapPath    = "/app/cptc_harness/resources/portcast-bootstrap-v1.sha256"
+	launcherPath     = "/app/deployment/portcast-bootstrap"
+	runtimeRoot      = "/app/vendor/portcast-rootfs-runtime"
+	loaderPath       = runtimeRoot + "/lib/ld-linux-x86-64.so.2"
+	pythonPath       = runtimeRoot + "/bin/python3.14"
+	lockPath         = "/var/lib/cptc-harness/portcast-live-v1/deployment.lock"
+	planPath         = "/app/testing/cptc11_lab/portcast-live-plan-v5.json"
+	admissionPath    = "/var/lib/cptc-harness/portcast-live-v1/admission"
+	projectionPath   = "/var/lib/cptc-harness/portcast-live-v1/admission-projection"
+	admissionMarker  = "v5-start.marker"
+	expectedActionID = "cptc11-portcast-public-identity-action-v5"
 )
 
 func fail() { os.Exit(126) }
@@ -104,6 +110,152 @@ func readTrusted(path string, maximum int64) ([]byte, error) {
 		return nil, errors.New("file exceeds limit")
 	}
 	return value, nil
+}
+
+type startPlan struct {
+	ActionID   string `json:"action_id"`
+	ReleaseID  string `json:"release_id"`
+	PlanSHA256 string `json:"plan_sha256"`
+}
+
+func startAdmissionPayload() ([]byte, error) {
+	anchorRaw, err := readTrusted(anchorPath, 1024)
+	if err != nil {
+		return nil, err
+	}
+	anchor, err := parseAnchor(anchorRaw)
+	if err != nil {
+		return nil, err
+	}
+	planRaw, err := readTrusted(planPath, 1024*1024)
+	if err != nil {
+		return nil, err
+	}
+	var plan startPlan
+	if err := json.Unmarshal(planRaw, &plan); err != nil ||
+		plan.ActionID != expectedActionID || plan.ReleaseID != "portcast-live-v1" ||
+		len(plan.PlanSHA256) != 64 {
+		return nil, errors.New("start plan differs")
+	}
+	if _, err := hex.DecodeString(plan.PlanSHA256); err != nil {
+		return nil, errors.New("start plan differs")
+	}
+	digest := sha256.Sum256(planRaw)
+	return []byte(fmt.Sprintf(
+		"PORTCAST-START-V1\nrelease %s\nplan %s\naction %s\n",
+		anchor["release"], hex.EncodeToString(digest[:]), plan.ActionID,
+	)), nil
+}
+
+func exactDirectory(file *os.File, mode os.FileMode) error {
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	statInfo, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.IsDir() || statInfo.Uid != 0 || statInfo.Gid != 0 || info.Mode().Perm() != mode {
+		return errors.New("admission directory metadata differs")
+	}
+	return nil
+}
+
+func writeExclusive(directory *os.File, name string, payload []byte, mode uint32) error {
+	fd, err := syscall.Openat(int(directory.Fd()), name, syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, mode)
+	if err != nil {
+		return err
+	}
+	file := os.NewFile(uintptr(fd), name)
+	if file == nil {
+		syscall.Close(fd)
+		return errors.New("admission marker unavailable")
+	}
+	defer file.Close()
+	if info, statErr := file.Stat(); statErr != nil || !info.Mode().IsRegular() {
+		return errors.New("admission marker metadata differs")
+	}
+	if err := syscall.Fchown(fd, 0, 0); err != nil {
+		return err
+	}
+	if err := syscall.Fchmod(fd, mode); err != nil {
+		return err
+	}
+	written, err := file.Write(payload)
+	if err != nil {
+		return err
+	}
+	if written != len(payload) {
+		return io.ErrShortWrite
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func createStartAdmission() error {
+	payload, err := startAdmissionPayload()
+	if err != nil {
+		return err
+	}
+	admission, err := trustedOpen(admissionPath, true)
+	if err != nil {
+		return err
+	}
+	defer admission.Close()
+	if err := exactDirectory(admission, 0700); err != nil {
+		return err
+	}
+	projection, err := trustedOpen(projectionPath, true)
+	if err != nil {
+		return err
+	}
+	defer projection.Close()
+	if err := exactDirectory(projection, 0755); err != nil {
+		return err
+	}
+	if err := writeExclusive(admission, admissionMarker, payload, 0600); err != nil {
+		return err
+	}
+	if err := writeExclusive(projection, admissionMarker, payload, 0444); err != nil {
+		return err
+	}
+	if err := syscall.Fsync(int(admission.Fd())); err != nil {
+		return err
+	}
+	return syscall.Fsync(int(projection.Fd()))
+}
+
+func verifyStartProjection() error {
+	expected, err := startAdmissionPayload()
+	if err != nil {
+		return err
+	}
+	projection, err := trustedOpen(projectionPath, true)
+	if err != nil {
+		return err
+	}
+	defer projection.Close()
+	if err := exactDirectory(projection, 0755); err != nil {
+		return err
+	}
+	marker, err := trustedOpen(projectionPath+"/"+admissionMarker, false)
+	if err != nil {
+		return err
+	}
+	defer marker.Close()
+	info, err := marker.Stat()
+	if err != nil {
+		return errors.New("start admission projection metadata differs")
+	}
+	statInfo, ok := info.Sys().(*syscall.Stat_t)
+	if !info.Mode().IsRegular() || !ok || statInfo.Uid != 0 || statInfo.Gid != 0 || info.Mode().Perm() != 0444 || statInfo.Nlink != 1 {
+		return errors.New("start admission projection metadata differs")
+	}
+	actual, err := io.ReadAll(io.LimitReader(marker, 4097))
+	if err != nil || len(actual) != len(expected) || string(actual) != string(expected) {
+		return errors.New("start admission projection differs")
+	}
+	return nil
 }
 
 func parseAnchor(raw []byte) (map[string]string, error) {
@@ -307,32 +459,53 @@ func validAcceptanceRunID(value string) bool {
 }
 
 func main() {
+	arguments := os.Args[1:]
+	if len(arguments) == 1 && arguments[0] == "--admit-start" {
+		runtime.LockOSThread()
+		os.Clearenv()
+		if err := syscall.Unshare(syscall.CLONE_NEWNET); err != nil {
+			fail()
+		}
+	}
 	if err := retainDeploymentLock(); err != nil {
 		fail()
 	}
 	if err := verify(); err != nil {
 		fail()
 	}
-	arguments := os.Args[1:]
+	if len(arguments) == 1 && arguments[0] == "--admit-start" {
+		if err := createStartAdmission(); err != nil {
+			fail()
+		}
+		return
+	}
 	if len(arguments) == 0 {
+		if err := verifyStartProjection(); err != nil {
+			fail()
+		}
 		if syscall.Exec(loaderPath, pythonArgs("/app/testing/cptc11_lab/portcast_service.py"), []string{}) != nil {
+			fail()
+		}
+	}
+	if len(arguments) == 1 && arguments[0] == "--broker-worker" {
+		if err := verifyStartProjection(); err != nil {
 			fail()
 		}
 	}
 	if len(arguments) == 1 && (arguments[0] == "--broker-worker" || arguments[0] == "--verify-startup-only") {
 		if arguments[0] == "--broker-worker" {
 			bwrap := runtimeRoot + "/bin/bwrap"
-			ledger := "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
+			ledger := "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
 			bwrapArgs := []string{loaderPath, "--inhibit-cache", "--library-path", runtimeRoot + "/lib", bwrap,
 				"--unshare-user", "--uid", "0", "--gid", "0", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--share-net",
 				"--die-with-parent", "--new-session", "--cap-drop", "ALL", "--clearenv",
 				"--ro-bind", "/app", "/app", "--dir", "/etc", "--dir", "/etc/cptc-harness", "--dir", "/etc/cptc-harness/trust",
 				"--ro-bind", anchorPath, anchorPath, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
 				"--dir", "/var", "--dir", "/var/lib", "--dir", "/var/lib/cptc-harness",
-				"--dir", "/var/lib/cptc-harness/portcast-live-v1", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger",
-				// The coordinator writes continuation state before starting this
-				// child. The broker may inspect only the exact historical ledger.
-				"--ro-bind", ledger, ledger, "--chdir", ledger,
+				"--dir", "/var/lib/cptc-harness/portcast-live-v1", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger",
+				// The coordinator reserves the current action before starting
+				// this child. The broker owns only the fresh v5 ledger.
+				"--bind", ledger, ledger, "--chdir", ledger,
 			}
 			bwrapArgs = append(bwrapArgs, pythonArgs("/app/testing/cptc11_lab/portcast_service.py", "--broker-worker")...)
 			if releaseDeploymentLock() != nil {
@@ -356,9 +529,10 @@ func main() {
 			"--unshare-user", "--uid", "0", "--gid", "0", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
 			"--die-with-parent", "--cap-drop", "ALL", "--clearenv",
 			"--ro-bind", "/app", "/app", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-				// New audit events belong to the v3 runtime. The old v2 audit is
-				// mounted read-only by systemd and is verified by the coordinator.
-				"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/v3/runtime/audit", "/audit",
+			// New audit events belong to the v5 runtime. Predecessor audit
+			// state is mounted read-only by systemd and is verified by the
+			// coordinator.
+			"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/runtime/audit", "/audit",
 			"--ro-bind-data", strconv.Itoa(fd), "/config.json",
 		}
 		bwrapArgs = append(bwrapArgs, pythonArgs("/app/cptc_harness/audit_worker.py")...)

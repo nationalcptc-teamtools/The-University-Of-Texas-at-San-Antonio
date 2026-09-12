@@ -1016,7 +1016,12 @@ def tar_bytes(entries, epoch):
             member.mode = 0o755 if executable else 0o644
             member.uid = member.gid = 0; member.uname = member.gname = "root"
             archive.addfile(member, io.BytesIO(payload))
-    return gzip.compress(raw.getvalue(), compresslevel=9, mtime=0)
+    compressed = io.BytesIO()
+    with gzip.GzipFile(
+        filename="", fileobj=compressed, mode="wb", compresslevel=9, mtime=0
+    ) as stream:
+        stream.write(raw.getvalue())
+    return compressed.getvalue()
 
 
 def normalize_source(path, epoch, contents, version):

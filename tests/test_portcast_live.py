@@ -18,7 +18,6 @@ from cptc_harness.contracts import (
     OperationResult,
     PolicyError,
 )
-import cptc_harness.integrity as integrity
 from cptc_harness.integrity import VerifiedRelease
 from cptc_harness.memfd import MFD_ALLOW_SEALING, MFD_CLOEXEC, memfd_create, seal_readonly, write_all
 from cptc_harness.profile_runtime.broker_ipc import (
@@ -68,7 +67,10 @@ def _release(plan) -> VerifiedRelease:
     return VerifiedRelease(
         plan.release_id,
         "3" * 64,
-        {},
+        {
+            "cptc_harness/portcast_identity.py": plan.parser_sha256,
+            "testing/cptc11_lab/portcast_broker_worker.py": plan.broker_worker_sha256,
+        },
         {plan.profile_id: plan.worker_sha256},
         {plan.profile_id: (plan.worker_sha256,)},
     )
@@ -185,8 +187,8 @@ def test_legacy_v2_plan_uses_an_explicit_immutable_loader():
     historical_v3 = live.load_frozen_portcast_plan_v3()
     legacy = live.load_frozen_portcast_plan_v2()
 
-    assert current.schema_version == 4
-    assert current.action_id == "cptc11-portcast-public-identity-action-v4"
+    assert current.schema_version == 5
+    assert current.action_id == "cptc11-portcast-public-identity-action-v5"
     assert historical_v3.schema_version == 3
     assert historical_v3.action_id == "cptc11-portcast-public-identity-action-v3"
     assert legacy.schema_version == 2
@@ -201,14 +203,7 @@ def test_frozen_plan_binds_one_exact_admitted_action_and_release(
     tmp_path, monkeypatch
 ):
     plan = live.load_frozen_portcast_plan()
-    anchor = tmp_path / "portcast-live-v1.sha256"
-    anchor.write_text(hashlib.sha256(integrity._RELEASE_MANIFEST.read_bytes()).hexdigest() + "\n")
-    verified_release = integrity._verify_portcast_release(
-        release_root=integrity._RELEASE_ROOT,
-        manifest_path=integrity._RELEASE_MANIFEST,
-        anchor_path=anchor,
-        owner_uid=os.getuid(),
-    )
+    verified_release = _release(plan)
     monkeypatch.setattr(live, "verify_portcast_release", lambda: verified_release)
     verified = live.validate_current_release(plan)
     profile = load_profile(plan.profile_id)
@@ -218,14 +213,11 @@ def test_frozen_plan_binds_one_exact_admitted_action_and_release(
     assert plan.operation_sha256 == profile.operation.sha256
     assert plan.runtime_pinset_sha256 == profile.runtime_pinset_sha256
     assert plan.request_count == 1
-    assert plan.schema_version == 4
-    assert plan.action_id == "cptc11-portcast-public-identity-action-v4"
-    assert plan.predecessor_action_id == (
-        "cptc11-portcast-public-identity-action-v2"
-    )
-    assert plan.predecessor_plan_sha256 == (
-        "a6aada496c238513080798ad8012bb4e9688847e2cd49330e2c7f081ce0012c4"
-    )
+    assert plan.schema_version == 5
+    assert plan.action_id == "cptc11-portcast-public-identity-action-v5"
+    assert plan.predecessor_action_id == "cptc11-portcast-public-identity-action-v2"
+    assert plan.predecessor_v4_action_id == "cptc11-portcast-public-identity-action-v4"
+    assert plan.predecessor_v4_plan_sha256 == live._V4_PLAN_SHA256
     assert plan.automatic_retries == 0
     assert plan.authentication_attempts == 0
     assert not any(

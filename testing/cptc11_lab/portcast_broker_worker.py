@@ -34,7 +34,7 @@ from cptc_harness.profile_runtime.worker import WireExecutionError, capture_clea
 
 _MAX_PACKET = 64 * 1024
 _PRODUCTION_LEDGER_ROOT = Path(
-    "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
 )
 _BROKER_ROUTE = "100.85.84.30/32"
 _FAILURE_STAGES = frozenset(

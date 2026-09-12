@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-import fcntl
 import threading
 import time
 from pathlib import Path
@@ -9,6 +8,12 @@ from dataclasses import replace
 
 import pytest
 
+from cptc_harness.memfd import (
+    MFD_ALLOW_SEALING,
+    MFD_CLOEXEC,
+    memfd_create,
+    seal_readonly,
+)
 from cptc11_readonly_wave_v1.catalog import PLAN_ID, plan_actions
 
 
@@ -185,9 +190,9 @@ def test_audit_requires_sealed_readonly_memfd_and_serializes_writers(tmp_path):
     first.emit("first", {"value": 1}); second.emit("second", {"value": 2})
     assert first.verify().sequence == 2
     first.reserve_output("descriptor", 3)
-    fd = os.memfd_create("readonly-test", os.MFD_ALLOW_SEALING)
+    fd = memfd_create("readonly-test", MFD_CLOEXEC | MFD_ALLOW_SEALING)
     os.write(fd, b"abc")
-    fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_WRITE | fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK | fcntl.F_SEAL_SEAL)
+    seal_readonly(fd)
     readonly_fd = os.open(f"/proc/self/fd/{fd}", os.O_RDONLY)
     assert first.capture_descriptor("descriptor", "stdout", readonly_fd, 3)
     os.close(readonly_fd); os.close(fd)

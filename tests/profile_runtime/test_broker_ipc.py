@@ -31,6 +31,12 @@ PROFILE_ID = "web.http_jellyfin_public_identity"
 RUNTIME = "9bcaeaa02a0c9f52b1b32c4259a35043b9dd0caec55f6fec150ec6f5a722df16"
 WORKER = "4" * 64
 RAW = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}"
+PRODUCTION_LEDGER_ROOT = Path(
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/v5/ledger/cptc11-dell-validation-portcast-v5"
+)
+HISTORICAL_LEDGER_ROOT = Path(
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"
+)
 
 
 def release() -> VerifiedRelease:
@@ -139,7 +145,7 @@ def test_production_factory_matches_worker_ledger_and_nonroot_service_identity(
     import cptc_harness.profile_runtime.broker_ipc as ipc
     import testing.cptc11_lab.portcast_broker_worker as worker
 
-    assert ipc._PRODUCTION_LEDGER_ROOT == worker._PRODUCTION_LEDGER_ROOT
+    assert ipc._PRODUCTION_LEDGER_ROOT == worker._PRODUCTION_LEDGER_ROOT == PRODUCTION_LEDGER_ROOT
     store = ledger(tmp_path)
     credentials = (
         _sealed_secret("synthetic-service-dell", b"synthetic-dell"),
@@ -291,7 +297,7 @@ def test_production_broker_launch_has_fixed_argv_empty_environment_and_no_raw_se
         assert '"--cap-drop", "ALL"' in launcher_source
         assert '"--share-net"' in launcher_source
         assert '"--ro-bind", anchorPath, anchorPath' in launcher_source
-        assert '"--ro-bind", ledger, ledger' in launcher_source
+        assert '"--bind", ledger, ledger' in launcher_source
     finally:
         if client._channel is not None:
             client._channel.close()
@@ -300,6 +306,33 @@ def test_production_broker_launch_has_fixed_argv_empty_environment_and_no_raw_se
             captured["child"].close()
         client._process = None
         for descriptor in originals:
+            os.close(descriptor)
+
+
+def test_production_broker_and_worker_reject_historical_ledger_root(tmp_path, monkeypatch):
+    import cptc_harness.profile_runtime.broker_ipc as ipc
+    import testing.cptc11_lab.portcast_broker_worker as worker
+
+    old_store = ledger(tmp_path)
+    credentials = (
+        _sealed_secret("synthetic-old-dell", b"synthetic-dell"),
+        _sealed_secret("synthetic-old-kali", b"synthetic-kali"),
+    )
+    monkeypatch.setattr(ipc, "_PRODUCTION_LEDGER_ROOT", PRODUCTION_LEDGER_ROOT)
+    monkeypatch.setattr(worker, "_PRODUCTION_LEDGER_ROOT", PRODUCTION_LEDGER_ROOT)
+    try:
+        with pytest.raises(PolicyError, match="Ledger root differs"):
+            ipc._service_wire_broker_factory(
+                old_store, release(), credential_fds=credentials
+            )
+        assert str(PRODUCTION_LEDGER_ROOT) in Path(
+            "testing/cptc11_lab/portcast_broker_worker.py"
+        ).read_text()
+        assert str(HISTORICAL_LEDGER_ROOT) not in Path(
+            "testing/cptc11_lab/portcast_broker_worker.py"
+        ).read_text()
+    finally:
+        for descriptor in credentials:
             os.close(descriptor)
 
 

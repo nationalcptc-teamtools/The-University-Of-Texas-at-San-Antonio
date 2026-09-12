@@ -14,6 +14,7 @@ LoadCredentialEncrypted=cptc11-dell:/etc/cptc-harness/credentials/cptc11-dell.cr
 LoadCredentialEncrypted=cptc11-kali:/etc/cptc-harness/credentials/cptc11-kali.cred
 RootDirectory=/usr/lib/cptc-harness/portcast-live-v1
 MountAPIVFS=yes
+ExecStartPre=+/app/deployment/portcast-bootstrap --admit-start
 ExecStart=/app/deployment/portcast-bootstrap
 UnsetEnvironment=LD_AUDIT LD_LIBRARY_PATH LD_PRELOAD PYTHONHOME PYTHONPATH PYTHONSTARTUP PYTHONUSERBASE GODEBUG GOENV GOTRACEBACK
 Restart=no
@@ -38,12 +39,15 @@ BindReadOnlyPaths=/etc/cptc-harness/trust/portcast-live-v1.sha256
 BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json
 BindPaths=/run/cptc-harness
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/deployment.lock
-# The v4 coordinator owns the new runtime. Keep the historical v1 ledger
-# writable for its one-time continuation and expose the old v3 runtime only as
-# immutable input. Do not replace these entries with a broad runtime bind.
-BindPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4
+BindPaths=/var/lib/cptc-harness/portcast-live-v5/admission:/var/lib/cptc-harness/portcast-live-v1/admission
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection
+# The v5 coordinator owns the new runtime. Keep the historical v1 ledger and
+# predecessor runtimes immutable inputs. Do not replace these entries with a
+# broad state bind.
+BindPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v4/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v4
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v3/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v3-predecessor
-BindPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation
+BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation:/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation
 BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit:/var/lib/cptc-harness/portcast-live-v1/runtime/runtime/audit
 # The continuation verifier opens the result through its parent directory to
 # defend against file replacement. Mount that service-owned directory as one

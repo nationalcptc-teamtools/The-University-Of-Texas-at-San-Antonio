@@ -96,30 +96,33 @@ only. Raw HTTP bytes remain in the encrypted Audit evidence store. The typed
 result identifies Jellyfin Server 10.10.7 as a component candidate. It does
 not confirm a vulnerability or a CVE.
 
-### Schema-v4 admission
+### Schema-v5 admission
 
 The installed PortCast service keeps the release protocol name
-`portcast-live-v1`, but the current frozen coordinator is schema v4. Its new
+`portcast-live-v1`, but the current frozen coordinator is schema v5. Its new
 runtime is mounted at the logical path
-`/var/lib/cptc-harness/portcast-live-v1/runtime/v4` from the host path
-`/var/lib/cptc-harness/portcast-live-v4/runtime`. The prior v3 host tree is
-mounted read-only at `runtime/v3-predecessor`.
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v5` from the host path
+`/var/lib/cptc-harness/portcast-live-v5/runtime`. The failed v4 and v3 host
+trees are mounted read-only at `runtime/v4` and `runtime/v3-predecessor`.
 
-At startup it verifies the exact v2 audit and result files. It records one
-continuation proof in the historical ledger and then performs at most one new
-connection and one request. It does not retry the uncertain v2 action. The v2
-audit and result are read-only inputs; current audit and result files are written in
-the new runtime. A missing, changed, or writable historical input blocks the
-run before target access.
+At startup it verifies the exact v2 audit and result files. It requires the
+one continuation proof recorded by the prior v4 admission. It never records a
+second one. It then permits at most one new connection and one request. It does
+not retry
+the uncertain v2 action or the failed v3 or v4 actions. All predecessor state
+is read-only. Current audit, ledger, and result files use the v5 runtime. A
+missing, changed, or writable predecessor input blocks the run before target
+access.
 
-Before it creates the target broker, schema v4 also checks the exact v3 plan,
-the empty v3 audit and result directories, the absence of a v3 ledger action,
-and the absence of the service socket. The recorded v3 startup failed before
-credential loading. Its target counters are zero.
+Before it creates the target broker, schema v5 checks the exact v3 and v4
+plans, the empty v3 and v4 output directories, the absence of action state,
+the exact v4 continuation row, and the absence of the service socket. Both
+failed starts occurred before credential loading. Their target counters are
+zero.
 
-Use the deployment helper to inspect this layout. It reports the v3 state,
-historical ledger, historical audit, and historical result paths. It never
-starts the service during `plan` or `apply`.
+Use the deployment helper to inspect this layout. It reports the v3, v4, and
+v5 state paths and the historical inputs. It never starts the service during
+`plan` or `apply`.
 
 A clean CLI result includes one complete reservation, one complete attempt,
 and these counters: one TCP connection, zero UDP datagrams, one protocol
@@ -198,12 +201,13 @@ repair, replace, or reopen it. A recipient, path, hash, policy, ownership,
 mode, layout, SQLite, or audit-integrity mismatch blocks the service before
 target access.
 
-The production v4 application runtime is fixed at the logical path
-`/var/lib/cptc-harness/portcast-live-v1/runtime/v4/runtime`; its host storage
-is `/var/lib/cptc-harness/portcast-live-v4/runtime`. Its audit worker sees only
-the `audit/` child. Durable request accounting uses the separate fixed
-historical `runtime/ledger/cptc11-dell-validation` directory. The historical
-v2 audit and result are read-only continuation inputs.
+The production v5 application runtime is fixed at the logical path
+`/var/lib/cptc-harness/portcast-live-v1/runtime/v5/runtime`; its host storage
+is `/var/lib/cptc-harness/portcast-live-v5/runtime`. Its audit worker sees only
+the `audit/` child. Current request accounting uses the fresh fixed
+`runtime/v5/ledger/cptc11-dell-validation-portcast-v5` directory. The
+historical v1 ledger, v2 audit and result, and v3 and v4 runtimes are read-only
+inputs.
 
 ## Scope and lifecycle
 
