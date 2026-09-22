@@ -35,10 +35,31 @@ _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _PROFILE_ID = "web.http_jellyfin_public_identity"
 _TARGET_ID = "cptc11-prod-portcast"
 _MAX_PACKET = 64 * 1024
+# v7 is the only writable live admission.  Keep path construction versioned
+# below so historical v6 fixtures can still be inspected by tests without
+# making their state a runtime input.
 _PRODUCTION_LEDGER_ROOT = Path(
-    "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6"
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/v7/ledger/cptc11-dell-validation-portcast-v7"
 )
 _SERVICE_AUTHORITY = object()
+
+
+def _ledger_root_for_plan(plan: Any) -> Path:
+    """Resolve the exact ledger mount for the loaded immutable plan."""
+
+    version = getattr(plan, "schema_version", None)
+    engagement = getattr(plan, "engagement_id", None)
+    if type(version) is not int or version < 3 or type(engagement) is not str:
+        raise PolicyError("PortCast plan ledger identity is invalid")
+    if not _ID.fullmatch(engagement):
+        raise PolicyError("PortCast plan ledger identity is invalid")
+    if version >= 5:
+        return Path(
+            "/var/lib/cptc-harness/portcast-live-v1/runtime"
+        ) / f"v{version}" / "ledger" / engagement
+    return Path(
+        "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger"
+    ) / engagement
 
 
 @dataclass(frozen=True, slots=True)

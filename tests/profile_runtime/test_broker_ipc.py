@@ -32,7 +32,7 @@ RUNTIME = "9bcaeaa02a0c9f52b1b32c4259a35043b9dd0caec55f6fec150ec6f5a722df16"
 WORKER = "4" * 64
 RAW = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}"
 PRODUCTION_LEDGER_ROOT = Path(
-    "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6"
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/v7/ledger/cptc11-dell-validation-portcast-v7"
 )
 HISTORICAL_LEDGER_ROOT = Path(
     "/var/lib/cptc-harness/portcast-live-v1/runtime/ledger/cptc11-dell-validation"

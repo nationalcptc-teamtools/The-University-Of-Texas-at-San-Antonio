@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,9 +12,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -22,30 +25,37 @@ import (
 var heldDeploymentLock *os.File
 
 const (
-	appRoot          = "/app"
-	anchorPath       = "/etc/cptc-harness/trust/portcast-live-v1.sha256"
-	releasePath      = "/app/cptc_harness/resources/release-integrity.json"
-	bootstrapPath    = "/app/cptc_harness/resources/portcast-bootstrap-v1.sha256"
-	launcherPath     = "/app/deployment/portcast-bootstrap"
-	runtimeRoot      = "/app/vendor/portcast-rootfs-runtime"
-	loaderPath       = runtimeRoot + "/lib/ld-linux-x86-64.so.2"
-	pythonPath       = runtimeRoot + "/bin/python3.14"
-	lockPath         = "/var/lib/cptc-harness/portcast-live-v1/deployment.lock"
-	planPath         = "/app/testing/cptc11_lab/portcast-live-plan-v6.json"
-	admissionPath    = "/var/lib/cptc-harness/portcast-live-v1/admission"
-	projectionPath   = "/var/lib/cptc-harness/portcast-live-v1/admission-projection"
-	admissionMarker  = "v6-start.marker"
-	expectedActionID = "cptc11-portcast-public-identity-action-v6"
-	v5AdmissionPath  = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission"
-	v5ProjectionPath = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission-projection"
-	v5RuntimePath    = "/var/lib/cptc-harness/portcast-live-v1/runtime/v5-predecessor"
-	v5ReceiptPath    = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/receipt.json"
-	v5MarkerName     = "v5-start.marker"
-	v5ReceiptSHA256  = "42fdd74d5b0c99a00a3f2761c1efcc3e3a579c86caf30c85bf01d34cf9400ffe"
-	mountReadOnly    = 1 // Linux ST_RDONLY; keep the static launcher dependency-free.
+	appRoot                 = "/app"
+	anchorPath              = "/etc/cptc-harness/trust/portcast-live-v1.sha256"
+	releasePath             = "/app/cptc_harness/resources/release-integrity.json"
+	bootstrapPath           = "/app/cptc_harness/resources/portcast-bootstrap-v1.sha256"
+	launcherPath            = "/app/deployment/portcast-bootstrap"
+	runtimeRoot             = "/app/vendor/portcast-rootfs-runtime"
+	loaderPath              = runtimeRoot + "/lib/ld-linux-x86-64.so.2"
+	pythonPath              = runtimeRoot + "/bin/python3.14"
+	lockPath                = "/var/lib/cptc-harness/portcast-live-v1/deployment.lock"
+	planPath                = "/app/testing/cptc11_lab/portcast-live-plan-v7.json"
+	admissionPath           = "/var/lib/cptc-harness/portcast-live-v1/admission"
+	projectionPath          = "/var/lib/cptc-harness/portcast-live-v1/admission-projection"
+	legacyV6Path            = "/var/lib/cptc-harness/portcast-live-v1/runtime/v6"
+	v6UnusedReceiptPath     = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v6-unused/receipt.json"
+	admissionMarker         = "v7-start.marker"
+	expectedActionID        = "cptc11-portcast-public-identity-action-v7"
+	expectedPlanSHA256      = "8cfb1e7b75f9496f235beb65f05c2577fdda4577620d58299cf90b644a3d2442"
+	expectedPlanShapeSHA256 = "e09ddd0efb34f6640ab5d93f957e5452a13eca4e2d6fb424bf9aecf8a3ba64a1"
+	v5AdmissionPath         = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission"
+	v5ProjectionPath        = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission-projection"
+	v5RuntimePath           = "/var/lib/cptc-harness/portcast-live-v1/runtime/v5-predecessor"
+	v5ReceiptPath           = "/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/receipt.json"
+	v5MarkerName            = "v5-start.marker"
+	v5ReceiptSHA256         = "42fdd74d5b0c99a00a3f2761c1efcc3e3a579c86caf30c85bf01d34cf9400ffe"
+	v6UnusedReceiptSHA256   = "6ea2a1a73384bc0a37b52c9b61b5ec624ba3142135d7883470d68e868b765947"
+	mountReadOnly           = 1 // Linux ST_RDONLY; keep the static launcher dependency-free.
 )
 
 const v5MarkerPayload = "PORTCAST-START-V1\nrelease 4c9db1a159d7b1ca2ef38170458f32a2a17a6cd56d7c19e912a187cac138b918\nplan dcb908436af15c0945926cabd16d12df1a78064bb85b2d0d675682da5164d08b\naction cptc11-portcast-public-identity-action-v5\n"
+
+const v6UnusedReceiptPayload = "{\"action_id\":\"cptc11-portcast-public-identity-action-v6\",\"charged_tcp_connects\":0,\"deployment_status\":\"never-deployed\",\"engagement_id\":\"cptc11-dell-validation-portcast-v6\",\"execution_status\":\"never-run\",\"first_byte_observed\":false,\"possible_tcp_connects\":0,\"release_manifest_sha256\":\"154ad483d30f8f55cf15093a48614e37057a2c7f9e941e188d56caecccefea8f\",\"result_present\":false,\"schema\":\"portcast-v6-unused-state-v1\",\"target_capability_created\":false,\"target_traffic\":false,\"v6_plan_file_sha256\":\"c2b4fad1f137d2c99a42a37f67773acdcfce9fe7a5983bf5d267082232120f71\",\"v6_plan_sha256\":\"d21dd898329ca575f2d7848896776140c863a39d3473d4720f0c4a24352b066b\"}"
 
 func fail() { os.Exit(126) }
 
@@ -208,6 +218,34 @@ func verifyV5Predecessor() error {
 	return nil
 }
 
+func verifyV6UnusedReceipt() error {
+	receipt, err := trustedOpen(v6UnusedReceiptPath, false)
+	if err != nil {
+		return err
+	}
+	defer receipt.Close()
+	if err := requireReadOnlyMount(receipt); err != nil {
+		return err
+	}
+	info, err := receipt.Stat()
+	if err != nil {
+		return err
+	}
+	statInfo, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || !info.Mode().IsRegular() || statInfo.Uid != 0 || statInfo.Gid != 0 || info.Mode().Perm() != 0444 || statInfo.Nlink != 1 {
+		return errors.New("v6-unused receipt metadata differs")
+	}
+	actual, err := io.ReadAll(io.LimitReader(receipt, 4097))
+	if err != nil || string(actual) != v6UnusedReceiptPayload {
+		return errors.New("v6-unused receipt differs")
+	}
+	hash := sha256.Sum256(actual)
+	if hex.EncodeToString(hash[:]) != v6UnusedReceiptSHA256 {
+		return errors.New("v6-unused receipt hash differs")
+	}
+	return nil
+}
+
 func digestFile(path string) (string, error) {
 	file, err := trustedOpen(path, false)
 	if err != nil {
@@ -243,6 +281,142 @@ type startPlan struct {
 	PlanSHA256 string `json:"plan_sha256"`
 }
 
+func asciiJSON(value string) bool {
+	for index := 0; index < len(value); index++ {
+		if value[index] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeStartPlan(raw []byte) (startPlan, map[string]any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return startPlan{}, nil, errors.New("start plan differs")
+	}
+	fields := map[string]any{}
+	for decoder.More() {
+		rawKey, err := decoder.Token()
+		key, ok := rawKey.(string)
+		if err != nil || !ok || !asciiJSON(key) {
+			return startPlan{}, nil, errors.New("start plan differs")
+		}
+		if _, exists := fields[key]; exists {
+			return startPlan{}, nil, errors.New("start plan differs")
+		}
+		var value any
+		if err := decoder.Decode(&value); err != nil {
+			return startPlan{}, nil, errors.New("start plan differs")
+		}
+		switch typed := value.(type) {
+		case string:
+			if !asciiJSON(typed) {
+				return startPlan{}, nil, errors.New("start plan differs")
+			}
+		case json.Number:
+			integer := new(big.Int)
+			if _, ok := integer.SetString(string(typed), 10); !ok {
+				return startPlan{}, nil, errors.New("start plan differs")
+			}
+			value = json.Number(integer.String())
+		case bool:
+		default:
+			// The frozen plan schema contains only top-level scalar fields.
+			return startPlan{}, nil, errors.New("start plan differs")
+		}
+		fields[key] = value
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') {
+		return startPlan{}, nil, errors.New("start plan differs")
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return startPlan{}, nil, errors.New("start plan differs")
+	}
+	plan := startPlan{}
+	var ok bool
+	if plan.ActionID, ok = fields["action_id"].(string); !ok {
+		return startPlan{}, nil, errors.New("start plan differs")
+	}
+	if plan.ReleaseID, ok = fields["release_id"].(string); !ok {
+		return startPlan{}, nil, errors.New("start plan differs")
+	}
+	if plan.PlanSHA256, ok = fields["plan_sha256"].(string); !ok {
+		return startPlan{}, nil, errors.New("start plan differs")
+	}
+	return plan, fields, nil
+}
+
+func semanticPlanSHA256(fields map[string]any) (string, error) {
+	unsigned := make(map[string]any, len(fields)-1)
+	for key, value := range fields {
+		if key != "plan_sha256" {
+			unsigned[key] = value
+		}
+	}
+	var canonical bytes.Buffer
+	encoder := json.NewEncoder(&canonical)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(unsigned); err != nil {
+		return "", err
+	}
+	raw := canonical.Bytes()
+	if len(raw) == 0 || raw[len(raw)-1] != '\n' {
+		return "", errors.New("start plan differs")
+	}
+	digest := sha256.Sum256(raw[:len(raw)-1])
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func planShapeSHA256(fields map[string]any) string {
+	keys := make([]string, 0, len(fields))
+	for key := range fields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	hash := sha256.New()
+	for _, key := range keys {
+		kind := ""
+		switch fields[key].(type) {
+		case string:
+			kind = "string"
+		case json.Number:
+			kind = "integer"
+		case bool:
+			kind = "boolean"
+		}
+		hash.Write([]byte(key))
+		hash.Write([]byte{0})
+		hash.Write([]byte(kind))
+		hash.Write([]byte{'\n'})
+	}
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+func validateStartPlan(plan startPlan, fields map[string]any) error {
+	if plan.ActionID != expectedActionID || plan.ReleaseID != "portcast-live-v1" ||
+		len(plan.PlanSHA256) != 64 {
+		return errors.New("start plan differs")
+	}
+	decodedPlanSHA256, err := hex.DecodeString(plan.PlanSHA256)
+	if err != nil || hex.EncodeToString(decodedPlanSHA256) != plan.PlanSHA256 {
+		return errors.New("start plan differs")
+	}
+	semanticSHA256, err := semanticPlanSHA256(fields)
+	schemaVersion, schemaOK := fields["schema_version"].(json.Number)
+	if err != nil || semanticSHA256 != plan.PlanSHA256 ||
+		plan.PlanSHA256 != expectedPlanSHA256 ||
+		planShapeSHA256(fields) != expectedPlanShapeSHA256 ||
+		!schemaOK || schemaVersion != "7" {
+		return errors.New("start plan differs")
+	}
+	return nil
+}
+
 func startAdmissionPayload() ([]byte, error) {
 	anchorRaw, err := readTrusted(anchorPath, 1024)
 	if err != nil {
@@ -256,13 +430,8 @@ func startAdmissionPayload() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var plan startPlan
-	if err := json.Unmarshal(planRaw, &plan); err != nil ||
-		plan.ActionID != expectedActionID || plan.ReleaseID != "portcast-live-v1" ||
-		len(plan.PlanSHA256) != 64 {
-		return nil, errors.New("start plan differs")
-	}
-	if _, err := hex.DecodeString(plan.PlanSHA256); err != nil {
+	plan, fields, err := decodeStartPlan(planRaw)
+	if err != nil || validateStartPlan(plan, fields) != nil {
 		return nil, errors.New("start plan differs")
 	}
 	digest := sha256.Sum256(planRaw)
@@ -496,6 +665,17 @@ func verifyTree(expected map[string]string) error {
 }
 
 func verify() error {
+	// v6 was approved but never admitted.  A v6 runtime mount would allow a
+	// stale service or ledger to become a live input, so fail closed before
+	// validating any release content.
+	if _, err := os.Lstat(legacyV6Path); err == nil {
+		return errors.New("legacy v6 runtime state is present")
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := verifyV6UnusedReceipt(); err != nil {
+		return err
+	}
 	raw, err := readTrusted(anchorPath, 1024)
 	if err != nil {
 		return err
@@ -623,16 +803,16 @@ func main() {
 	if len(arguments) == 1 && (arguments[0] == "--broker-worker" || arguments[0] == "--verify-startup-only") {
 		if arguments[0] == "--broker-worker" {
 			bwrap := runtimeRoot + "/bin/bwrap"
-			ledger := "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6"
+			ledger := "/var/lib/cptc-harness/portcast-live-v1/runtime/v7/ledger/cptc11-dell-validation-portcast-v7"
 			bwrapArgs := []string{loaderPath, "--inhibit-cache", "--library-path", runtimeRoot + "/lib", bwrap,
 				"--unshare-user", "--uid", "0", "--gid", "0", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--share-net",
 				"--die-with-parent", "--new-session", "--cap-drop", "ALL", "--clearenv",
 				"--ro-bind", "/app", "/app", "--dir", "/etc", "--dir", "/etc/cptc-harness", "--dir", "/etc/cptc-harness/trust",
 				"--ro-bind", anchorPath, anchorPath, "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
 				"--dir", "/var", "--dir", "/var/lib", "--dir", "/var/lib/cptc-harness",
-				"--dir", "/var/lib/cptc-harness/portcast-live-v1", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v6", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger",
+				"--dir", "/var/lib/cptc-harness/portcast-live-v1", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v7", "--dir", "/var/lib/cptc-harness/portcast-live-v1/runtime/v7/ledger",
 				// The coordinator reserves the current action before starting
-				// this child. The broker owns only the fresh v6 ledger.
+				// this child. The broker owns only the fresh v7 ledger.
 				"--bind", ledger, ledger, "--chdir", ledger,
 			}
 			bwrapArgs = append(bwrapArgs, pythonArgs("/app/testing/cptc11_lab/portcast_service.py", "--broker-worker")...)
@@ -657,10 +837,10 @@ func main() {
 			"--unshare-user", "--uid", "0", "--gid", "0", "--unshare-net", "--unshare-pid", "--unshare-ipc", "--unshare-uts",
 			"--die-with-parent", "--cap-drop", "ALL", "--clearenv",
 			"--ro-bind", "/app", "/app", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp",
-			// New audit events belong to the v6 runtime. Predecessor audit
+			// New audit events belong to the v7 runtime. Predecessor audit
 			// state is mounted read-only by systemd and is verified by the
 			// coordinator.
-			"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/runtime/audit", "/audit",
+			"--bind", "/var/lib/cptc-harness/portcast-live-v1/runtime/v7/runtime/audit", "/audit",
 			"--ro-bind-data", strconv.Itoa(fd), "/config.json",
 		}
 		bwrapArgs = append(bwrapArgs, pythonArgs("/app/cptc_harness/audit_worker.py")...)

@@ -44,14 +44,14 @@ def _write_receipt(state_root: Path, plan, value=None) -> Path:
     return path
 
 
-def test_v6_is_current_and_v5_remains_historical():
+def test_v7_is_current_and_v6_remains_historical():
     current = live.load_frozen_portcast_plan()
-    historical = live.load_frozen_portcast_plan_v5()
+    historical = live.load_frozen_portcast_plan_v6()
 
-    assert current.schema_version == 6
-    assert current.action_id == live._V6_SUCCESSOR_ACTION_ID
-    assert current.predecessor_v5_action_id == historical.action_id
-    assert current.predecessor_v5_plan_sha256 == historical.plan_sha256
+    assert current.schema_version == 7
+    assert current.action_id == live._V7_SUCCESSOR_ACTION_ID
+    assert current.superseded_v6_action_id == historical.action_id
+    assert current.superseded_v6_plan_sha256 == historical.plan_sha256
     assert {
         limit.ceiling
         for limit in live.policy_for_plan(current).budget_limits
@@ -172,7 +172,7 @@ def test_v6_receipt_precedes_runtime_creation(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         live,
-        "_verify_v5_predecessor_receipt",
+        "_verify_v7_predecessor_receipts",
         lambda *args: events.append("predecessor"),
     )
     monkeypatch.setattr(
@@ -246,7 +246,7 @@ def test_v6_success_then_replay_creates_only_one_broker(tmp_path, monkeypatch):
     monkeypatch.setattr(live, "_replay_metadata", lambda *args: next(replay))
     monkeypatch.setattr(
         live,
-        "_verify_v5_predecessor_receipt",
+        "_verify_v7_predecessor_receipts",
         lambda *args: events.append("predecessor") or {},
     )
     monkeypatch.setattr(
@@ -284,7 +284,7 @@ def test_v6_unbound_release_blocks_before_receipt_and_broker(tmp_path, monkeypat
     monkeypatch.setattr(live, "validate_current_release", lambda _plan: release)
     monkeypatch.setattr(
         live,
-        "_verify_v5_predecessor_receipt",
+        "_verify_v7_predecessor_receipts",
         lambda *args: called.append("predecessor"),
     )
 

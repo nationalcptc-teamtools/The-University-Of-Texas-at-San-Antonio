@@ -188,8 +188,8 @@ def test_legacy_v2_plan_uses_an_explicit_immutable_loader():
     historical_v3 = live.load_frozen_portcast_plan_v3()
     legacy = live.load_frozen_portcast_plan_v2()
 
-    assert current.schema_version == 6
-    assert current.action_id == "cptc11-portcast-public-identity-action-v6"
+    assert current.schema_version == 7
+    assert current.action_id == "cptc11-portcast-public-identity-action-v7"
     assert historical_v5.schema_version == 5
     assert historical_v5.action_id == "cptc11-portcast-public-identity-action-v5"
     assert historical_v3.schema_version == 3
@@ -216,8 +216,8 @@ def test_frozen_plan_binds_one_exact_admitted_action_and_release(
     assert plan.operation_sha256 == profile.operation.sha256
     assert plan.runtime_pinset_sha256 == profile.runtime_pinset_sha256
     assert plan.request_count == 1
-    assert plan.schema_version == 6
-    assert plan.action_id == "cptc11-portcast-public-identity-action-v6"
+    assert plan.schema_version == 7
+    assert plan.action_id == "cptc11-portcast-public-identity-action-v7"
     assert plan.predecessor_action_id == "cptc11-portcast-public-identity-action-v2"
     assert plan.predecessor_v4_action_id == "cptc11-portcast-public-identity-action-v4"
     assert plan.predecessor_v4_plan_sha256 == live._V4_PLAN_SHA256
@@ -520,7 +520,7 @@ def test_frozen_plan_rejects_rehashed_operator_change(tmp_path, monkeypatch):
     value["plan_sha256"] = hashlib.sha256(live._canonical(unsigned)).hexdigest()
     changed = tmp_path / "changed-plan.json"
     changed.write_text(json.dumps(value))
-    monkeypatch.setattr(live, "_V6_PLAN_PATH", changed)
+    monkeypatch.setattr(live, "_V7_PLAN_PATH", changed)
 
     with pytest.raises(PolicyError, match="allowance"):
         live.load_frozen_portcast_plan()
@@ -537,7 +537,7 @@ def test_frozen_plan_binds_a_valid_evidence_recipient(tmp_path, monkeypatch):
     value["plan_sha256"] = hashlib.sha256(live._canonical(unsigned)).hexdigest()
     changed = tmp_path / "changed-recipient-plan.json"
     changed.write_text(json.dumps(value))
-    monkeypatch.setattr(live, "_V6_PLAN_PATH", changed)
+    monkeypatch.setattr(live, "_V7_PLAN_PATH", changed)
 
     with pytest.raises(PolicyError, match="evidence recipient"):
         live.load_frozen_portcast_plan()

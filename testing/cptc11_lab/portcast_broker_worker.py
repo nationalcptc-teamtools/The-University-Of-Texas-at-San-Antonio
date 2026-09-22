@@ -34,7 +34,7 @@ from cptc_harness.profile_runtime.worker import WireExecutionError, capture_clea
 
 _MAX_PACKET = 64 * 1024
 _PRODUCTION_LEDGER_ROOT = Path(
-    "/var/lib/cptc-harness/portcast-live-v1/runtime/v6/ledger/cptc11-dell-validation-portcast-v6"
+    "/var/lib/cptc-harness/portcast-live-v1/runtime/v7/ledger/cptc11-dell-validation-portcast-v7"
 )
 _BROKER_ROUTE = "100.85.84.30/32"
 _FAILURE_STAGES = frozenset(
@@ -81,7 +81,7 @@ def _assert_exact_worker_descriptors() -> None:
         raise PolicyError("PortCast broker inherited an unexpected descriptor")
 
 
-def _sandbox_attestation() -> dict[str, object]:
+def _sandbox_attestation(ledger_root: Path | None = None) -> dict[str, object]:
     status = {}
     for line in Path("/proc/self/status").read_text().splitlines():
         if ":" in line:
@@ -90,7 +90,8 @@ def _sandbox_attestation() -> dict[str, object]:
     cap_eff = status.get("CapEff")
     if cap_eff != "0000000000000000":
         raise PolicyError("PortCast broker effective capabilities differ")
-    if Path.cwd() != _PRODUCTION_LEDGER_ROOT or not Path("/app/cptc_harness").is_dir():
+    expected_root = ledger_root or _PRODUCTION_LEDGER_ROOT
+    if Path.cwd() != expected_root or not Path("/app/cptc_harness").is_dir():
         raise PolicyError("PortCast broker sandbox mounts differ")
     _assert_exact_worker_descriptors()
     return {
@@ -379,8 +380,6 @@ def main(*, verified_release: VerifiedRelease | None = None) -> int:
     try:
         if os.geteuid() != 0:
             raise PolicyError("PortCast worker requires the canonical service identity")
-        if Path.cwd() != _PRODUCTION_LEDGER_ROOT:
-            raise PolicyError("PortCast worker canonical state root differs")
         if type(verified_release) is not VerifiedRelease:
             raise PolicyError("PortCast worker verified release is unavailable")
         from testing.cptc11_lab.portcast_live import (
@@ -389,9 +388,14 @@ def main(*, verified_release: VerifiedRelease | None = None) -> int:
         )
 
         plan = load_frozen_portcast_plan()
+        from cptc_harness.profile_runtime.broker_ipc import _ledger_root_for_plan
+
+        expected_ledger_root = _ledger_root_for_plan(plan)
+        if Path.cwd() != expected_ledger_root:
+            raise PolicyError("PortCast worker canonical state root differs")
         if validate_current_release(plan) != verified_release:
             raise PolicyError("PortCast worker release verification differs")
-        _send(ipc, _sandbox_attestation())
+        _send(ipc, _sandbox_attestation(expected_ledger_root))
         credential_fds = _receive_credentials(ipc)
         request = _receive(ipc)
         if set(request) != {"method", "binding"} or request["method"] != "bind":

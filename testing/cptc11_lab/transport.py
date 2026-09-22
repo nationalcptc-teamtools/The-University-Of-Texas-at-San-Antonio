@@ -28,7 +28,7 @@ from typing import Any, Callable, Mapping, Protocol, TextIO
 import uuid
 
 from cptc_harness.contracts import PolicyError
-from cptc_harness.profile_runtime.service_client import validate_portcast_result_v6
+from cptc_harness.profile_runtime.service_client import validate_portcast_result_v7
 from cptc_harness.scanner_results import parse_smb2_xml_facts
 from cptc_harness.portcast_identity import (
     PORTCAST_PROFILE_ID,
@@ -1402,7 +1402,7 @@ def _validate_portcast_cli_result(value: Any) -> dict[str, Any]:
     """Select metadata-only coordinator fields for transcript and stdout."""
 
     try:
-        validated = validate_portcast_result_v6(value)
+        validated = validate_portcast_result_v7(value)
     except PolicyError:
         raise TransportError("PortCast coordinator returned invalid metadata")
     if validated["profile_id"] != PORTCAST_PROFILE_ID:

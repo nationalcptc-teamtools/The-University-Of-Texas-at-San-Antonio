@@ -1006,7 +1006,7 @@ def test_scan_portcast_cli_uses_frozen_session_runner_and_writes_no_target_artif
     def runner():
         calls.append(True)
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v6",
+            "action_id": "cptc11-portcast-public-identity-action-v7",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": "passed",
@@ -1038,7 +1038,7 @@ def test_scan_portcast_cli_uses_frozen_session_runner_and_writes_no_target_artif
     result = json.loads(output.getvalue())
     run_path = Path(result["run_directory"])
     assert status == 0 and result["status"] == "passed"
-    assert result["action_id"] == "cptc11-portcast-public-identity-action-v6"
+    assert result["action_id"] == "cptc11-portcast-public-identity-action-v7"
     assert result["receipt_outcome"] == "complete"
     assert result["cleanup_status"] == "passed"
     assert result["execution"] == {
@@ -1093,13 +1093,63 @@ def test_scan_portcast_cli_uses_frozen_session_runner_and_writes_no_target_artif
     assert not list(run_path.glob("portcast-identity.*.age"))
 
 
+def test_scan_portcast_cli_rejects_complete_v6_result(tmp_path):
+    output = io.StringIO()
+    historical_result = {
+        "action_id": "cptc11-portcast-public-identity-action-v6",
+        "audit_verified": True,
+        "automatic_retry": False,
+        "cleanup_status": "passed",
+        "profile_id": "web.http_jellyfin_public_identity",
+        "receipt_outcome": "complete",
+        "status": "complete",
+        "workspace": "cptc11-portcast-workspace",
+        "execution": {
+            "reservation_state": "complete",
+            "attempt_count": 1,
+            "attempt_state": "complete",
+            "transport_counters": {
+                "tcp_connects": 1,
+                "udp_datagrams": 0,
+                "protocol_requests": 1,
+                "tx_bytes": 103,
+                "rx_bytes": 282,
+            },
+            "wire_counters_verified": True,
+            "result_receipt_present": True,
+        },
+    }
+
+    from cptc_harness.profile_runtime.service_client import validate_portcast_result_v6
+
+    assert validate_portcast_result_v6(historical_result) == historical_result
+    with pytest.raises(TransportError, match="returned invalid metadata"):
+        transport._validate_portcast_cli_result(historical_result)
+
+    status = main(
+        ["scan-portcast", "--run-root", str(tmp_path)],
+        stdout=output,
+        encryptor=FakeEncryptor(),
+        portcast_session_runner=lambda: historical_result,
+    )
+    result = json.loads(output.getvalue())
+    events = [
+        json.loads(line)
+        for line in (Path(result["run_directory"]) / "transcript.jsonl").read_text().splitlines()
+    ]
+    assert status == 1
+    assert result["status"] == "failed"
+    assert "action_id" not in result
+    assert not any(event["event"] == "profile.coordinator" for event in events)
+
+
 def test_scan_portcast_cli_rejects_extra_raw_result_without_disclosing_it(tmp_path):
     output = io.StringIO()
     marker = "raw-client-value-must-not-appear"
 
     def runner():
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v6",
+            "action_id": "cptc11-portcast-public-identity-action-v7",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": "passed",
@@ -1144,7 +1194,7 @@ def test_scan_portcast_cli_does_not_render_missing_counters_as_zero(tmp_path):
 
     def runner():
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v6",
+            "action_id": "cptc11-portcast-public-identity-action-v7",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": None,
@@ -1188,7 +1238,7 @@ def test_scan_portcast_cli_reports_only_the_fixed_failure_stage(tmp_path):
 
     def runner():
         return {
-            "action_id": "cptc11-portcast-public-identity-action-v6",
+            "action_id": "cptc11-portcast-public-identity-action-v7",
             "audit_verified": True,
             "automatic_retry": False,
             "cleanup_status": "passed",

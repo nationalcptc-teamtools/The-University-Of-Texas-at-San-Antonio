@@ -243,8 +243,21 @@ def validate_portcast_result_v6(value: Any) -> dict[str, Any]:
     )
 
 
+def validate_portcast_result_v7(value: Any) -> dict[str, Any]:
+    """Validate the current schema-v7 metadata contract.
+
+    The v6 validator remains available for historical receipts.  Runtime
+    callers must use this validator for the v7 admission so that a stale
+    result cannot cross the service boundary.
+    """
+
+    return _validate_portcast_result(
+        value, "cptc11-portcast-public-identity-action-v7"
+    )
+
+
 def _validate_result(value: Any) -> dict[str, Any]:
-    return validate_portcast_result_v6(value)
+    return validate_portcast_result_v7(value)
 
 
 class PortcastServiceClient:
@@ -307,4 +320,5 @@ __all__ = (
     "validate_portcast_result_v4",
     "validate_portcast_result_v5",
     "validate_portcast_result_v6",
+    "validate_portcast_result_v7",
 )

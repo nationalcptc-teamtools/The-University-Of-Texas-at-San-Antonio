@@ -184,6 +184,15 @@ def test_service_result_v6_validator_is_current_and_strict():
         service_client.validate_portcast_result_v5(value)
 
 
+def test_service_result_v7_validator_is_current_and_strict():
+    value = _complete_service_result(
+        "cptc11-portcast-public-identity-action-v7"
+    )
+    assert service_client.validate_portcast_result_v7(value) == value
+    with pytest.raises(PolicyError, match="invalid metadata"):
+        service_client.validate_portcast_result_v6(value)
+
+
 def test_service_result_validator_accepts_only_fixed_failure_stage_metadata():
     value = _complete_service_result()
     value.update(
@@ -509,7 +518,8 @@ def test_deployment_unit_exposes_only_the_authenticated_fixed_socket():
     assert "BindReadOnlyPaths=/run/cptc-harness-clock/portcast-live-v1.json" in unit
     assert "BindReadOnlyPaths=/etc/cptc-harness/trust\n" not in unit
     assert "BindPaths=/run/cptc-harness" in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v6" in unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v7/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v7" in unit
+    assert "runtime/v6" not in unit
     assert "RestrictAddressFamilies=AF_UNIX AF_INET AF_NETLINK\n" in unit
     assert "AF_INET6" not in unit
     assert "IPAddressDeny=any" in unit
@@ -536,12 +546,13 @@ def test_sysusers_and_units_require_the_dedicated_nonroot_service_identity():
         assert "CapabilityBoundingSet=\n" in unit
         assert "AmbientCapabilities=\n" in unit
         assert "User=root\n" not in unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v6\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v7/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v7\n" in service_unit
     assert "ExecStartPre=+/app/deployment/portcast-bootstrap --admit-start\n" in service_unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/admission:/var/lib/cptc-harness/portcast-live-v1/admission\n" in service_unit
-    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v6/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection\n" in service_unit
-    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v6/predecessors/v5/receipt.json:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/receipt.json\n" in service_unit
-    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v6/predecessors/v5:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5\n" not in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v7/admission:/var/lib/cptc-harness/portcast-live-v1/admission\n" in service_unit
+    assert "BindPaths=/var/lib/cptc-harness/portcast-live-v7/admission-projection:/var/lib/cptc-harness/portcast-live-v1/admission-projection\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v7/predecessors/v5/receipt.json:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/receipt.json\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v7/predecessors/v6-unused/receipt.json:/var/lib/cptc-harness/portcast-live-v1/predecessors/v6-unused/receipt.json\n" in service_unit
+    assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v7/predecessors/v5:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5\n" not in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/runtime:/var/lib/cptc-harness/portcast-live-v1/runtime/v5-predecessor\n" in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission\n" in service_unit
     assert "BindReadOnlyPaths=/var/lib/cptc-harness/portcast-live-v5/admission-projection:/var/lib/cptc-harness/portcast-live-v1/predecessors/v5/admission-projection\n" in service_unit
@@ -755,6 +766,55 @@ def test_deployment_creates_exact_immutable_v5_predecessor_receipt(tmp_path, mon
     with pytest.raises(deployment.DeploymentError, match="metadata"):
         deployment._prepare_v5_receipt()
 
+
+def test_deployment_records_v6_unused_receipt_before_v7_admission(tmp_path, monkeypatch):
+    state = tmp_path / "portcast-live-v1"
+    state.mkdir(mode=0o700)
+    monkeypatch.setattr(deployment, "STATE_PATH", state)
+    monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
+    monkeypatch.setattr(deployment, "SOCKET_PATH", tmp_path / "service.sock")
+    monkeypatch.setattr(deployment, "_service_is_active", lambda: False)
+
+    receipt = deployment._prepare_v6_unused_receipt()
+    assert receipt == tmp_path / "portcast-live-v7/predecessors/v6-unused/receipt.json"
+    assert receipt.read_bytes() == deployment._V6_UNUSED_RECEIPT_BYTES
+    assert hashlib.sha256(receipt.read_bytes()).hexdigest() == deployment._V6_UNUSED_RECEIPT_SHA256
+    assert stat.S_IMODE(receipt.stat().st_mode) == 0o444
+    assert stat.S_IMODE(receipt.parent.stat().st_mode) == 0o555
+    assert deployment._prepare_v6_unused_receipt() == receipt
+
+    (tmp_path / "portcast-live-v6").mkdir()
+    with pytest.raises(deployment.DeploymentError, match="v6 state"):
+        deployment._prepare_v6_unused_receipt()
+
+
+def test_v7_admission_requires_inactive_service_and_absent_socket(tmp_path, monkeypatch):
+    monkeypatch.setattr(deployment, "SOCKET_PATH", tmp_path / "service.sock")
+    monkeypatch.setattr(deployment, "_service_is_active", lambda: True)
+    with pytest.raises(deployment.DeploymentError, match="inactive"):
+        deployment._prepare_v6_unused_receipt()
+
+    monkeypatch.setattr(deployment, "_service_is_active", lambda: False)
+    (tmp_path / "service.sock").write_text("")
+    with pytest.raises(deployment.DeploymentError, match="socket"):
+        deployment._prepare_v6_unused_receipt()
+
+
+def test_v6_conflict_creates_no_v7_state(tmp_path, monkeypatch):
+    state = tmp_path / "portcast-live-v1"
+    state.mkdir(mode=0o700)
+    (tmp_path / "portcast-live-v6").mkdir()
+    monkeypatch.setattr(deployment, "STATE_PATH", state)
+    monkeypatch.setattr(deployment, "ROOT_UID", os.getuid())
+    monkeypatch.setattr(deployment, "ROOT_GID", os.getgid())
+    monkeypatch.setattr(deployment, "SOCKET_PATH", tmp_path / "service.sock")
+    monkeypatch.setattr(deployment, "_service_is_active", lambda: False)
+
+    with pytest.raises(deployment.DeploymentError, match="v6 state"):
+        deployment._prepare_v6_unused_receipt()
+
+    assert not (tmp_path / "portcast-live-v7").exists()
 
 @pytest.mark.parametrize("mutation", ("runtime", "marker", "projection"))
 def test_deployment_rejects_any_v5_predecessor_mutation(tmp_path, monkeypatch, mutation):
@@ -1520,7 +1580,7 @@ def test_deployment_helper_retires_verified_previous_generation_idempotently(
     assert result["service_started"] is False
     assert result["target_traffic"] is False
     assert repeated == {**result, "already_retired": True}
-    assert service_state_checks == ["checked", "checked"]
+    assert service_state_checks == ["checked"] * 4
     assert marker.read_text() == "unchanged"
     for current in (release, unit, sysusers, anchor):
         previous = current.with_name(current.name + ".previous")
@@ -1934,6 +1994,8 @@ def test_no_target_startup_smoke_uses_the_prepared_installed_tree(tmp_path, monk
     anchor.chmod(0o444)
     (state / "deployment.lock").write_bytes(b"")
     (state / "deployment.lock").chmod(0o600)
+    monkeypatch.setattr(deployment, "_service_is_active", lambda: False)
+    deployment._prepare_v6_unused_receipt()
 
     deployment._startup_smoke(manifest)
 
