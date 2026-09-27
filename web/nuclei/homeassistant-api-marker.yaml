@@ -1,0 +1,64 @@
+# Check whether the Home Assistant API identifies itself.
+id: homeassistant-api-marker
+
+info:
+  name: Home Assistant API Marker Endpoint
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Home Assistant is the dominant open-source home and building automation
+    platform, and it turns up in unexpected places: gatehouses, staff
+    cottages, the maintenance shop, and small park buildings retrofitted
+    with it because it was cheap.
+
+    /api/ is unauthenticated on a stock install and returns the framework's
+    own banner. /manifest.json carries the X-Hass-Source response header,
+    which is a header the product sets and nothing else does.
+
+    A match means Home Assistant is serving this origin. It does NOT mean
+    any entity, state, automation or script is readable, it does NOT
+    provide a long-lived token, and it does NOT call a service or fire an
+    automation. No state-changing request is made.
+
+    Read-only. Two GET requests, no credentials, no token.
+  reference:
+    - https://www.home-assistant.io/integrations/homeassistant/
+  tags: ot,bms,homeassistant,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "API running"
+          - "Home Assistant"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/manifest.json"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Home Assistant"
+          - '"start_url"'
+      - type: word
+        part: header
+        condition: or
+        words:
+          - "X-Hass-Source"

@@ -1,0 +1,69 @@
+# Check whether the GLPI front page responds.
+id: glpi-front-brand
+
+info:
+  name: GLPI Front End Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    GLPI is the incumbent open-source IT asset and service desk. A park's
+    IT administrator keeps the ride fleet in one: every ride, coaster,
+    kiosk, printer and point-of-sale terminal, with its warranty, its
+    maintenance history and often its network address.
+
+    That makes the asset list an internal network map. A reachable front
+    end is worth recording even when the console is correctly
+    authenticated, and the helpdesk behind it usually carries staff
+    usernames and infrastructure detail in its tickets.
+
+    GLPI's own asset paths and brand string are the marker. A 302 to a login
+    page is a reachability result, not an exposure, and is reported as such.
+
+    A match means GLPI is serving this origin. It does NOT mean the console
+    is unauthenticated, does NOT mean an asset, ticket, user or history is
+    readable, and it does NOT attempt a login or read a ticket.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://glpi-project.org/documentation/
+  tags: infrastructure,glpi,asset,helpdesk,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "GLPI"
+          - "glpi/front/"
+      - type: status
+        status:
+          - 200
+          - 301
+          - 302
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/front/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "GLPI"
+          - "glpi/"
+      - type: status
+        status:
+          - 200
+          - 301
+          - 302

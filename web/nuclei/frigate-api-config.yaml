@@ -1,0 +1,68 @@
+# Check whether the Frigate configuration API is open.
+id: frigate-api-config
+
+info:
+  name: Frigate NVR API Config Endpoint Open
+  author: host-exposure-audit
+  severity: medium
+  metadata:
+    kind: exposure
+    max-request: 2
+  description: |
+    Frigate is an open-source network video recorder built on real-time
+    object detection. A park uses it for entrance, queue and platform
+    cameras, and its configured camera list is a map of the site's coverage.
+
+    /api/config returns the full configuration, including every camera, its
+    address, its credentials reference, its retention settings and the
+    integrations wired to it. That is a meaningful disclosure, which is why
+    this is an exposure rather than a detection.
+
+    The version and the frigate object key are the product marker. A version
+    string on its own is not a fingerprint, so both are required.
+
+    A match means the Frigate config API is open to the scanner. It does NOT
+    mean any camera stream, snapshot or recording was fetched, and it does
+    NOT alter the configuration, arm a detection zone, or drive a PTZ. No
+    media is requested and no configuration is written.
+
+    Read-only. Two GET requests.
+  reference:
+    - https://docs.frigate.video/
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+    cwe-id: CWE-284
+  tags: ot,cctv,frigate,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/config"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "frigate"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/stats"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "cameras"
+          - "frigate"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

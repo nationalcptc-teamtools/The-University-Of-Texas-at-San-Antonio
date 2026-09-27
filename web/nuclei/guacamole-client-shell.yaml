@@ -1,0 +1,65 @@
+# Check whether the Guacamole client page responds.
+id: guacamole-client-shell
+
+info:
+  name: Apache Guacamole Client Shell Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Apache Guacamole is a browser-based remote desktop gateway. A park uses
+    one to reach the NVR, the ride PLC maintenance workstation, the
+    point-of-sale back office and the building-management controller from a
+    single console.
+
+    That makes a reachable Guacamole unusually consequential: the console
+    lists the targets and, where the auth extension is misconfigured, the
+    connection parameters behind them. The unauthenticated client shell at
+    /guacamole/ is the product marker; the tokens endpoint answers with the
+    caller's identity and is the second, independent signal.
+
+    A match means a Guacamole console is reachable. It does NOT mean any
+    remote session can be started, does NOT mean any stored connection or
+    credential is readable, and it starts no session and touches no target
+    behind the gateway.
+
+    Read-only: two GET requests, no credentials, no session creation.
+  reference:
+    - https://guacamole.apache.org/doc/gug/
+  tags: themepark,remote-management,guacamole,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/guacamole/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Guacamole"
+          - "guacamole-common"
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/guacamole/api/tokens"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "availableDataSources"
+          - "dataSource"
+          - "username"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

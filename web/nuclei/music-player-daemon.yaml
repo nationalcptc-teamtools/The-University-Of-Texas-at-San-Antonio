@@ -1,0 +1,27 @@
+# Check whether a Music Player Daemon sends a greeting.
+id: music-player-daemon
+
+info:
+  name: Music Player Daemon Protocol
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    MPD sends an OK MPD protocol greeting on connection. A match identifies
+    a compatible music service; it does not access playlists, change volume,
+    or start playback. One connection, no command, then close.
+  reference:
+    - https://mpd.readthedocs.io/en/stable/protocol.html
+  tags: themepark,music,mpd,detection
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 6600
+    read-size: 128
+    matchers:
+      - type: regex
+        regex:
+          - '^OK MPD [0-9]+\.[0-9]+(?:\.[0-9]+)?\r?\n$'

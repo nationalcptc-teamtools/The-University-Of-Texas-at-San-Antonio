@@ -1,0 +1,60 @@
+# Check whether an MQTT broker accepts a connection.
+id: mqtt-listener-identification
+
+info:
+  name: MQTT Broker Acknowledges a Connect
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    MQTT is the default publish/subscribe protocol for small IoT and
+    building work, and a park uses it for turnstile counters, ride telemetry,
+    door contacts and the show systems that subscribe to them.
+
+    This sends a MQTT 3.1.1 CONNECT with Clean Session and a zero-length client
+    identifier, then reads the CONNACK. A conforming broker that accepts this
+    form assigns a unique identifier, so the probe cannot collide with and
+    disconnect an existing named client. It subscribes to nothing, publishes
+    nothing, and stores no persistent session.
+
+    A real MQTT 3.1.1 broker answers with a complete four-byte CONNACK: 20 02,
+    a valid session-present flag, and a return code from 0 through 5. The
+    request this template sends begins 10, so an echo cannot produce a 20. A
+    return code of 5 -
+    not authorised - is still a match: it means a broker is there and
+    rejected us, which is a correct configuration and not a finding.
+
+    A match means an MQTT broker answered a CONNECT. It does NOT mean any
+    topic, retained message, client or subscription is readable, and it does
+    NOT publish, subscribe, or unsubscribe.
+
+    The regression harness refuses any packet whose high nibble is 0x3 or
+    0x6 - PUBLISH, PUBREC, PUBREL and PUBCOMP - and fails the run if one is
+    observed. MQTT is a fire-and-forget bus with no authorisation model
+    beyond connection, so a publish is a real state change to real
+    actuators. It is not sent.
+  reference:
+    - https://docs.oasis-open.org/mqtt/mqtt/v5.0/os/mqtt-v5.0-os.html
+  tags: ot,mqtt,iot,detection
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 1883
+    read-size: 32
+
+    # MQTT CONNECT, protocol name "MQTT", level 4, clean session flag set,
+    # keep-alive 30, and a zero-length client identifier. Nothing is
+    # subscribed and nothing is published.
+    inputs:
+      - data: "100c00044d5154540402001e0000"
+        type: hex
+
+    matchers:
+      - type: regex
+        regex:
+          # CONNACK, remaining length 2, valid session-present bit, and a
+          # MQTT 3.1.1 connection return code (0x00 through 0x05).
+          - '^\x20\x02[\x00-\x01][\x00-\x05]$'

@@ -1,0 +1,59 @@
+# Check whether EtherNet/IP lists its services.
+id: enip-list-services
+
+info:
+  name: EtherNet/IP Encapsulation Services Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    EtherNet/IP (CIP over TCP 44818) is the common industrial protocol in
+    North American control systems, and it fronts PLCs, I/O and drives.
+
+    ListServices is an encapsulation-layer identity call. It enumerates what
+    the device supports and returns no process data. Both request and reply
+    use command 0x04. The matcher therefore requires the standard
+    Communications service item that appears only in a valid reply; an echo
+    cannot satisfy it.
+
+    A match means an EtherNet/IP encapsulation endpoint answered. It does
+    NOT mean a CIP service was invoked, that a tag was read, that a
+    connection was opened, or that the device is misconfigured. CIP is where
+    the consequences live - Write Tag, Read Modify Write Tag, and the
+    connection-oriented services - and none of it is exercised.
+
+    The regression harness refuses any encapsulation command other than
+    ListIdentity, ListServices, and its two replies, and refuses any CIP
+    write service code it can see in the payload. It fails the run if either
+    is observed.
+  reference:
+    - https://www.odva.org/wp-content/uploads/2019/06/cip-vol1-ch1.pdf
+  tags: ot,enip,cip,ics,detection
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 44818
+    read-size: 512
+
+    # Encapsulation command 0x04 ListServices, session handle 0,
+    # status 0, then the standard service list trailer.
+    inputs:
+      - data: "040000000000000000000000000000000000000000000000"
+        type: hex
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        regex:
+          # ListServices command, declared payload length 26, at offset zero.
+          - '^\x04\x00\x1a\x00'
+      - type: size
+        size:
+          - 50
+      - type: binary
+        binary:
+          # Complete Communications service item name.
+          - "0001140001002000436f6d6d756e69636174696f6e73"

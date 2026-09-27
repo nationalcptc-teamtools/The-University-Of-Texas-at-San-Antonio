@@ -1,0 +1,40 @@
+# Check whether CouchDB returns root information.
+id: couchdb-root-info
+
+info:
+  name: Apache CouchDB Root Information
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    CouchDB documents a JSON welcome response with its version and Apache
+    vendor name. A match identifies the service only. It does not read a
+    database, document, configuration value or user account. One GET.
+  reference:
+    - https://docs.couchdb.org/en/stable/api/server/common.html
+  tags: data,couchdb,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: header
+        words: ["application/json"]
+      - type: regex
+        part: body
+        regex:
+          - '"couchdb"\s*:\s*"Welcome"'
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"version"'
+          - 'The Apache Software Foundation'

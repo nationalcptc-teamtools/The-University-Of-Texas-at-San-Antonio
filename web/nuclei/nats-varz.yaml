@@ -1,0 +1,38 @@
+# Check whether NATS returns monitoring data.
+id: nats-varz
+
+info:
+  name: NATS Monitoring Varz
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    NATS documents /varz on its optional monitoring listener. A match
+    identifies that monitoring API, not access to message subjects or
+    permission to publish. One read-only GET; no client connection.
+  reference:
+    - https://docs.nats.io/reference/system/monitor/varz
+  tags: data,messaging,nats,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/varz"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: header
+        words: ["application/json"]
+      - type: regex
+        part: body
+        condition: and
+        regex:
+          - '"server_id"\s*:\s*"[^"]+"'
+          - '"proto"\s*:\s*[0-9]+'
+          - '"max_payload"\s*:\s*[0-9]+'
+          - '"total_connections"\s*:\s*[0-9]+'

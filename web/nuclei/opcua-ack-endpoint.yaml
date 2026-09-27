@@ -1,0 +1,59 @@
+# Check whether an OPC UA server acknowledges a hello.
+id: opcua-ack-endpoint
+
+info:
+  name: OPC UA Server Acknowledges a Hello
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    OPC UA is the industrial interoperability standard, and it is the most
+    likely modern integration protocol in a mixed park estate: ride
+    controllers, PLCs, the building management system and the historian
+    all converging on one address space.
+
+    An OPC UA server answers a Hello with an Ack, and "ACKF" is a four-byte
+    signature that no other protocol on that port produces. Hello/Ack is
+    transport negotiation: it opens a channel and sets buffer sizes. It
+    creates no session, activates no identity, and grants no access to the
+    address space.
+
+    A match means an OPC UA server is on this port. It does NOT mean a
+    session was created, that anonymous access is permitted, that a node was
+    read, or that a method was called. Those are the operations worth
+    testing and they are deliberately not attempted here.
+
+    A client sending anything other than a Hello is doing more than
+    identifying the server, and the regression harness refuses to answer
+    such a request and fails the run.
+
+    Read-only. One connection, one Hello, closed.
+  reference:
+    - https://reference.opcfoundation.org/Core/Part1/v104/docs/5.6.3
+  tags: ot,opcua,ics,detection
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 4840
+    read-size: 128
+
+    # OPC UA Hello: "HELF" (message type F = Full chunk), chunk, size,
+    # protocol version 0, receive/send buffer, max message size, max chunk
+    # count, then the client endpoint URL. The endpoint string is ours and
+    # is not a value the server returns.
+    inputs:
+      - data: "48454c463800000000000000ffff0000ffff00000000000000000000180000006f70632e7463703a2f2f6c6f63616c686f73743a34383430"
+        type: hex
+
+    matchers-condition: and
+    matchers:
+      - type: regex
+        regex:
+          # ACKF, little-endian MessageSize 28, at offset zero.
+          - '^\x41\x43\x4b\x46\x1c\x00\x00\x00'
+      - type: size
+        size:
+          - 28

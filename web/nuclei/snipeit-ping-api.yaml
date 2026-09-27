@@ -1,0 +1,61 @@
+# Check whether the Snipe-IT ping API responds.
+id: snipeit-ping-api
+
+info:
+  name: Snipe-IT Ping API Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Snipe-IT is a common open-source asset tracker. A park keeps its ride
+    fleet, kiosks, printers and point-of-sale terminals in one, and the
+    asset list doubles as a network address book and a warranty calendar.
+
+    /api/v1/ping is unauthenticated on a stock install and returns the
+    product's own success envelope. The version field is a product marker in
+    its own right and is stronger than the page title, which is why the
+    front page is not the primary signal.
+
+    A match means a Snipe-IT instance is reachable. It does NOT mean any
+    asset, serial number, assignee, licence or checkout record is readable,
+    and it does NOT read the asset list or the checkout history.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://snipe-it.readme.io/docs
+  tags: infrastructure,snipeit,asset,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/ping"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      # Snipe-IT wraps its reply in a nested "success" object carrying a
+      # message and a timestamp. A bare "message" key matches almost every
+      # JSON API, and did match Grafana in a real scan.
+      - type: regex
+        regex:
+          - '"success"\s*:\s*\{\s*"message"'
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Snipe-IT"
+          - "snipeit"
+      - type: status
+        status:
+          - 200

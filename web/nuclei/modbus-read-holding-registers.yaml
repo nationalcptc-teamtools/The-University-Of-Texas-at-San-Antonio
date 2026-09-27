@@ -1,0 +1,67 @@
+# Check whether Modbus answers a holding-register read.
+id: modbus-read-holding-registers
+
+info:
+  name: Modbus TCP Service Answers a Register Read
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Modbus/TCP is the most common fieldbus in building and industrial
+    control, and in a park it appears behind HVAC, lighting, fountain and
+    pump control, and increasingly behind the ride controllers themselves.
+
+    This template sends function code 0x03, Read Holding Registers. That is
+    a READ. It is one of the four Modbus read functions (0x01 coils, 0x02
+    discrete inputs, 0x03 holding registers, 0x04 input registers) and it
+    changes nothing on the device.
+
+    The match is byte-level and deliberately non-reflectable. The request
+    contains 03 00 00 00 01; a genuine one-register reply has a complete
+    eleven-byte MBAP/PDU frame, function 03, byte count 02, and two value
+    bytes. The matcher validates that complete shape, so a two-byte banner or
+    reflected request cannot satisfy this template.
+
+    A match means a Modbus/TCP service answered a register read. It does NOT
+    mean any register value is known to you - the reply is not recorded
+    beyond the frame header - and it does NOT write a coil, write a
+    register, invoke a function, or change any device state. No write
+    function code is sent at all.
+
+    The regression harness refuses to answer any request whose function code
+    is 0x05, 0x06, 0x0F or 0x10, and fails the run if one is observed.
+  reference:
+    - https://www.modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf
+  tags: ot,modbus,ics,detection
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 502
+    read-size: 64
+
+    # MBAP (transaction 0x0001, protocol 0, length 6, unit 0x01) followed by
+    # PDU: function 0x03 read, start address 0x0000, quantity 0x0001.
+    # 00000001 00000000 00000006 ff 03 0000 0001
+    inputs:
+      - data: "000100000006010300000001"
+        type: hex
+
+    # No `part:` field. In a tcp: template `part: response` yields an empty
+    # string and no matcher can ever pass, so the template validates, loads,
+    # and silently matches nothing. Found by testing against a live service.
+    # No `dsl` either: a dsl matcher does not evaluate under tcp:, even a
+    # trivially true clause.
+    matchers-condition: and
+    matchers:
+      - type: regex
+        regex:
+          # Fixed transaction, protocol, length and unit from the request,
+          # followed by function 03 and byte count 02, at frame offset zero.
+          - '^\x00\x01\x00\x00\x00\x05\x01\x03\x02'
+      - type: size
+        size:
+          # MBAP header (7) + function/count (2) + one register value (2).
+          - 11

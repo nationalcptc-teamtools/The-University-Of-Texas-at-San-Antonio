@@ -1,0 +1,68 @@
+# Check whether WordPress login and REST endpoints respond.
+id: wordpress-login-surface
+
+info:
+  name: WordPress Login Surface and REST API Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 4
+  description: |
+    A park's public marketing site is usually WordPress, and the group that
+    can reach wp-login.php is the marketing team. A reachable login form is a
+    precondition for credential stuffing and for any WordPress authentication
+    weakness, so it is worth recording even when the site is otherwise sound.
+
+    The /wp-json/ block is a separate and stronger signal: the REST namespace
+    index is present by default and its absence usually means it was
+    deliberately disabled, which is the correct configuration. Its presence,
+    not its content, is the finding.
+
+    A match means WordPress is serving this origin. It does NOT mean the site
+    is out of date, does NOT mean any plugin is vulnerable, and does NOT
+    attempt a login. The readme version extract is enumeration aid only and
+    is frequently stale on a patched host.
+
+    Read-only: four GET requests, no credentials.
+  reference:
+    - https://developer.wordpress.org/rest-api/
+  tags: themepark,wordpress,marketing,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-login.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "user_login"
+          - "wp-login.php?action=lostpassword"
+          - "id=\"loginform\""
+          - "WordPress"
+      - type: status
+        status:
+          - 200
+          - 301
+          - 302
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-json/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - '"wp/v2"'
+          - '"wp\/v2"'
+          - "rest_route"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

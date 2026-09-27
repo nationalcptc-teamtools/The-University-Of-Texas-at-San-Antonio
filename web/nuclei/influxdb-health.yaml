@@ -1,0 +1,48 @@
+# Check whether the InfluxDB health endpoint responds.
+id: influxdb-health
+
+info:
+  name: InfluxDB Health Endpoint Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    InfluxDB and the Timescale-backed alternatives built on it are the common
+    time-series store for a park's ride telemetry, energy and water
+    metering, and environmental sensors.
+
+    /ping and /health are the product's own endpoints and return its
+    characteristic document. They are identification, not exposure: a
+    health endpoint is supposed to answer.
+
+    It is included because a time-series store for a park is a strong signal
+    that ride and plant telemetry exists somewhere behind it, which is
+    useful mapping even when nothing is readable.
+
+    A match means InfluxDB is serving this origin. It does NOT mean any
+    measurement, bucket, organisation or retention policy is readable, and
+    it does NOT query any time series, write a point, or create a bucket.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://docs.influxdata.com/influxdb/v2/reference/api/
+  tags: ot,telemetry,influxdb,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/health"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "influxdb"
+          - "ready for queries"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

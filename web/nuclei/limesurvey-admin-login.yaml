@@ -1,0 +1,63 @@
+# Check whether the LimeSurvey admin login responds.
+id: limesurvey-admin-login
+
+info:
+  name: LimeSurvey Administration Login Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    LimeSurvey is a widely deployed self-hosted survey tool. A park runs it
+    for patron satisfaction surveys, season-pass questionnaires, waiver
+    follow-ups and staff training checks, and a park that collects child
+    data or season-pass-holder details is holding regulated information
+    behind whatever is on that login page.
+
+    The generator meta tag is the product-owned marker. It is required
+    together with a login-form path, because a page called "Administration
+    Login" exists on plenty of products and a bare 200 is not evidence.
+
+    A match means a LimeSurvey administration interface is reachable. It does
+    NOT mean it is unauthenticated, does NOT mean a survey or response is
+    readable, and does NOT attempt a login or enumerate users.
+
+    Read-only: two GET requests, no credentials.
+  reference:
+    - https://www.limesurvey.org/documentation
+  tags: themepark,survey,limesurvey,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.php/admin/authentication/sa/login"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "LimeSurvey"
+          - "limesurvey"
+      - type: status
+        status:
+          - 200
+          - 302
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.php/admin/generalSettings"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "LimeSurvey"
+          - "limesurvey"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

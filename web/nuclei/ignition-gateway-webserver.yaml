@@ -1,0 +1,50 @@
+# Check whether the Ignition gateway responds.
+id: ignition-gateway-webserver
+
+info:
+  name: Ignition Gateway Web Server Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Ignition (Inductive Automation) is a widely deployed SCADA platform. A
+    park with ride PLCs, a water treatment skid, or a building plant is a
+    plausible site for it, and it is common in the small industrial and
+    utility deployments that CPTC environments mirror.
+
+    /system/webserver is the Gateway's own page and names both Ignition and
+    Gateway. Both markers are required because "Gateway" alone is generic.
+
+    This reports REACHABILITY of an HMI surface and nothing more. It cannot
+    and does not report what that surface permits. An HMI reachable from
+    outside the control network is serious precisely because the class of
+    exposure is often start/stop and setpoint authority, and matching the
+    page is the precondition for that judgement, never the judgement.
+
+    A match does NOT mean a tag was read, a value was written, a setpoint
+    changed or a program was started. No write of any kind is made to an
+    industrial surface.
+
+    Read-only. One GET request.
+  reference:
+    - https://www.ignitionproject.com/
+  tags: ot,scada,hmi,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/system/webserver"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: and
+        words:
+          - "Ignition"
+          - "Gateway"
+      - type: status
+        status:
+          - 200

@@ -1,0 +1,71 @@
+# Check whether the Elasticsearch root API is open.
+id: elasticsearch-root-open
+
+info:
+  name: Elasticsearch Root API Open
+  author: host-exposure-audit
+  severity: medium
+  metadata:
+    kind: exposure
+    max-request: 2
+  description: |
+    Elasticsearch and OpenSearch are the default log store in this class of
+    environment. A park runs them for ride-show logs, point-of-sale
+    transactions, access-control events and building alarms, and a log store
+    is a record of everything that happened and who did it.
+
+    The root endpoint is unauthenticated on a stock install and returns the
+    node name, cluster name and version. The _cat/indices list is the more
+    consequential half: it names every index in the cluster, and index names
+    in a themed environment describe the estate directly.
+
+    A match means the Elasticsearch root and index list are open. It does
+    NOT mean any document, field, mapping or record was read, and it does
+    NOT search, export, scroll or delete anything.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://www.elastic.co/guide/en/elasticsearch/reference/current/index.html
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-284
+  tags: data,elasticsearch,logging,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "You Know, for Search"
+          - '"cluster_name"'
+          - '"build_flavor"'
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/_cat/indices"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "open "
+          - "health"
+          - "index"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

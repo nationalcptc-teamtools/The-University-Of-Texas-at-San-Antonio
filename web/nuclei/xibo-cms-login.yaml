@@ -1,0 +1,67 @@
+# Check whether the Xibo CMS login page responds.
+id: xibo-cms-login
+
+info:
+  name: Xibo Digital Signage CMS Login Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Xibo is the common open-source digital signage CMS. A park uses it for
+    the entrance marquee, ride-queue boards, wayfinding and the screens in
+    the gift shop and food stands - which means it is a public-facing
+    display system, deployed to a machine reachable from guest space.
+
+    The CMS login is the product-owned marker. A 302 from / to /xibo/ is
+    part of the normal deployment shape and is accepted on that basis, but
+    the brand marker is still required, because "302 to somewhere" is the
+    single most common non-finding in a web scan.
+
+    A match means an Xibo CMS is reachable. It does NOT mean it is
+    unauthenticated, does NOT mean any display, layout or media library is
+    readable, and does NOT read a screen or a schedule.
+
+    Read-only: two GET requests, no credentials.
+  reference:
+    - https://xibo.org.uk/
+  tags: themepark,signage,xibo,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/xibo/"
+    redirects: false
+    # The brand marker and the status are required together. An earlier
+    # revision put them under `or`, so the status arm alone matched every
+    # server that answers 200 or 302 at /xibo/ - which in a real scan was
+    # Metabase and a plain nginx.
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Xibo"
+          - "Xibo CMS"
+      - type: status
+        status:
+          - 200
+          - 302
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/xibo/index.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Xibo"
+      - type: status
+        status:
+          - 200
+          - 302

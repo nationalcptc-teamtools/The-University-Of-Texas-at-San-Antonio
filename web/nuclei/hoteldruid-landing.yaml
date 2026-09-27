@@ -1,0 +1,34 @@
+# Check whether the HotelDruid landing page responds.
+id: hoteldruid-landing
+
+info:
+  name: HotelDruid Landing Page
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    The upstream landing page names HotelDruid and refreshes to inizio.php.
+    A match identifies that public landing page, not access to reservations,
+    guest records or the property management console. Two read-only GETs.
+  reference:
+    - https://raw.githubusercontent.com/digital-druid/hoteldruid/master/index.html
+  tags: themepark,hotel,pos,hoteldruid,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/hoteldruid/index.html"
+      - "{{BaseURL}}/index.html"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '<title> Hoteldruid </title>'
+          - 'url=inizio.php'

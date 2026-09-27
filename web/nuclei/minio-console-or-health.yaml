@@ -1,0 +1,45 @@
+# Check whether the MinIO console or health endpoint responds.
+id: minio-console-or-health
+
+info:
+  name: MinIO Object Storage Console Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    MinIO and Ceph RADOS gateways are the S3-compatible object stores small
+    on-premise deployments use for ticket media, ride-show video, merch
+    photography and camera export.
+
+    The console path must contain a MinIO-owned brand marker. Generic S3
+    AccessDenied responses and bare health responses are deliberately not
+    accepted because neither identifies MinIO.
+
+    A match means a MinIO deployment is reachable. It does NOT mean any
+    bucket, object or credential is readable, does NOT mean a bucket policy
+    is public, and it does NOT authenticate, create a bucket, or upload.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://min.io/docs/minio/linux/integrations/healthcheck.html
+  tags: data,object-storage,minio,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/minio/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "MinIO"
+          - "minio-console"
+          - "minio-browser"
+      - type: status
+        status:
+          - 200

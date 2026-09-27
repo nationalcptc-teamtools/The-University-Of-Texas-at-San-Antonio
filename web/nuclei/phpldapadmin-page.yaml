@@ -1,0 +1,37 @@
+# Check whether the phpLDAPadmin page responds.
+id: phpldapadmin-page
+
+info:
+  name: phpLDAPadmin Page
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    phpLDAPadmin 1.2 renders its product name and version in the page title
+    and uses its own favicon path. A match identifies the web interface, not
+    anonymous LDAP access or permission to change directory entries.
+    Two read-only GETs and no authentication attempt.
+  reference:
+    - https://raw.githubusercontent.com/leenooks/phpLDAPadmin/1.2.6.3/lib/page.php
+  tags: identity,ldap,phpldapadmin,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/phpldapadmin/"
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: body
+        regex:
+          - '<title>phpLDAPadmin\s*\([0-9][^)]*\)[^<]*</title>'
+      - type: word
+        part: body
+        words:
+          - 'href="images/favicon.ico"'

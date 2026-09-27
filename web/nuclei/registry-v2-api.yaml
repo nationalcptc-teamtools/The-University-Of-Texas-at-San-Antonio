@@ -1,0 +1,32 @@
+# Check whether a container registry supports API v2.
+id: registry-v2-api
+
+info:
+  name: Container Registry V2 API
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    The Distribution API specifies a version header on 200 and 401 replies
+    from /v2/. This identifies a registry protocol, which Harbor and other
+    products can implement. A 401 is an authentication boundary, not an
+    exposure. One read-only GET; no repository or manifest request.
+  reference:
+    - https://distribution.github.io/distribution/spec/api/
+  tags: devops,registry,containers,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v2/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200, 401]
+      - type: regex
+        part: header
+        regex:
+          - '(?im)^Docker-Distribution-Api-Version:\s*registry/2\.0\s*$'

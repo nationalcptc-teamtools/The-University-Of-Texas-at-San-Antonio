@@ -1,0 +1,61 @@
+# Check whether the OpenRemote console responds.
+id: openremote-console
+
+info:
+  name: OpenRemote Asset Console Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    OpenRemote is an open-source IoT and asset-management platform used for
+    building and energy management. In a park it is a plausible front end
+    for lighting, HVAC, submeters, EV charging and the environmental sensors
+    that drive the show systems.
+
+    The console at /console/ is the operator surface, and /console/health is
+    its own liveness endpoint. Both are required, because a sub-path of
+    /console/ alone is a shape many single-page apps produce.
+
+    A match means an OpenRemote console is reachable. It does NOT mean the
+    asset tree, agent inventory or protocol configuration is readable, and
+    it does NOT read an asset attribute or invoke a protocol action. No
+    write, no asset operation, no device command.
+
+    Read-only. Two GET requests.
+  reference:
+    - https://openremote.io/docs/
+  tags: ot,bms,openremote,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/console/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "OpenRemote"
+          - "openremote"
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/console/health"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "openremote"
+      - type: status
+        status:
+          - 200

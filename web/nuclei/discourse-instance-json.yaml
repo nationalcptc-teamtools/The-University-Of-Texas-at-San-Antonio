@@ -1,0 +1,52 @@
+# Check whether Discourse returns instance data.
+id: discourse-instance-json
+
+info:
+  name: Discourse Instance Metadata Endpoint Open
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Discourse exposes /about.json unauthenticated by design so that clients
+    can discover the instance. That is correct behaviour, and
+    the endpoint is a product fingerprint rather than a misconfiguration.
+
+    It is included because a park running a community forum, a fan club or a
+    staff discussion board will deploy one, and knowing which instance is in
+    front of you decides which documentation and which advisories apply.
+
+    A match means Discourse is serving this origin. It does NOT mean any
+    board is readable, does NOT mean registration is open, and does NOT read
+    a single topic, post or user. The content-type guard keeps an SPA shell
+    from satisfying it.
+
+    Read-only: one GET request, no session.
+  reference:
+    - https://meta.discourse.org/t/24348/site-json-endpoint/24364
+  tags: themepark,forum,discourse,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/about.json"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"about"'
+          - '"stats"'
+          - '"topic_count"'
+          - '"post_count"'
+          - '"admins"'
+          - '"moderators"'
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'application/json')"

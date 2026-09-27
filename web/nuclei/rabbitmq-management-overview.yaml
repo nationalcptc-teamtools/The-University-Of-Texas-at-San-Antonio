@@ -1,0 +1,51 @@
+# Check whether the RabbitMQ management overview is open.
+id: rabbitmq-management-overview
+
+info:
+  name: RabbitMQ Management Overview Endpoint Open
+  author: host-exposure-audit
+  severity: medium
+  metadata:
+    kind: exposure
+    max-request: 2
+  description: |
+    RabbitMQ is a common message broker, and a park uses one for the
+    point-of-sale integration, ticket validation, ride-show triggers and
+    the door-access event stream.
+
+    The management plugin's /api/overview is unauthenticated on some
+    configurations and returns the broker version, the node name and
+    statistics. /api/health/checks/alarms is included as a separate signal
+    so the template still fires where overview is protected but alarms are
+    not, which is a common partial-exposure shape.
+
+    A match means a RabbitMQ management endpoint is open. It does NOT mean
+    any queue, exchange, binding, user, vhost or message is readable, and
+    it does NOT publish a message, declare a queue, or bind an exchange.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://www.rabbitmq.com/docs/http-api-reference
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-284
+  tags: data,messaging,rabbitmq,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/overview"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "management_version"
+          - "rabbit_version"
+          - "rates_mode"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

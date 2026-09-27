@@ -1,0 +1,31 @@
+# Check whether the GitLab health endpoint responds.
+id: gitlab-health
+
+info:
+  name: GitLab Health Endpoint
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    GitLab documents the unauthenticated /-/health response as "GitLab OK".
+    A match identifies that response, not repository access or a security flaw.
+    One read-only GET; no login or project request.
+  reference:
+    - https://docs.gitlab.com/administration/monitoring/health_check/
+  tags: devops,gitlab,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/-/health"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: body
+        regex:
+          - '^GitLab OK\s*$'

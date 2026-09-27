@@ -1,0 +1,63 @@
+# Check whether a Uptime Kuma public status page responds.
+id: uptime-kuma-heartbeat
+
+info:
+  name: Uptime Kuma Public Status Page Heartbeat Open
+  author: host-exposure-audit
+  severity: info
+    # kind recorded below in metadata
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Uptime Kuma is a popular self-hosted uptime monitor, and a small
+    operations team frequently puts a status page up in front of it. That
+    status page is by design public and is often mounted at a park's
+    customer-facing URL.
+
+    /api/status-page/heartbeat is the public status page feed. It is the
+    product's own endpoint and it names uptimeKuma, which is the marker.
+
+    A match means a Uptime Kuma public status page is reachable. It does NOT
+    mean any monitor, notification channel, credential or dashboard is
+    readable - the admin API is a different surface entirely - and it does
+    NOT create, pause or delete a monitor.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://github.com/louislam/uptime-kuma
+  tags: monitoring,uptime-kuma,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/status-page/heartbeat"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "heartbeatList"
+          - "uptimeList"
+          - "uptimeKuma"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Uptime Kuma"
+          - "uptime-kuma"
+      - type: status
+        status:
+          - 200

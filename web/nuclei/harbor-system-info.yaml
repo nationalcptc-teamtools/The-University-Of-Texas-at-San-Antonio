@@ -1,0 +1,38 @@
+# Check whether Harbor returns system information.
+id: harbor-system-info
+
+info:
+  name: Harbor General System Information
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Harbor documents anonymous access to general system information.
+    A match requires Harbor's version field and registry storage field.
+    It identifies Harbor; it does not list projects or registry artifacts.
+    One read-only GET.
+  reference:
+    - https://raw.githubusercontent.com/goharbor/harbor/main/api/v2.0/swagger.yaml
+  tags: devops,registry,harbor,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v2.0/systeminfo"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: header
+        words: ["application/json"]
+      - type: regex
+        part: body
+        regex:
+          - '"harbor_version"\s*:\s*"[^" ]+"'
+      - type: word
+        part: body
+        words: ['"registry_storage_provider_name"']

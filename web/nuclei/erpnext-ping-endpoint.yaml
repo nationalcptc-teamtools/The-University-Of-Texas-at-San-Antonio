@@ -1,0 +1,61 @@
+# Check whether the ERPNext ping endpoint responds.
+id: erpnext-ping-endpoint
+
+info:
+  name: ERPNext / Frappe Ping Endpoint Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    ERPNext is an open-source ERP that small organisations deploy for
+    inventory, purchasing, accounting and, in a park or food operation,
+    recipe and stock control. It is built on the Frappe framework, so
+    /api/method/ping is the framework's own liveness method and returns a
+    fixed pong document on any Frappe-based site.
+
+    That makes it a framework fingerprint rather than a product fingerprint:
+    a match means a Frappe application is present, and the asset bundle path
+    is included to confirm the framework specifically. Any other Frappe app
+    on the same host would also match, which is a stated limit.
+
+    A match means a Frappe-based ERP is reachable. It does NOT mean any
+    document, ledger, customer or stock record is readable, and it does NOT
+    attempt a login or call any method other than ping.
+
+    Read-only: two GET requests, no credentials.
+  reference:
+    - https://docs.frappe.io/framework/user/en/api/rest
+  tags: themepark,erp,erpnext,frappe,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/method/ping"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "pong"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/assets/frappe/js/frappe-web.bundle.js"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Frappe"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

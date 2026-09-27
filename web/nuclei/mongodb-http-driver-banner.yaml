@@ -1,0 +1,48 @@
+# Check whether a MongoDB driver port answers HTTP.
+id: mongodb-http-driver-banner
+
+info:
+  name: MongoDB Native Driver Port Answers With HTTP
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    MongoDB's default port speaks the wire protocol, not HTTP. When it
+    answers an HTTP request with its own explanatory banner, the port is
+    open and a native-protocol client can reach it - which is the useful
+    fact, since MongoDB left unauthenticated is one of the most reliable
+    findings in this class of environment.
+
+    This template only reads the banner. It does NOT attempt a MongoDB
+    handshake beyond the HTTP exchange the banner itself requires, does not
+    enumerate databases or collections, and does not send any query.
+
+    A match means a MongoDB port is open and speaking. It does NOT mean the
+    instance is unauthenticated - that requires a separate, deliberate
+    protocol test - and it does not read a single document.
+
+    Read-only. One GET request.
+  reference:
+    - https://www.mongodb.com/docs/manual/reference/
+  tags: data,mongodb,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "trying to access MongoDB over"
+          - "It looks like you are trying to access MongoDB"
+      - type: status
+        status:
+          - 200
+          - 400
+          - 404

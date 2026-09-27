@@ -1,0 +1,34 @@
+# Check whether the phpMyAdmin login form responds.
+id: phpmyadmin-login
+
+info:
+  name: phpMyAdmin Login Form
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    phpMyAdmin's upstream login template has paired pma_username and
+    pma_password inputs. A match identifies the login form only; it does not
+    establish database access. Two read-only GETs and no submitted form.
+  reference:
+    - https://raw.githubusercontent.com/phpmyadmin/phpmyadmin/master/resources/templates/login/form.twig
+  tags: data,mysql,phpmyadmin,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/phpmyadmin/"
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: body
+        condition: and
+        regex:
+          - '<input[^>]*name="pma_username"'
+          - '<input[^>]*name="pma_password"'

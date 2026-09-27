@@ -1,0 +1,65 @@
+# Check whether Zabbix returns its JSON-RPC version.
+id: zabbix-jsonrpc-version
+
+info:
+  name: Zabbix JSON-RPC Version Endpoint Open
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Zabbix is one of the two dominant infrastructure monitoring platforms and
+    a park's operations group will run it over the show systems, the
+    building plant and the guest network.
+
+    On a stock install the JSON-RPC endpoint answers the unauthenticated
+    `apiinfo.version` method with the server version.
+
+    The matcher is a regex for a version-shaped `result` string, not a word.
+    An earlier revision matched the literal `jsonrpc`, which is also the last
+    segment of the path this template requests - and an Elasticsearch-shaped
+    server echoes the requested path in its body, so that needle was
+    satisfied by Elasticsearch. A second revision required the word
+    `Zabbix`, which a real Zabbix JSON-RPC reply does not contain, so it
+    stopped matching the product it names. The version regex is what the
+    response actually carries.
+
+    A match means a Zabbix JSON-RPC endpoint answered with a version. It
+    does NOT mean any host, trigger, item, graph or user was read, and it
+    does NOT attempt a login, enumerate hosts, or acknowledge an event.
+
+    Read-only. One POST request carrying the documented version method and no
+    credential.
+  reference:
+    - https://www.zabbix.com/documentation/current/manual/api/reference/rpc/api
+  tags: monitoring,zabbix,detection
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/api_jsonrpc.php"
+    headers:
+      Content-Type: application/json-rpc
+    body: '{"jsonrpc":"2.0","method":"apiinfo.version","params":[],"id":1}'
+    redirects: false
+    matchers-condition: and
+    matchers:
+      # A JSON-RPC 2.0 envelope whose result is a version string.
+      - type: regex
+        part: body
+        regex:
+          - '"result"\s*:\s*"[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.\-]*"'
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"jsonrpc"'
+          - '"id"'
+    extractors:
+      - type: regex
+        regex:
+          - '"result"\s*:\s*"([0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.\-]*)"'

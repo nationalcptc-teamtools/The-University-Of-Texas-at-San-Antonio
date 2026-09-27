@@ -1,0 +1,31 @@
+# Check whether Memcached returns its version.
+id: memcached-version
+
+info:
+  name: Memcached Text Protocol Version
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    The Memcached text protocol documents a read-only version command and
+    VERSION response. A match identifies a compatible service; it does not
+    read cache keys or prove that cache data is accessible. One connection,
+    one version command, then close.
+  reference:
+    - https://raw.githubusercontent.com/memcached/memcached/master/doc/protocol.txt
+  tags: data,cache,memcached,detection
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 11211
+    read-size: 128
+    inputs:
+      - data: "76657273696f6e0d0a"
+        type: hex
+    matchers:
+      - type: regex
+        regex:
+          - '^VERSION [0-9]+\.[0-9]+(?:\.[0-9]+)?[^\r\n]*\r\n$'

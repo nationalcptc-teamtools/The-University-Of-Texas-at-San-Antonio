@@ -1,0 +1,74 @@
+# Check for a KasmVNC or Guacamole login challenge.
+id: kasmvnc-auth-challenge
+
+info:
+  name: KasmVNC or Guacamole-Style Authentication Challenge
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    KasmVNC, noVNC and xrdp gateways are used to reach maintenance
+    workstations and thin clients. A 401 on such a gateway is a
+    CHALLENGE, not an exposure, and reporting it as an exposure would be
+    wrong - that distinction is the reason this template exists.
+
+    It is included because the gateway's existence is still a useful piece of
+    the map, and because the brand of the challenge tells you which remote
+    access product is deployed.
+
+    A match means a remote-access gateway is present and is asking for
+    authentication. It does NOT mean the credentials are weak, does NOT
+    attempt any authentication, and does NOT say anything about what is
+    reachable behind the gateway.
+
+    On a self-signed TLS endpoint this template asserts the STATUS CODE
+    rather than a response header, because header matching on a self-signed
+    response was measured to be unreliable on the nuclei build used here.
+    The status is the reliable part, and the brand is required alongside it.
+
+    Read-only: two GET requests, no credentials.
+  reference:
+    - https://www.kasmweb.com/
+  tags: themepark,remote-management,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 401
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "KasmVNC"
+          - "noVNC"
+          - "WebVNC"
+          - "guacamole"
+          - "xrdp"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/vnc.html"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 401
+          - 200
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "KasmVNC"
+          - "noVNC"
+          - "WebVNC"
+          - "guacamole"
+          - "xrdp"

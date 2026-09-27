@@ -1,0 +1,38 @@
+# Check whether the ScadaBR login page responds.
+id: scadabr-login
+
+info:
+  name: ScadaBR Login Page
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    ScadaBR documents the /ScadaBR/login.htm route and username/password
+    login form. Its upstream page tag renders a product-owned logo path.
+    A match identifies the login surface, not controller access.
+    One read-only GET; no credentials or process commands.
+  reference:
+    - https://www.scadabr.com.br/index.php/sobre-o-scadabr/
+    - https://forum.scadabr.com.br/t/modo-kiosk-para-novatos/3446
+    - https://raw.githubusercontent.com/ScadaBR/ScadaBR/master/WebContent/WEB-INF/tags/page.tag
+    - https://raw.githubusercontent.com/ScadaBR/ScadaBR/master/WebContent/WEB-INF/jsp/login.jsp
+  tags: ot,scada,scadabr,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/ScadaBR/login.htm"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: body
+        condition: and
+        words:
+          - 'images/scadabrLogoMed.svg'
+          - 'name="username"'
+          - 'name="password"'

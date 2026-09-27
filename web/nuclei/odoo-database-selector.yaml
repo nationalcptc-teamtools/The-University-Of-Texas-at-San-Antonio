@@ -1,0 +1,69 @@
+# Check whether the Odoo database manager responds.
+id: odoo-database-selector
+
+info:
+  name: Odoo Database Manager Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    max-request: 3
+    kind: detection
+  description: |
+    Odoo is a common back-office and point-of-adjacent system for retail,
+    warehouse and service operations. A park uses it for merchandise
+    inventory, supplier records, staff scheduling and gift-shop accounting.
+
+    /web/database/selector is the database manager. On Odoo 9 and later it is
+    the administrative root of the application, and where master password
+    protection is disabled it will list and create databases. The presence
+    of the page is the finding; this template does not enumerate databases,
+    does not attempt the master password, and does not create anything.
+
+    The Odoo asset bundle path is included as an independent second signal,
+    because a database manager served behind a different hostname is still
+    Odoo.
+
+    A match means an Odoo web interface is reachable. It does NOT mean any
+    database is listed or writable, does NOT mean records are readable, and
+    does NOT attempt the master password or any login.
+
+    Read-only: three GET requests, no credentials.
+  reference:
+    - https://www.odoo.com/documentation/
+  tags: themepark,pos,odoo,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/web/database/selector"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Odoo"
+          - "odoo"
+          - "db_manager"
+      - type: status
+        status:
+          - 200
+          - 302
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/web/login"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Odoo"
+          - "odoo"
+      - type: status
+        status:
+          - 200
+          - 302

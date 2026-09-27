@@ -1,0 +1,49 @@
+# Check whether the Netdata info API responds.
+id: netdata-info-api
+
+info:
+  name: Netdata Info API Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Netdata is a lightweight host metrics agent that is trivially easy to
+    deploy, and a small operations team with a handful of servers will often
+    have it running on everything by default.
+
+    /api/v1/info returns the agent version, host name, mirrored-host list,
+    alarms and collector inventory. The matcher requires several of those
+    product-owned fields so ordinary application metadata cannot satisfy it.
+
+    A match means a Netdata agent is serving this origin. It does NOT mean
+    any chart, metric, process, container or disk is readable - those are
+    different API surfaces - and it does NOT query any metric stream.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://learn.netdata.cloud/docs/netdata-agent/configuration/
+  tags: monitoring,netdata,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/info"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"mirrored_hosts"'
+          - '"alarms"'
+          - '"collectors"'
+          - '"buildinfo"'
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'application/json')"

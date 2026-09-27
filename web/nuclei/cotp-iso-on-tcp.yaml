@@ -1,0 +1,57 @@
+# Check whether an ISO-on-TCP service accepts a connection request.
+id: cotp-iso-on-tcp
+
+info:
+  name: ISO-on-TCP Service Answers a Connection Request
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Port 102 carries ISO-on-TCP, the transport used by S7 communication
+    between a PLC and its engineering station, and by several other
+    industrial protocols. Finding the transport is a precondition; what
+    speaks on top of it is a separate question this template does not answer.
+
+    A TPKT-wrapped Connection Request gets a Connection Confirm. The two
+    differ in the TPDU code: e0 for CR and d0 for CC. Matching the TPKT and CC
+    prefix therefore cannot be satisfied by a service
+    that reflects the request.
+
+    This is transport identification only. It does NOT read a block, a
+    variable, a diagnostic buffer or a program, and it does NOT download,
+    start, stop or modify a PLC program. No S7 payload is sent at all: the
+    exchange is CR/CC and nothing more.
+
+    A match means something is speaking ISO-on-TCP. It does NOT mean a PLC
+    is present, and it does NOT mean S7 is present.
+  reference:
+    - https://www.snap7.org/en/doc/official_s7_description.html
+  tags: ot,ics,transport,detection
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 102
+    read-size: 64
+
+    # RFC 1006 TPKT (03 00, total length 0x0016) followed by an ISO 8073 COTP
+    # CR: LI 0x11, code 0xe0, references, class 0, TPDU size and TSAP params.
+    inputs:
+      - data: "0300001611e00000000100c0010ac1020100c2020102"
+        type: hex
+
+    # A Connection Confirm uses TPDU code 0xd0 where the request uses 0xe0.
+    matchers-condition: and
+    matchers:
+      - type: regex
+        regex:
+          # TPKT version/reserved, 22-byte frame and COTP header at offset zero.
+          - '^\x03\x00\x00\x16\x11'
+      - type: size
+        size:
+          - 22
+      - type: binary
+        binary:
+          - "0300001611d0"

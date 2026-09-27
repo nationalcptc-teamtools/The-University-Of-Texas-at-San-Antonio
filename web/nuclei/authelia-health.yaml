@@ -1,0 +1,46 @@
+# Check whether the Authelia health endpoint responds.
+id: authelia-health
+
+info:
+  name: Authelia Health Endpoint Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Authelia is a forward-auth gateway commonly placed in front of internal
+    services, and a small organisation with a mixed estate reaches for it
+    because it needs an SSO layer without a full identity provider.
+
+    /api/health and /api/state are its own endpoints. The state endpoint in
+    particular is the interesting one: it reports the caller's authentication
+    state, and on a misconfigured deployment that is readable by anyone.
+
+    A match means an Authelia gateway is serving this origin. It does NOT
+    mean any protected service is reachable, does NOT mean a session exists,
+    and it does NOT attempt a login, submit a factor, or enumerate users.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://www.authelia.com/integration/prologue/introduction/
+  tags: identity,authelia,sso,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/state"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      # authentication_level is Authelia's own key and is what distinguishes
+      # it from any other service returning {"status":"OK"}. An earlier
+      # revision matched /api/health on the literal keys "status" and "OK",
+      # and fired against both Metabase and Elasticsearch in a real scan.
+      - type: word
+        part: body
+        words:
+          - "authentication_level"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

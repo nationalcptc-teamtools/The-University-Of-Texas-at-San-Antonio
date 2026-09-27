@@ -1,0 +1,75 @@
+# Check whether a printer web page identifies JetDirect.
+id: jetdirect-embedded-web
+
+info:
+  name: Network Printer Embedded Web Server Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    A park runs printers at the ticket windows, guest services, the merch
+    warehouse and the maintenance shop, and network printers expose an
+    embedded web server by default. That server shows page counts, toner
+    levels, the print queue, the network configuration, and on many models a
+    firmware update control and a configuration-save function.
+
+    A printer on the maintenance VLAN is often a bridge to a segment with no
+    other filtering, which is why an exposed printer web interface is a
+    finding in its own right.
+
+    The product-configuration XML document is the strong marker: it is a
+    vendor-shaped XML document on a printer-shaped path, and the front-page
+    brand words are accepted alongside it because a deployment behind a
+    proxy may not expose the XML.
+
+    This template replaced a raw 9100 port probe. A JetDirect port is a
+    sink: it accepts bytes and returns nothing, so a word matcher on 9100
+    can only ever match a printer that happens to banner, and cannot match a
+    normal one. That original template validated cleanly and had never once
+    been able to fire.
+
+    A match means a printer web interface answered. It does NOT mean it is
+    unauthenticated, does NOT mean the device is unpatched, does NOT read a
+    page count, and does NOT cancel, hold or send a print job. No print job
+    is generated.
+
+    Read-only. Two GET requests.
+  reference:
+    - https://support.hp.com/us-en/document/c00060232
+  tags: themepark,printer,jetdirect,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/DevMgmt/ProductConfigDyn.xml"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "HP LaserJet"
+          - "HP OfficeJet"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "JetDirect"
+          - "Embedded Web Server"
+          - "Toner"
+      - type: status
+        status:
+          - 200

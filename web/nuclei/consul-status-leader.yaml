@@ -1,0 +1,72 @@
+# Check whether Consul exposes agent status.
+id: consul-status-leader
+
+info:
+  name: Consul Agent Status Endpoints Open
+  author: host-exposure-audit
+  severity: medium
+  metadata:
+    kind: exposure
+    max-request: 2
+  description: |
+    Consul is used for service discovery and, more consequentially, for its
+    key/value store and ACL system. A park may run it to find the show
+    services, the ticket validators and the access-control gateways, and a
+    Consul key/value store frequently holds the same configuration those
+    services read at boot.
+
+    /v1/status/leader returns the raft leader address and /v1/agent/self
+    returns the node configuration. The leader address is the direct
+    interest: it is an internal address that is normally not meant to leave
+    the segment.
+
+    A match means a Consul agent API is open. It does NOT mean the
+    key/value store, service catalogue, or any session is readable - those
+    are separate endpoints and are not requested - and it does NOT write a
+    key, deregister a service, or create a session.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://developer.hashicorp.com/consul/api-docs/agent
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-284
+  tags: data,consul,service-discovery,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1/status/leader"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        # The leader reply is a JSON string holding host:raftport. Requiring
+        # the port makes it Consul's own response shape; the earlier list
+        # included bare "10." and "192.168." which any echoed path could
+        # satisfy.
+        words:
+          - ":8300"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1/agent/self"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Config"
+          - "Datacenter"
+          - "NodeName"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

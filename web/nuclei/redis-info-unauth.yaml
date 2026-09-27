@@ -1,0 +1,70 @@
+# Check whether Redis answers INFO and CONFIG GET without authentication.
+id: redis-info-unauth
+
+info:
+  name: Redis Answers INFO and CONFIG GET Without Authentication
+  author: host-exposure-audit
+  severity: high
+  metadata:
+    kind: exposure
+    max-request: 1
+  description: |
+    Redis is everywhere, including as the session store and queue behind a
+    park's ticketing, signage and guest-facing applications. A Redis left
+    unauthenticated is one of the most reliable findings in this class of
+    environment, and it is also the most reliably repeatable.
+
+    This sends INFO, CONFIG GET dir and CONFIG GET dbfilename, and requires
+    both redis_version and dbfilename in the reply. Those are values the
+    server RETURNS; the request never mentions redis_version, so nothing
+    that reflects its own input back can satisfy this.
+
+    An earlier revision of this template listed redis_version and dir in a
+    word matcher with no explicit condition, and a word matcher's default
+    condition is or. That meant "dir" alone satisfied it - and "dir" appears
+    in this very request, in "CONFIG GET dir". The cross-product matrix
+    recorded the template matching a raw printer port, because that port
+    echoed the request. The explicit `condition: and` below is the fix, and
+    the reason the rule about non-reflectable needles exists.
+
+    An authenticated Redis answers NOAUTH and no redis_version, so the
+    positive assertion is sufficient and nothing negative is needed.
+
+    A match means the instance answered unauthenticated and its configuration
+    is readable. It does NOT mean a file was written, a key was set, a module
+    was loaded, or a replica was configured - and this template does none of
+    those. CONFIG SET, EVAL, MODULE LOAD, FLUSHALL, DEBUG and SHUTDOWN are
+    refused by the regression harness, which fails the run if any appears.
+
+    Read-only. One connection, one command batch, closed.
+  reference:
+    - https://redis.io/docs/latest/operate/oss_and_stack/management/security/
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:C/C:L/I:H/A:N
+    cvss-score: 8.1
+    cwe-id: CWE-306
+  tags: data,redis,exposure
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 6379
+    read-size: 8192
+
+    inputs:
+      - data: "494e464f0d0a434f4e46494720474554206469720d0a434f4e4649472047455420646266696c656e616d650d0a515549540d0a"
+        type: hex
+
+    # No `part:` field: in a tcp: template `part: response` yields an empty
+    # string, so no matcher can ever pass. The template validates, loads, and
+    # reports nothing - indistinguishable from a target that is not there.
+    # No `dsl` either; a dsl matcher does not evaluate under tcp: at all.
+    #
+    # `condition: and` is load-bearing, not decoration. See the description.
+    matchers-condition: and
+    matchers:
+      - type: word
+        condition: and
+        words:
+          - "redis_version"
+          - "dbfilename"

@@ -1,0 +1,60 @@
+# Check whether the Traefik router API is open.
+id: traefik-api-routers
+
+info:
+  name: Traefik Router Configuration API Open
+  author: host-exposure-audit
+  severity: high
+  metadata:
+    kind: exposure
+    max-request: 1
+  description: |
+    Traefik fronts services in a park that runs many small applications -
+    ticketing, signage, dashboards, the guest wifi portal - often with one
+    hostname each behind one address.
+
+    Its router API is the enumeration prize. It returns every routing rule,
+    which is to say every hostname, which upstream service each one points
+    at, and whether each router is healthy. That is a complete map of the
+    estate, and it is frequently unauthenticated because Traefik's API is
+    off by default and gets switched on without a password.
+
+    This template is written the way it is because an earlier revision
+    matched every web server on the internet: it combined a bare
+    `status: 200` with an `or` condition, and any 200 satisfies that. The
+    mandatory signal is Traefik's own routing-table shape - named routers
+    with rule, service and status keys - which no generic server produces.
+    The 404 page of a stock Traefik is explicitly a negative control.
+
+    A match means the Traefik router API answered. It does NOT mean any
+    upstream is reachable, and it does NOT read an application's own data,
+    which is a separate request against a separate service.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://doc.traefik.io/traefik/reference/api-documentation/
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+    cwe-id: CWE-284
+  tags: infrastructure,traefik,reverse-proxy,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/http/routers"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"name"'
+          - '"rule"'
+          - '"service"'
+          - '"status"'
+      - type: dsl
+        dsl:
+          - "status_code == 200"
+          - "contains(to_lower(content_type), 'application/json')"

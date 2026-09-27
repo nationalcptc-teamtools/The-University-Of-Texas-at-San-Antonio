@@ -1,0 +1,46 @@
+# Check whether the Proxmox VE web console responds.
+id: proxmox-ve-api
+
+info:
+  name: Proxmox VE Web Console Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Proxmox VE is the dominant virtualisation platform in the small and
+    mid-sized installations this kind of environment runs on, and a park's
+    IT group is a plausible operator of one for its servers.
+
+    The web console carries Proxmox-owned product markers. A generic JSON
+    error from /api2/json/access/ticket is not a product fingerprint, so this
+    check deliberately does not use that endpoint as a fallback.
+
+    A match means a Proxmox VE API is reachable. It does NOT mean any
+    virtual machine, container, storage pool, node or backup is visible, and
+    it does NOT create a ticket, enumerate guests, or touch any API path
+    that returns inventory.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://pve.proxmox.com/wiki/API_Viewer
+  tags: infrastructure,remote-management,proxmox,virtualisation,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Proxmox"
+          - "PVEAuthCookie"
+      - type: status
+        status:
+          - 200
+          - 401

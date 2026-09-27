@@ -1,0 +1,65 @@
+# Check whether the Grafana data source API is open.
+id: grafana-datasources-open
+
+info:
+  name: Grafana Data Source API Open
+  author: host-exposure-audit
+  severity: high
+  metadata:
+    kind: exposure
+    max-request: 2
+  description: |
+    Grafana is the default dashboard tool in operations, and a park's
+    operations, facilities and IT dashboards are all built on it.
+
+    /api/datasources is the finding. When an operator explicitly enables
+    anonymous viewer access, it can return configured data sources with
+    its name, type and URL - which is a map of the monitoring estate and,
+    more usefully, the set of internal endpoints an attacker would want to
+    reach next. Anonymous access to Grafana has been the single most common
+    misconfiguration in this class of environment.
+
+    The matchers are deliberately product-prefixed. An earlier revision
+    matched `go_gc_duration_seconds`, which is generic Go runtime telemetry
+    present in every Go binary, and therefore reported Grafana on a Caddy
+    server. Only grafana_-prefixed series belong in a Grafana template.
+
+    A match means the Grafana data source API is open to the scanner. It
+    does NOT read a dashboard, a query result, or any metric, and it does
+    NOT read a data source's stored credentials - those are not returned by
+    this endpoint and are not requested.
+
+    The public health endpoint is deliberately not a fallback: it can identify
+    Grafana, but it cannot prove that the data source API is exposed.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://grafana.com/docs/grafana/latest/developers/http_api/data_source/
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N
+    cvss-score: 7.5
+    cwe-id: CWE-284
+  tags: monitoring,grafana,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/datasources"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"id"'
+          - '"uid"'
+          - '"name"'
+          - '"type"'
+          - '"url"'
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'application/json')"

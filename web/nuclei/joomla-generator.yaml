@@ -1,0 +1,31 @@
+# Check for a Joomla generator marker.
+id: joomla-generator
+
+info:
+  name: Joomla Generator Marker
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Joomla emits its product name in a generator meta element by default.
+    A match identifies that marker, not administrator access or a version
+    specific vulnerability. A customized site can remove it. One GET.
+  reference:
+    - https://raw.githubusercontent.com/joomla/joomla-cms/5.4-dev/libraries/src/Document/Document.php
+  tags: patron,web,joomla,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: body
+        regex:
+          - '(?i)<meta[^>]+name=["'']generator["''][^>]+content=["'']Joomla! - Open Source Content Management'

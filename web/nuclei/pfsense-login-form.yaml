@@ -1,0 +1,66 @@
+# Check whether the pfSense login page responds.
+id: pfsense-login-form
+
+info:
+  name: pfSense Web Interface Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    pfSense and OPNsense are the dominant open-source firewalls and a park
+    will usually have one at the edge of the guest, corporate or OT
+    segment. A web interface on the firewall is worth identifying on its
+    own: it is the control plane for the network the rest of this pack is
+    describing.
+
+    The marker is the login form served on the pfSense web root, together
+    with the login action. A bare 200 is never sufficient, and a redirect
+    to a login page is not a finding by itself.
+
+    A match means a pfSense web interface is reachable. It does NOT mean the
+    firewall is misconfigured, does NOT mean any interface, NAT rule, VPN or
+    packet capture is visible, and it does NOT attempt a login, read a
+    configuration, or touch packet capture - which is a live interception
+    function and is never triggered by this template.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://docs.netgate.com/pfsense/en/latest/
+  tags: network-edge,pfsense,firewall,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "pfSense"
+          - "pfsense"
+      - type: status
+        status:
+          - 200
+          - 302
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/login.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "pfSense"
+          - "pfsense"
+      - type: status
+        status:
+          - 200
+          - 302

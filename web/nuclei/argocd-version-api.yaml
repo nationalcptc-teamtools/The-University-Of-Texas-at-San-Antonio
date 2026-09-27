@@ -1,0 +1,51 @@
+# Check whether the Argo CD version API responds.
+id: argocd-version-api
+
+info:
+  name: Argo CD Version API Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Argo CD is the standard GitOps deployment controller, and a small team
+    running its own infrastructure very often has one. It holds the desired
+    state of every workload, which makes it a map of the estate and of the
+    registry, cluster and secret references those workloads use.
+
+    The version endpoint is unauthenticated on a stock install and returns
+    four build-identity fields. All four are required so an unrelated JSON
+    API with a generic version field cannot identify itself as Argo CD.
+
+    A match means an Argo CD API is reachable. It does NOT mean any
+    application, manifest, repository, cluster or secret is readable, and
+    it does NOT sync, deploy, roll back, or modify any application. Sync is
+    the operation that changes the estate, and none of it is exercised.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://argo-cd.readthedocs.io/en/stable/developer-guide/api-docs/
+  tags: devops,gitops,argocd,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/version"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"Version"'
+          - '"BuildDate"'
+          - '"GitCommit"'
+          - '"GoVersion"'
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'application/json')"

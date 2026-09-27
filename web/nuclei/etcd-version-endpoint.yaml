@@ -1,0 +1,47 @@
+# Check whether the etcd version endpoint responds.
+id: etcd-version-endpoint
+
+info:
+  name: etcd Version Endpoint Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    etcd backs Kubernetes and is also deployed on its own for
+    configuration and service state. In a themed environment etcd is where
+    the show-system configuration, the discovered endpoints and frequently
+    the secrets live, because everything else reads it at boot.
+
+    The /version endpoint names the etcd server and cluster versions. It is a
+    product fingerprint. It does not establish whether key/value operations
+    require authentication.
+
+    A match means an etcd endpoint is reachable by the scanner. It does NOT mean
+    any key, value, member, lease or cluster state was read, and it does
+    NOT read the key range, which is the endpoint that would return the
+    actual configuration. Getting to that requires a deliberate, separately
+    authorised step.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://etcd.io/docs/v3.5/dev-guide/api_reference/
+  tags: data,etcd,kubernetes,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/version"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "etcdserver"
+          - "etcdcluster"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

@@ -1,0 +1,56 @@
+# Check whether the Cockpit ping endpoint responds.
+id: cockpit-ping
+
+info:
+  name: Cockpit Web Console Ping Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Cockpit is the standard web console for systemd hosts, commonly enabled
+    on servers and, in a park, on the machines that run the show systems
+    and the file and backup services.
+
+    /ping is Cockpit's own unauthenticated liveness endpoint and returns a
+    fixed token, which makes it a product marker rather than a status code.
+    The bridge websocket path is included as a second, independent signal.
+
+    A match means a Cockpit console is reachable. It does NOT mean the host
+    can be administered, does NOT mean any service, container, storage pool
+    or log is visible, and it does NOT execute a command, restart a service,
+    or open a terminal. Those are exactly the actions Cockpit permits, which
+    is why none of them appear here.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://cockpit-project.org/guide/
+  tags: remote-management,cockpit,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/ping"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "cockpit-ping"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/cockpit/login"
+    redirects: false
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Cockpit"

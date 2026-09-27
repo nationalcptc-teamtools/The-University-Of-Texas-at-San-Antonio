@@ -1,0 +1,68 @@
+# Check whether Keycloak returns realm OIDC settings.
+id: keycloak-realm-oidc-config
+
+info:
+  name: Keycloak Realm OIDC Discovery Document Open
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Keycloak is a widely deployed identity provider, and a park with an
+    office network, a staff portal and a guest-facing application very often
+    puts all three behind it.
+
+    A realm's .well-known/openid-configuration is public by design - every
+    relying party must be able to read it - and it names the issuer, the
+    token endpoint and the grant types the realm accepts. That makes it the
+    correct marker, and it is a fingerprint rather than a finding: a public
+    discovery document is the correct state.
+
+    It is included because the grant_types_supported list is genuinely
+    useful. A realm advertising the "password" grant next to
+    "authorization_code" is a materially different posture from one that
+    does not, and that is worth seeing without attempting any login.
+
+    A match means a Keycloak realm is serving discovery. It does NOT mean any
+    token can be obtained, any user enumerated, or any client
+    authenticated, and it does NOT attempt a login or a token request.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://www.keycloak.org/securing-apps/oidc-layers
+  tags: identity,keycloak,sso,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/realms/master/.well-known/openid-configuration"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "token_endpoint"
+          - "authorization_endpoint"
+          - "jwks_uri"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/auth/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "kc-form"
+          - "Keycloak"
+      - type: status
+        status:
+          - 200

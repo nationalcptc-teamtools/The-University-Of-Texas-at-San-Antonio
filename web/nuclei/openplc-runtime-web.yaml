@@ -1,0 +1,63 @@
+# Check whether the OpenPLC Runtime web page responds.
+id: openplc-runtime-web
+
+info:
+  name: OpenPLC Runtime Web Interface Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    OpenPLC is an open-source PLC runtime. In a small park it is a plausible
+    choice for ride-show sequencing, fountain or lighting control, and a
+    water-park or dark-ride operator may well have one.
+
+    An OpenPLC Runtime web interface is a ladder-logic editor that talks to
+    the runtime over the same port, so reachability is meaningful and not
+    merely a status page. The runtime banner on /webserver is the
+    product-owned marker; the page title is accepted alongside it because a
+    stock install serves both.
+
+    A match means an OpenPLC Runtime web interface is reachable. It does NOT
+    mean a program was read or written, does NOT mean any ladder logic was
+    downloaded, and it does NOT start, stop, or alter a running program. No
+    state-changing request is made. The /webserver check is a plain GET.
+
+    Read-only, by construction. Two GET requests.
+  reference:
+    - https://autonomylogic.com/docs/2-2-openplc-runtime/
+  tags: ot,plc,openplc,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "OpenPLC"
+          - "openplc"
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/webserver"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "OpenPLC Runtime"
+          - "openplc"
+      - type: status
+        status:
+          - 200

@@ -1,0 +1,68 @@
+# Check whether the Jenkins identity endpoint responds.
+id: jenkins-whoami
+
+info:
+  name: Jenkins Who Am I Endpoint Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Jenkins is the standard CI server and appears wherever a team deploys
+    its own systems, which in a small organisation includes a great deal of
+    the internal estate.
+
+    /whoAmI/api/json is unauthenticated on a stock install and returns the
+    caller's identity and authentication state. It is identification, not
+    exposure: it tells you Jenkins is there and whether the scanner is
+    anonymous, and nothing more.
+
+    It is included because Jenkins is one of the products most often
+    misidentified by a generic scanner. A title of "Sign in [Jenkins]" is
+    the only product-owned marker on the front end, and the whoAmI document
+    is the one that cannot be faked by a proxy error page.
+
+    A match means a Jenkins instance is reachable. It does NOT mean any
+    build, job, credential, agent, plugin or console log is readable, and
+    it does NOT build, execute, or trigger anything - which is exactly the
+    capability this template declines to touch.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://www.jenkins.io/doc/book/using/remote-access-api/
+  tags: devops,ci,jenkins,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/whoAmI/api/json"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - '"anonymous"'
+          - '"authenticated"'
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/login"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Jenkins"
+          - "jenkins"
+      - type: status
+        status:
+          - 200
+          - 403

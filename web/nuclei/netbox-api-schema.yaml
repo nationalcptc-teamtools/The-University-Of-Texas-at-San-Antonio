@@ -1,0 +1,58 @@
+# Check whether the NetBox API schema is open.
+id: netbox-api-schema
+
+info:
+  name: NetBox API Schema Endpoint Open
+  author: host-exposure-audit
+  severity: medium
+  metadata:
+    kind: exposure
+    max-request: 2
+  description: |
+    NetBox is the standard source-of-truth for network and data-centre
+    documentation, and a park's IT group is as likely to keep its IP plan,
+    device list and circuit records in one as any other small
+    infrastructure. That content is a network map.
+
+    /api/schema/ is publicly reachable on a stock install and returns the
+    full API schema, including the name and shape of every model. It is
+    enumeration rather than data, which is why it is medium rather than
+    high - but it is an unauthenticated disclosure of internal vocabulary
+    that makes every later guess cheaper.
+
+    A match means the NetBox schema is open to the scanner. It does NOT mean
+    any device, IP address, circuit, credential or tenant was read, and it
+    does NOT call any endpoint that returns records.
+
+    A public login page is product detection only and is deliberately not a
+    fallback for this exposure check.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://demo.netbox.dev/
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-284
+  tags: infrastructure,netbox,asset,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/schema/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: and
+        words:
+          - "openapi:"
+          - "/api/dcim/"
+          - "/api/ipam/"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

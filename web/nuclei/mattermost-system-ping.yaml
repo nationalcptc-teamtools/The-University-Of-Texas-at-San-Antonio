@@ -1,0 +1,53 @@
+# Check whether Mattermost ping and config endpoints respond.
+id: mattermost-system-ping
+
+info:
+  name: Mattermost System Ping and Config Endpoint
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Mattermost is the common self-hosted internal collaboration server. A
+    park uses it for staff comms across rides, guest services and
+    maintenance, which puts shift rosters, incident notes and internal
+    discussion behind it.
+
+    /api/v4/system/ping is unauthenticated on a stock install. That is the
+    product's intended liveness endpoint, so a match is an identification
+    result, not an exposure. /api/v4/config is the more interesting half and
+    is only open on an install where authentication is disabled; where it is
+    closed it answers 401 and neither request matches.
+
+    A match means Mattermost is serving this origin. It does NOT mean
+    channels, users or files are readable, and it does NOT read any message
+    or directory entry.
+
+    Read-only: two GET requests, no session.
+  reference:
+    - https://api.mattermost.com/#tag/system/operation/GetSystemPing
+  tags: themepark,collaboration,mattermost,detection
+
+http:
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v4/config"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        # Mattermost's own configuration-section names. The ping endpoint
+        # was dropped from this template: it returns {"status":"OK"}, and
+        # both of those keys are generic enough to match unrelated JSON.
+        words:
+          - "EmailSettings"
+          - "ServiceSettings"
+          - "SqlSettings"
+          - "TeamSettings"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

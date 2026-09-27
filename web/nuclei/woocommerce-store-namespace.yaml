@@ -1,0 +1,34 @@
+# Check whether WordPress lists the WooCommerce Store API.
+id: woocommerce-store-namespace
+
+info:
+  name: WooCommerce Store API Namespace
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    WooCommerce documents its public wc/store/v1 namespace under the
+    WordPress REST API. A match identifies the registered namespace, not
+    checkout access or customer data exposure. One read-only GET.
+  reference:
+    - https://developer.woocommerce.com/docs/apis/store-api/
+  tags: themepark,patron,commerce,woocommerce,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-json/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: header
+        words: ["application/json"]
+      - type: regex
+        part: body
+        regex:
+          - '"namespaces"\s*:\s*\[[^]]*"wc(?:\x5c)?/store(?:\x5c)?/v1"'

@@ -1,0 +1,47 @@
+# Check whether the Nextcloud status endpoint responds.
+id: nextcloud-status-public
+
+info:
+  name: Nextcloud Status Endpoint Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 2
+  description: |
+    Nextcloud serves /status.php unauthenticated by design. It is the
+    product's own identity endpoint and it is the strongest available marker:
+    the response names productname and versionstring, so a match cannot be
+    explained by a generic web server, a login page or a JSON API.
+
+    Included because a park uses Nextcloud for staff documents, maintenance
+    records, waiver forms and incident reports, which makes it a high-value
+    identifier even though this particular endpoint discloses nothing.
+
+    A match means Nextcloud is serving this origin. It does NOT mean files
+    are accessible, does NOT mean the install is current, and does NOT
+    attempt a session. versionstring is an enumeration aid and is routinely
+    stale relative to the running build.
+
+    Read-only: two GET requests, no credentials.
+  reference:
+    - https://docs.nextcloud.com/server/latest/admin_manual/developer_manual/client_apis/WebDAV/index.html
+  tags: themepark,nextcloud,storage,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/status.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - '"productname"'
+          - '"versionstring"'
+          - "Nextcloud"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

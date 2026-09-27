@@ -1,0 +1,46 @@
+# Check whether a Vault-compatible health endpoint responds.
+id: vault-compatible-health
+
+info:
+  name: Vault-Compatible Active Health Response
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Vault documents the /v1/sys/health schema. OpenBao and compatible
+    servers can share it, so this result names a compatible API, not a
+    HashiCorp product. This conservative check matches healthy active nodes;
+    other documented states remain a coverage gap. It does not read secrets.
+    One read-only GET.
+  reference:
+    - https://developer.hashicorp.com/vault/api-docs/system/health
+  tags: identity,secrets,vault,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1/sys/health"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: header
+        words: ["application/json"]
+      - type: regex
+        part: body
+        condition: and
+        regex:
+          - '"initialized"\s*:\s*(true|false)'
+          - '"sealed"\s*:\s*(true|false)'
+          - '"standby"\s*:\s*(true|false)'
+          - '"server_time_utc"\s*:\s*[0-9]+'
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"replication_dr_mode"'
+          - '"replication_performance_mode"'

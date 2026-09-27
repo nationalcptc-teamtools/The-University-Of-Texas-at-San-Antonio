@@ -1,0 +1,46 @@
+# Check whether Jellyfin returns public system data.
+id: jellyfin-public-info
+
+info:
+  name: Jellyfin Public System Info Endpoint
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Jellyfin serves /System/Info/Public unauthenticated on a stock install so
+    that clients can discover the server. The endpoint is a product-owned
+    fingerprint: it names ServerName and Version and no generic web server,
+    login page or JSON API produces that shape.
+
+    Included because a park runs Jellyfin for internal show playback,
+    guest-housing media, or a staff-facing display, and the ServerName field
+    often names the park or the building.
+
+    A match means Jellyfin is serving this origin. It does NOT mean the
+    library, users or sessions are readable, and it does NOT read a single
+    media item, playback record or watch state.
+
+    Read-only: one GET request, no credentials.
+  reference:
+    - https://api.jellyfin.org/
+  tags: themepark,media,jellyfin,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/System/Info/Public"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "ServerName"
+          - "Jellyfin"
+          - "MediaBrowser"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

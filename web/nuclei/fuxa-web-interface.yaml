@@ -1,0 +1,48 @@
+# Check whether the FUXA web interface responds.
+id: fuxa-web-interface
+
+info:
+  name: FUXA SCADA Web Interface Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    FUXA is an open-source SCADA/HMI built on Node.js and frequently used
+    for small plant and building visualisation. In a park it is a plausible
+    front end for ride telemetry, fountain and lighting sequences, HVAC
+    dashboards and utility metering.
+
+    Its web interface is a design surface - it holds the project file, which
+    names the controllers, the tag names and the historian endpoints. That
+    makes reachability worth recording even before any question of access.
+
+    The /fuxa/ path with the bundled client and its FUXA marker identifies the
+    product. A generic project JSON document is not accepted as identity.
+
+    A match means a FUXA SCADA interface is reachable. It does NOT mean the
+    project, tags, values or setpoints were read, and it does NOT write a
+    tag, acknowledge an alarm, or send any command to a controller. No
+    state-changing request is made.
+
+    Read-only. One GET request.
+  reference:
+    - https://github.com/frangoteam/FUXA
+  tags: ot,scada,fuxa,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/fuxa/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "FUXA"
+      - type: status
+        status:
+          - 200

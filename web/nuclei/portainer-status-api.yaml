@@ -1,0 +1,51 @@
+# Check whether the Portainer status API responds.
+id: portainer-status-api
+
+info:
+  name: Portainer Status API Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    Portainer is the common container management UI. A park that runs its
+    show systems, dashboards and databases in containers will usually have
+    one, and Portainer is a control plane for all of them.
+
+    /api/status is unauthenticated on a stock install and returns the
+    version and instance identifier. That is the product marker, and the
+    version is extracted because it is directly relevant to CVE applicability.
+
+    A match means a Portainer API is reachable. It does NOT mean any
+    container, image, network, volume or endpoint is listed, does NOT mean
+    a Docker socket is exposed to the scanner, and it does NOT deploy,
+    exec into, or stop anything. Container control is exactly what this
+    endpoint fronts, so none of it is exercised.
+
+    Read-only. One GET request, no credentials.
+  reference:
+    - https://github.com/portainer/portainer/blob/develop/api/portainer.go
+  tags: devops,remote-management,portainer,containers,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/status"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: and
+        words:
+          - '"Version"'
+          - '"InstanceID"'
+      - type: dsl
+        dsl:
+          - "status_code == 200"
+          - "contains(to_lower(content_type), 'application/json')"
+    extractors:
+      - type: regex
+        regex:
+          - '"Version"\s*:\s*"([^"]+)"'

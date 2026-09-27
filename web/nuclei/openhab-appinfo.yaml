@@ -1,0 +1,48 @@
+# Check whether the openHAB app-info endpoint responds.
+id: openhab-appinfo
+
+info:
+  name: openHAB App Info Endpoint Reachable
+  author: host-exposure-audit
+  severity: info
+  metadata:
+    kind: detection
+    max-request: 1
+  description: |
+    openHAB is an open-source home and building automation platform, used
+    where an integrator wanted something that was not vendor-locked. It
+    shows up in small building and facility deployments.
+
+    /openhab.appInfo is the product's own identification document and names
+    displayName and version. It is the strongest available marker and does
+    not depend on a title, a favicon, or a status code.
+
+    A match means openHAB is serving this origin. It does NOT mean any item,
+    binding, rule or persisted state is readable, and it does NOT send a
+    command, update an item, or trigger a rule.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://www.openhab.org/docs/
+  tags: ot,bms,openhab,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/openhab.appInfo"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: and
+        words:
+          - "openHAB"
+          - "displayName"
+          - '"version"'
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'application/json')"

@@ -1,0 +1,81 @@
+# Check whether the Prometheus metrics endpoint is open.
+id: prometheus-metrics-open
+
+info:
+  name: Prometheus Metrics Endpoint Open
+  author: host-exposure-audit
+  severity: medium
+  metadata:
+    kind: exposure
+    max-request: 2
+  description: |
+    Prometheus is the default scrape-and-store monitoring system in
+    operations, and a park's show systems, building plant and guest network
+    are all instrumented through it.
+
+    /metrics is unauthenticated on a stock install. It discloses every
+    metric name, every label value, every target URL and every instance
+    label - which is a map of the estate and, in a well-labelled
+    environment, of the ride and plant topology.
+
+    Only series the Prometheus server itself emits are matched.
+    `go_*` and `process_*` are excluded because they are generic runtime
+    telemetry present in every Go binary, and `prometheus_` alone is not
+    enough: Grafana and Caddy both expose a /metrics endpoint in Prometheus
+    exposition format, and an earlier revision matched both and reported
+    them as Prometheus. `promhttp_` and `prometheus_build_info` come from
+    the server and are what the template requires.
+
+    This template therefore reports a Prometheus server, and it will NOT
+    report an endpoint that merely speaks the Prometheus exposition format.
+
+    A match means the Prometheus metrics endpoint is open. It does NOT mean
+    a query was run, a target reached, or an alert fired. The scrape config
+    and the /api/v1 endpoints are separate surfaces and are not queried for
+    data here.
+
+    Read-only. Two GET requests, no credentials.
+  reference:
+    - https://prometheus.io/docs/prometheus/latest/querying/api/
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-284
+  tags: monitoring,prometheus,exposure
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/metrics"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        # promhttp_ and prometheus_build_info are emitted by the Prometheus
+        # server itself. A bare "prometheus_" prefix is not enough: Grafana
+        # and Caddy both expose their own /metrics in Prometheus exposition
+        # format, and an earlier revision matched both and reported them as
+        # Prometheus.
+        words:
+          - "prometheus_build_info"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/status/config"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "scrape_configs"
+          - "evaluation_interval"
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"
