@@ -11,7 +11,7 @@ This private repository keeps team scripts, templates, and setup notes by task. 
 | [`Configs/`](Configs/) | Workstation configuration and the [Kali team setup tool](Configs/team-env-setup/README.md) |
 | [`comms/`](comms/) and [`injects/`](injects/) | Communication and inject templates |
 | [`linux/`](linux/) and [`windows/`](windows/) | Host and AD scripts and tools |
-| [`network/`](network/) | Network scan notes and firewall script |
+| [`network/`](network/) | Network scan notes, firewall script, and [Samba test share](network/samba/) |
 | [`phishing/`](phishing/) | Phishing templates and guides |
 | [`reporting/`](reporting/) | Report and presentation templates |
 | [`web/`](web/README.md) | Web tooling, SQL injection and SOAP scripts |
@@ -43,3 +43,21 @@ The SOAP scripts have an existing command-name mismatch and one fixed URL. Read 
 | Harness commands such as `python3 scripts/test-harness.py` | Run from `llm-harness/`: `cd llm-harness && python3 scripts/test-harness.py` |
 
 The installed harness command remains `cptc`. The archived team files were restored from this repository's commit `9341dda63c`; the separate former human and Python web applications remain available in Git history.
+
+## Kali Samba test share
+
+Run these on two Kali Linux hosts in the VDI network. The first script installs Samba when needed and adds a guest-accessible, writable `cptc-test` share. It creates `/srv/cptc-samba-test/test.txt` and `/srv/cptc-samba-test/test/test.txt`, each initially containing `Hello World`. Guest clients can read, write, and traverse the share. The script checks the proposed Samba configuration before applying it, backs up the previous config, and refuses to replace an unrelated share directory. The host must allow TCP 445 from the client.
+
+```bash
+sudo bash network/samba/create_samba_share.sh
+```
+
+On the other Kali host, pass the first host's IPv4 address. The client script installs `cifs-utils` when needed, mounts the share read/write at `~/cptc-samba-test`, and confirms that it can create and remove a guest file.
+
+```bash
+bash network/samba/join_samba_share.sh 192.0.2.10
+cat ~/cptc-samba-test/test.txt ~/cptc-samba-test/test/test.txt
+sudo umount ~/cptc-samba-test
+```
+
+The guest share requires no password. Any host that can reach TCP 445 can modify files in this test share. The server script adds `map to guest = Bad User` to Samba's global settings when it is absent; it refuses to override a different existing value or an `include` based configuration. Its printed backup path can be used to restore the prior Samba configuration. Re-running the script keeps guest-created files and edits to the two test files.
