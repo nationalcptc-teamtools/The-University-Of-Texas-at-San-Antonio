@@ -27,18 +27,36 @@ export TOOLS_DIR="${TOOLS_DIR:-$HOME/tools}"
 printf '%s\n' 'The reviewed lock covers only the team environment package bundle.' \
   'The following legacy sections also install packages and download external tools.'
 
-# ##### Reviewed Kali Team Environment #####
+
+
+
+# ###################################################################### Reviewed Kali Team Environment ######################################################################
+
+
+
 # This review covers only the team environment package bundle. The legacy
 # sections below retain their own unpinned package and download commands.
 # Run this before additional installers alter package sources or versions.
 sudo /usr/bin/python3 "$script_dir/team-env-setup/team_env_setup.py" apply --apply --lock "$lock" --review "$review"
 sudo /usr/bin/python3 "$script_dir/team-env-setup/team_env_setup.py" verify --lock "$lock" --review "$review"
 
-# ##### Shared APT Update #####
+
+
+
+# ###################################################################### Shared APT Update ######################################################################
+
+
+
 # Keep each category's package installation separate.
 sudo apt-get update
 
-# ##### Base Linux Setup #####
+
+
+
+###################################################################### Base Linux Setup ######################################################################
+
+
+
 printf '\n##### Base Linux Setup #####\n'
 # Commands from legacy/setup.sh run in this shell.
 #!/bin/bash
@@ -114,9 +132,10 @@ cp /usr/share/peass/winpeas/winPEASany.exe ~/tools/privesc
 
 
 
-echo "Ok, done :) refresh your ssh connection or enter bash to continue - Happy Hacking!"
+###################################################################### Terminal Configuration ###################################################################### 
 
-# ##### Terminal Configuration #####
+
+
 printf '\n##### Terminal Configuration #####\n'
 # Commands from legacy/terminal_config.zsh run in this shell once.
 if ! grep -Fq '# CPTC terminal config' "$HOME/.zshrc"; then
@@ -132,9 +151,15 @@ PROMPT="%F{%(#.blue.green)}┌──${debian_chroot:+($debian_chroot)─}${VIRTU
 └─%B%(#.%F{red}#.%F{blue}$)%b%F{reset} "
 CPTC_ZSH_CONFIG
 fi
-# Start a fresh Zsh session to load this configuration; do not source it in Bash.
+echo "Start a fresh Zsh session to load this configuration; do not source it in Bash."
 
-# ##### Linux Tools #####
+
+
+
+###################################################################### Linux Tools ######################################################################
+
+
+
 printf '\n##### Linux Tools #####\n'
 # Commands from legacy/linux-tooling.sh run in this shell.
 #!/bin/bash
@@ -167,7 +192,16 @@ cp -ra ~/tools/privesc/beroot/Linux/* "$tmpdir/privesc/beroot/"
 tar -C "$tmpdir" -cvf ~/tools/privesc/linux_privesc.tar privesc
 rm -rf "$tmpdir"
 
-# ##### Windows and AD Tools #####
+echo "Linux privilege escalation tools have been created."
+
+
+
+
+###################################################################### Windows and AD Tools ######################################################################
+
+
+
+
 printf '\n##### Windows and AD Tools #####\n'
 # Commands from legacy/Windows-Setup.sh run in this shell.
 #!/usr/bin/env bash
@@ -351,7 +385,13 @@ install_windows_ad() {
 
 install_windows_ad
 
-# ##### Additional Windows and AD Tools #####
+
+
+
+###################################################################### Additional Windows and AD Tools ######################################################################
+
+
+
 printf '\n##### Additional Windows and AD Tools #####\n'
 # Commands from legacy/windows-tooling.sh run in this shell.
 #!/bin/bash
@@ -398,7 +438,13 @@ wget -4 "https://github.com/r3motecontrol/Ghostpack-CompiledBinaries/raw/master/
 wget -4 "https://github.com/r3motecontrol/Ghostpack-CompiledBinaries/raw/master/dotnet%20v4.5%20compiled%20binaries/Rubeus.exe" -O ~/tools/AD/Rubeus/Rubeus-4_5.exe
 wget -4 "https://github.com/r3motecontrol/Ghostpack-CompiledBinaries/raw/master/dotnet%20v3.5%20compiled%20binaries/Rubeus.exe" -O ~/tools/AD/Rubeus/Rubeus-3_5.exe
 
-# ##### Web Tools #####
+
+
+
+###################################################################### Web Tools ######################################################################
+
+
+
 printf '\n##### Web Tools #####\n'
 # Commands from legacy/web-tooling.sh run in this shell.
 #!/bin/bash
@@ -441,7 +487,13 @@ sudo "${TMP_DIR}/zap_installer.sh" -y -d "${ZAP_DIR}"
 # Cleanup
 rm -rf "${TMP_DIR}"
 
-# ##### Cloud Tools #####
+
+
+
+###################################################################### Cloud Tools ######################################################################
+
+
+
 printf '\n##### Cloud Tools #####\n'
 # Commands from legacy/cloud-tooling.sh run in this shell.
 #!/bin/bash
@@ -457,7 +509,13 @@ mkdir -p ~/tools/cloud/
 wget https://github.com/BishopFox/cloudfox/releases/download/v1.13.0/cloudfox-linux-amd64.zip -O /tmp/cloudfox-linux-amd64.zip
 unzip -o /tmp/cloudfox-linux-amd64.zip -d ~/tools/cloud/
 
-# ##### GCP Tools #####
+
+
+
+###################################################################### GCP Tools ######################################################################
+
+
+
 printf '\n##### GCP Tools #####\n'
 # Commands from legacy/gcp-tooling.sh run in this shell.
 # This is for installing gcp tools
@@ -475,7 +533,9 @@ tar -xf google-cloud-cli-linux-x86_64.tar.gz
 [[ -d gcp-tooling/.git ]] || git clone https://github.com/TeneBrae93/gcp-tooling.git
 popd >/dev/null
 
-# ##### AWS Tools #####
+
+
+# ###################################################################### AWS Tools ######################################################################
 printf '\n##### AWS Tools #####\n'
 # Commands from legacy/aws-tooling.sh run in this shell.
 #!/bin/bash
@@ -499,7 +559,13 @@ if [[ $ID != kali ]]; then
     source ~/.bashrc
 fi
 
-# ##### BloodHound CE and RustHound CE #####
+
+
+
+###################################################################### BloodHound CE and RustHound CE ######################################################################
+
+
+
 # Disabled legacy BloodHound.py collector:
 # git clone https://github.com/dirkjanm/BloodHound.py.git
 # The old Debian bookworm Docker repository commands remain in legacy/.
@@ -527,4 +593,6 @@ popd >/dev/null
 printf 'BloodHound CE compose file: %s\n' "$HOME/BloodHoundCE/docker-compose.yml"
 printf 'RustHound CE executable: %s\n' "$HOME/.cargo/bin/rusthound-ce"
 printf 'Review the compose file and set unique credentials before starting BloodHound CE.\n'
-printf 'Setup complete.\n'
+
+
+echo "Ok, done :) refresh your ssh connection or enter bash to continue - Happy Hacking!"
