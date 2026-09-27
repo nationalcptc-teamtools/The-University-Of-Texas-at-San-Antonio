@@ -1,0 +1,51 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Reviewed generated provenance records: strict schemas contain file hashes and immutable source metadata only"
+paths = [
+  '''^cptc_harness/resources/portcast-python-runtime-v1\.json$''',
+  '''^cptc_harness/resources/portcast-cpython-runtime-v1\.json$''',
+  '''^cptc_harness/resources/release-integrity\.json$''',
+  '''^docs/harness/corresponding-source/specs/paramiko\.spec\.json$''',
+  '''^docs/harness/corresponding-source/python-paramiko-5\.0\.0-1\.json$''',
+  '''^docs/harness/portcast-vendor-inputs/manifest-v1\.json$''',
+]
+
+[[allowlists]]
+description = "Reviewed vendored upstream constants and type annotations pinned by the PortCast runtime lock"
+paths = [
+  '''^vendor/portcast-python3\.14/site-packages/cryptography/hazmat/bindings/_rust/openssl/hpke\.pyi$''',
+  '''^vendor/portcast-python3\.14/site-packages/nacl/pwhash/__init__\.py$''',
+  '''^vendor/portcast-python3\.14/site-packages/nacl/pwhash/argon2i\.py$''',
+  '''^vendor/portcast-python3\.14/site-packages/nacl/pwhash/argon2id\.py$''',
+  '''^vendor/portcast-python3\.14/site-packages/nacl/bindings/crypto_sign\.py$''',
+]
+
+[[allowlists]]
+description = "Reviewed false positives: public hashes and non-secret encrypted credential locators"
+regexTarget = "match"
+regexes = [
+  '''AGE_SIGSUM_KEYS_SHA256 = "ca60c0504ac65cc43ef180a34579ce6ed8f909b9136afef0ca42c88280f42cdc"''',
+  '''credential_name="cptc11-regional-(?:dell-prox|kali)"''',
+  '''smbauth\.lua", "8fbedb07ede517ddfeea00386ad03b17ee24c6969a7cfbe1734e2faa9dfe96ac"''',
+  '''config\.(?:dell|kali)_credential\.(?:encrypted_path\.name|credential_name) == "cptc11-regional-(?:dell-prox|kali)(?:\.cred)?"''',
+]
+
+[[allowlists]]
+description = "Reviewed false positive: exact public source-code SHA256 for the pinned secret worker, not a credential"
+regexTarget = "match"
+regexes = ['''secret_worker\.py": "640fcd52bb4026d2b62190b5b427f99dd22a686d00f05b441572b7a70f25260d"''']
+
+[[allowlists]]
+description = "Reviewed false positives: exact SHA256 pins of public Java and ZAP distribution files, verified against installed files"
+regexTarget = "match"
+regexes = [
+  '''keytool":\ "fbbcaddc0b913238abd4d4d1d1eeea2b311bc79fda4cccdc46a6f6809cc0eba2"''',
+  '''jdk\.security\.auth\.jmod":\ "a7d742ac2c5427646583abf10121e801fc701d6dd93ce142e006359b61c79ad6"''',
+  '''jmxremote\.access":\ "0c25d26ee212ca1e8c33f67c3c460d43fe849c3a1d23dbe341148517602b280c"''',
+  '''jmxremote\.password\.template":\ "0273b6a6b9e20e6ce54c5aee70164028e0395063b2b7d39060a40b6495543dbf"''',
+  '''log4j\-1\.2\-api\-2\.25\.2\.jar":\ "cb8e6efed1a386bb2789bfe45388850dd86b6d6b5858913e8c3f25690beb3251"''',
+  '''log4j\-api\-2\.25\.2\.jar":\ "9fd66c9fe0bea06fa9666c147989a46cafaa92b4a88753697d3945cc43338cbb"''',
+  '''openapi\-beta\-48\.zap":\ "8384f8b71a0cb8a69bfc859603d7418f2d9b59ceb499063909e11e78e152c698"''',
+]

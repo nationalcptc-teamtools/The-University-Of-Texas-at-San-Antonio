@@ -1,4 +1,7 @@
 # Preserve reviewed third-party bytes and generated runtime artifacts exactly.
-vendor/** -text -whitespace
-deployment/portcast-bootstrap -text
-docs/harness/portcast-vendor-inputs/files/** -text -whitespace
+llm-harness/vendor/** -text -whitespace
+llm-harness/deployment/portcast-bootstrap -text
+llm-harness/docs/harness/portcast-vendor-inputs/files/** -text -whitespace
+# These contributed HTML files have historical CRLF bytes.
+phishing/emails/Phishing2.html -text
+phishing/emails/aptemail.html -text

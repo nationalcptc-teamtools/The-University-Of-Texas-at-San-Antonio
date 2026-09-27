@@ -4,22 +4,22 @@ useDefault = true
 [[allowlists]]
 description = "Reviewed generated provenance records: strict schemas contain file hashes and immutable source metadata only"
 paths = [
-  '''^cptc_harness/resources/portcast-python-runtime-v1\.json$''',
-  '''^cptc_harness/resources/portcast-cpython-runtime-v1\.json$''',
-  '''^cptc_harness/resources/release-integrity\.json$''',
-  '''^docs/harness/corresponding-source/specs/paramiko\.spec\.json$''',
-  '''^docs/harness/corresponding-source/python-paramiko-5\.0\.0-1\.json$''',
-  '''^docs/harness/portcast-vendor-inputs/manifest-v1\.json$''',
+  '''^llm-harness/cptc_harness/resources/portcast-python-runtime-v1\.json$''',
+  '''^llm-harness/cptc_harness/resources/portcast-cpython-runtime-v1\.json$''',
+  '''^llm-harness/cptc_harness/resources/release-integrity\.json$''',
+  '''^llm-harness/docs/harness/corresponding-source/specs/paramiko\.spec\.json$''',
+  '''^llm-harness/docs/harness/corresponding-source/python-paramiko-5\.0\.0-1\.json$''',
+  '''^llm-harness/docs/harness/portcast-vendor-inputs/manifest-v1\.json$''',
 ]
 
 [[allowlists]]
 description = "Reviewed vendored upstream constants and type annotations pinned by the PortCast runtime lock"
 paths = [
-  '''^vendor/portcast-python3\.14/site-packages/cryptography/hazmat/bindings/_rust/openssl/hpke\.pyi$''',
-  '''^vendor/portcast-python3\.14/site-packages/nacl/pwhash/__init__\.py$''',
-  '''^vendor/portcast-python3\.14/site-packages/nacl/pwhash/argon2i\.py$''',
-  '''^vendor/portcast-python3\.14/site-packages/nacl/pwhash/argon2id\.py$''',
-  '''^vendor/portcast-python3\.14/site-packages/nacl/bindings/crypto_sign\.py$''',
+  '''^llm-harness/vendor/portcast-python3\.14/site-packages/cryptography/hazmat/bindings/_rust/openssl/hpke\.pyi$''',
+  '''^llm-harness/vendor/portcast-python3\.14/site-packages/nacl/pwhash/__init__\.py$''',
+  '''^llm-harness/vendor/portcast-python3\.14/site-packages/nacl/pwhash/argon2i\.py$''',
+  '''^llm-harness/vendor/portcast-python3\.14/site-packages/nacl/pwhash/argon2id\.py$''',
+  '''^llm-harness/vendor/portcast-python3\.14/site-packages/nacl/bindings/crypto_sign\.py$''',
 ]
 
 [[allowlists]]

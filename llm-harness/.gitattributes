@@ -1,0 +1,4 @@
+# Preserve reviewed third-party bytes and generated runtime artifacts exactly.
+vendor/** -text -whitespace
+deployment/portcast-bootstrap -text
+docs/harness/portcast-vendor-inputs/files/** -text -whitespace
