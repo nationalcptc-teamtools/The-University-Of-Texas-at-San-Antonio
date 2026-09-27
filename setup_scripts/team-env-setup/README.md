@@ -1,7 +1,8 @@
 # Private team environment setup
 
-Use this tool on a reviewed Kali Linux host. Do not run it on this development
-host. It prepares native Kali packages for a selected profile. It does not
+Use this tool on a reviewed Kali Linux host. Run the examples below from
+`setup_scripts/team-env-setup/`. Do not run it on this development host. It
+prepares native Kali packages for a selected profile. It does not
 start scanners, fetch application code, contact GitHub, pull images, start
 services, change firewall rules, or change group membership.
 
