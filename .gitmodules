@@ -1,0 +1,4 @@
+[submodule "linux/Edamame-NG"]
+	path = linux/Edamame-NG
+	url = https://github.com/Moriz82/Edamame-NG.git
+	branch = main
