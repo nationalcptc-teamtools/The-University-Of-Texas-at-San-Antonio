@@ -20,6 +20,7 @@ fi
 [[ -f $SMB_CONF && ! -L $SMB_CONF ]] || die "Expected a regular Samba config at $SMB_CONF."
 getent passwd nobody >/dev/null || die "The Samba guest account 'nobody' is missing."
 guest_group=$(id -gn nobody)
+# Samba's anonymous session needs group access even with force user = nobody.
 
 # A marker outside the share distinguishes previous runs from unrelated data.
 if [[ -e $STATE_DIR || -L $STATE_DIR ]]; then
@@ -74,10 +75,10 @@ share_block = '''# BEGIN CPTC TEST SHARE
     guest only = yes
     read only = no
     force user = nobody
-    create mask = 0700
-    force create mode = 0600
-    directory mask = 0700
-    force directory mode = 0700
+    create mask = 0770
+    force create mode = 0660
+    directory mask = 0770
+    force directory mode = 0770
     follow symlinks = no
 # END CPTC TEST SHARE
 '''
@@ -118,14 +119,14 @@ if (( first_run )); then
     chmod 0600 "$MARKER"
   fi
   staging_dir=$(mktemp -d /srv/.cptc-samba-test.XXXXXXXX)
-  install -d -m 0700 "$staging_dir/test"
+  install -d -m 0770 "$staging_dir/test"
   for file in "$staging_dir/test.txt" "$staging_dir/test/test.txt"; do
     printf 'Hello World\n' > "$file"
     chown "nobody:$guest_group" "$file"
-    chmod 0600 "$file"
+    chmod 0660 "$file"
   done
   chown "nobody:$guest_group" "$staging_dir" "$staging_dir/test"
-  chmod 0700 "$staging_dir" "$staging_dir/test"
+  chmod 0770 "$staging_dir" "$staging_dir/test"
   mv -nT "$staging_dir" "$SHARE_DIR"
   [[ ! -e $staging_dir ]] || die "$SHARE_DIR appeared during setup; staged data was not installed."
   staging_dir=
