@@ -1,0 +1,40 @@
+name: Update Edamame-NG submodule
+
+on:
+  schedule:
+    - cron: '23 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-edamame-ng-main
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          submodules: false
+
+      - name: Update the pinned upstream main commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule update --init --remote linux/Edamame-NG
+          if git diff --quiet -- linux/Edamame-NG; then
+            echo 'Edamame-NG is already current.'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add linux/Edamame-NG
+          git commit -m 'chore(linux): update Edamame-NG submodule'
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
