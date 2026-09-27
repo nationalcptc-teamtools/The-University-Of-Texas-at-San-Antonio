@@ -31,7 +31,7 @@ With the live IPs identified, run service AND port scans and save output. COPY a
 The `-oA` output includes XML for a manual web-service inventory.
 Record one application per discovered web service. Review inferred schemes and
 add named virtual hosts or separate application base paths. The available
-[web scripts](../web/README.md) are listed separately.
+[web scripts](web/README.md) are listed separately.
 
 ### Version and Vulnerability Checks
 
