@@ -1,0 +1,47 @@
+# VoxelBooking admin surface probe.
+id: voxelbooking-admin-probe
+
+info:
+  name: VoxelBooking Admin Surface Reachable
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    VoxelBooking is a booking/theme-park style reservation plugin with a
+    WordPress-style admin surface at /admin. Booking systems hold customer
+    PII and payment references.
+
+    This template confirms the VoxelBooking admin surface. A match means a
+    booking administration plane is exposed; the next steps are default
+    credential attempts and the unauthenticated API enumeration on the
+    reservation endpoints.
+
+    One GET request, read-only.
+  reference:
+    - https://github.com/NowSquare/VoxelBooking
+  tags: booking,voxelbooking,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "Voxel"
+          - "voxel"
+        condition: or
+      - type: word
+        part: body
+        words:
+          - "login"
+          - "password"
+        condition: or

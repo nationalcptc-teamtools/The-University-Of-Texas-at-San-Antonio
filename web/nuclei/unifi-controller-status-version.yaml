@@ -1,0 +1,45 @@
+# UniFi Controller unauthenticated version disclosure.
+id: unifi-controller-status-version
+
+info:
+  name: UniFi Controller Unauthenticated Version Disclosure
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    The UniFi Network controller answers /status without authentication and
+    carries the exact controller version plus the upstream and device
+    update state. Version is the input every CVE decision needs.
+
+    This template reads /status only. A match means a UniFi controller is
+    present with a known version: correlate against the UniFi advisory
+    feed, and note the controller reaches every AP and switch in the
+    deployment it manages.
+
+    One GET request, read-only.
+  reference:
+    - https://help.ui.com/
+  tags: wifi,unifi,version,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/status"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"version"'
+          - '"updatable"'
+          - "ubnt"
+        condition: or
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

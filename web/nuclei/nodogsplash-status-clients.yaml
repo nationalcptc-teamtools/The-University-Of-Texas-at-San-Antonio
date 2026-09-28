@@ -1,0 +1,43 @@
+# Nodogsplash captive portal status endpoint.
+id: nodogsplash-status-clients
+
+info:
+  name: Nodogsplash Captive Portal Status Exposure
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    Nodogsplash is the captive portal gateway on OpenWrt guest Wi-Fi. Its
+    :2050 status page lists every connected client with their token, MAC
+    address, IP and traffic counters without authentication.
+
+    This template reads the status page only. A match means the guest Wi-Fi
+    gateway is exposed and every client device MAC/IP pair is disclosed. The
+    same page pattern is what the auth server uses to issue and revoke
+    client tokens, so a tester can map clients to the auth flow and attempt
+    the token-based action URLs shown on the page.
+
+    One GET request, read-only.
+  reference:
+    - https://github.com/nodogsplash/nodogsplash
+  tags: wifi,captive-portal,nodogsplash,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/status"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Nodogsplash"
+          - "authenticated"
+          - "Clients"
+        condition: and
+      - type: dsl
+        dsl:
+          - "contains(to_lower(body), 'mac') || contains(body, 'token')"

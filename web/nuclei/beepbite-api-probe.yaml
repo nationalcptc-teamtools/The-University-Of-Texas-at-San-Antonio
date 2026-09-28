@@ -1,0 +1,65 @@
+# BeepBite KDS API exposure probe.
+id: beepbite-api-probe
+
+info:
+  name: BeepBite Kitchen Service API Exposure
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    BeepBite is a modern Go+Postgres kitchen-display service. Its sample
+    deployments leave the SSE order stream and the JWT configuration
+    reachable: the .env carries a static JWT secret, so a disclosed secret
+    means the tester can mint any staff session.
+
+    This template checks the API health/order surfaces. A match means the
+    food-service order plane is exposed: pair it with the generic .env
+    disclosure template to harvest the JWT secret and forge sessions.
+
+    Two GET requests, read-only.
+  reference:
+    - https://github.com/vul-os/beepbite
+  tags: pos,food-service,api,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/health"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "beepbite"
+          - '"status":"healthy"'
+          - '"kitchen"'
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/orders"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "orders"
+          - "id"
+          - "items"
+        condition: or
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

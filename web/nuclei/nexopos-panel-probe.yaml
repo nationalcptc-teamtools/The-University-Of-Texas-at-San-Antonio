@@ -1,0 +1,60 @@
+# NexoPOS panel detection.
+id: nexopos-panel-probe
+
+info:
+  name: NexoPOS Web Panel Reachable
+  author: cptc-toolkit
+  severity: info
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    NexoPOS is a Laravel-based point-of-sale system. Laravel deployments
+    leak the framework identity through the /api routes and error pages,
+    and the panel sits at /login.
+
+    This template confirms the NexoPOS panel and the Laravel API surface. A
+    match means a POS back-end is present; Laravel debug modes and the
+    /api/documentation surfaces are the immediate next checks.
+
+    Two GET requests, read-only.
+  reference:
+    - https://github.com/Blair2004/NexoPOS
+  tags: pos,nexopos,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/login"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "NexoPOS"
+          - "nexopos"
+        condition: or
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/nexopos/v4/settings"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 401
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        words:
+          - "nexopos"
+          - "settings"
+        condition: or

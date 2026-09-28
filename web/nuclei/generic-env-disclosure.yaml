@@ -1,0 +1,42 @@
+# Generic .env and config file disclosure.
+id: generic-env-disclosure
+
+info:
+  name: Application Environment File Disclosed
+  author: cptc-toolkit
+  severity: critical
+  metadata:
+    max-request: 3
+    kind: attack
+  description: |
+    Laravel, Node and prototype ticket/ops applications deployed without a
+    web server hardening pass serve their .env file directly. The file
+    carries the application secret, database credentials and frequently the
+    JWT signing key - with it the tester can sign their own sessions.
+
+    This template requests the common dotfile paths and matches the
+    APP_KEY/DATABASE_PASSWORD shape, not generic text. A match means
+    credentials in hand: try the database port and forge JWTs with the
+    disclosed key immediately.
+
+    Three GET requests, read-only.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/
+  tags: misconfig,credentials,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.env"
+      - "{{BaseURL}}/.env.local"
+      - "{{BaseURL}}/config/.env"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: regex
+        part: body
+        regex:
+          - "(?m)^(APP_KEY|DB_PASSWORD|JWT_SECRET|SECRET_KEY|DATABASE_URL)="

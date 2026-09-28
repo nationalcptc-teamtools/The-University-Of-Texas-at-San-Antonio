@@ -1,0 +1,61 @@
+# Directus unauthenticated server specs exposure.
+id: directus-server-specs
+
+info:
+  name: Directus Unauthenticated Server Specification Exposure
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    Directus deployments without the default access-control pass serve
+    /server/specs and /server/info unauthenticated. The specs response is
+    the complete OpenAPI description of every collection, field and
+    permission in the data model.
+
+    This template reads /server/info and /server/specs. A match means the
+    entire data model is mapped: enumerate the documented collections for
+    ones readable by the public role, and target the auth endpoints with
+    the disclosed version in hand.
+
+    Two GET requests, read-only.
+  reference:
+    - https://docs.directus.io/
+  tags: cms,directus,api,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/server/info"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"version"'
+          - '"node"'
+        condition: and
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/server/specs"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"openapi"'
+          - "paths"
+        condition: or

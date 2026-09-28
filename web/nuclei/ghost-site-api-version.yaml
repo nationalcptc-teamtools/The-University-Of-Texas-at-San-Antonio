@@ -1,0 +1,44 @@
+# Ghost unauthenticated site API version disclosure.
+id: ghost-site-api-version
+
+info:
+  name: Ghost Site API Version Disclosure
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Ghost exposes /ghost/api/site/ without authentication and the response
+    carries the exact Ghost version. Version is the input every CVE
+    decision needs; Ghost admin surfaces have documented RCE findings
+    mapped to specific version ranges.
+
+    This template reads the site API only. A match means a Ghost blog is
+    present with a known version - correlate against the Ghost security
+    advisories before any admin-surface attempt.
+
+    One GET request, read-only.
+  reference:
+    - https://ghost.org/docs/
+  tags: cms,ghost,version,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/ghost/api/site/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"version"'
+          - '"title"'
+        condition: and
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

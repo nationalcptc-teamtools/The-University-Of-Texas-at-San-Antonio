@@ -1,0 +1,48 @@
+# Leosac access-control API probe.
+id: leosac-gate-api-probe
+
+info:
+  name: Leosac Access Control API Reachable
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Leosac is an open-source physical access-control platform that drives
+    door and gate controllers. Its REST API serves the same authentication
+    surface the operator client uses, and on embedded deployments it is
+    frequently left on the device web root without TLS.
+
+    This template requests the API root and matches the Leosac JSON error
+    shape. A match means a gate controller API is reachable: the next steps
+    are the default credential attempts and the enrolment endpoints that
+    list cardholders.
+
+    One GET request, read-only.
+  reference:
+    - https://github.com/leosac/access-control
+  tags: ot,access-control,leosac,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 401
+          - 404
+      - type: word
+        part: body
+        words:
+          - "leosac"
+          - "Leosac"
+          - '"error"'
+        condition: or
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html') || contains(to_lower(body), 'leosac')"

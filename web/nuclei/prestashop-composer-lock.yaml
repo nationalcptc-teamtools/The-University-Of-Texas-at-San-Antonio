@@ -1,0 +1,48 @@
+# PrestaShop composer.lock disclosure and version.
+id: prestashop-composer-lock
+
+info:
+  name: PrestaShop composer.lock Disclosed
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    PrestaShop deployments without a web-server hardening pass serve
+    /composer.lock directly. The file lists every dependency with its exact
+    pinned version, which converts directly into the dependency CVE list
+    and confirms the PrestaShop core version.
+
+    This template fetches /composer.lock and matches the PrestaShop package
+    entries. A match means an exact dependency inventory in hand: map every
+    pinned version to its CVE feed, and check the adjacent /admin panel
+    rename status in the same pass.
+
+    One GET request, read-only.
+  reference:
+    - https://devdocs.prestashop.com/
+  tags: commerce,prestashop,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/composer.lock"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "prestashop"
+          - "smarty/smarty"
+        condition: or
+      - type: word
+        part: body
+        words:
+          - '"packages"'
+          - '"name"'
+        condition: and

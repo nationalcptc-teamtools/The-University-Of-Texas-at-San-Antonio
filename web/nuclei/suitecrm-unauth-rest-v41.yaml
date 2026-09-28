@@ -1,0 +1,50 @@
+# SuiteCRM legacy unauthenticated REST v4_1 endpoint.
+id: suitecrm-unauth-rest-v41
+
+info:
+  name: SuiteCRM Legacy REST v4_1 API Reachable
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    SuiteCRM and SugarCE builds keep the legacy SOAP/REST service at
+    /service/v4_1/rest.php reachable without any authentication on the
+    endpoint itself. It authenticates per-call, but the service surface is
+    where the historical injection findings live (including the
+    entry-point enumeration and the module list leaks).
+
+    This template POSTs the documented get_modules_list style probe with an
+    empty session. A match means the legacy API surface is open: the next
+    steps are the module enumeration and the historical SQLi/auth-bypass
+    payloads against rest.php entry points.
+
+    One POST request. No credentials, no state change.
+  reference:
+    - https://docs.suitecrm.com/developer/api/
+  tags: crm,suitecrm,api,attack
+
+http:
+  - raw:
+      - |
+        POST /service/v4_1/rest.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        method=get_module_fields&input_type=json&response_type=json
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"module_fields"'
+          - '"name"'
+        condition: and
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

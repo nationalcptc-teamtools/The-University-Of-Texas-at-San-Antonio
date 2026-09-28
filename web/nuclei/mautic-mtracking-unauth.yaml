@@ -1,0 +1,58 @@
+# Mautic unauthenticated tracking pixel and version surface.
+id: mautic-mtracking-unauth
+
+info:
+  name: Mautic Tracking Endpoint and Version Surface
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Mautic is a marketing-automation platform parks use for guest email
+    journeys. Its /mtracking.gif tracking pixel accepts unauthenticated
+    GETs and carries contact-tracking state, and Mautic 2.x builds carry
+    the documented PHP object-injection RCE in the same request path.
+
+    This template probes the tracking pixel and the /s/ admin surface. A
+    match means Mautic is present with the tracking surface open: on 2.x
+    the tracking endpoint is the documented RCE entry, so correlate the
+    version footer before attempting it.
+
+    Two GET requests, read-only.
+  reference:
+    - https://www.mautic.org/
+  tags: marketing,mautic,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/mtracking.gif"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: header
+        words:
+          - "image/gif"
+      - type: word
+        part: header
+        words:
+          - "Mautic"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/s/login"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Mautic"
+      - type: status
+        status:
+          - 200

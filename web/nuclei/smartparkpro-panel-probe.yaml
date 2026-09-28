@@ -1,0 +1,60 @@
+# SmartParkPro / ParkSmart panel probe.
+id: smartparkpro-panel-probe
+
+info:
+  name: SmartParkPro or ParkSmart Parking Panel Reachable
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    SmartParkPro and ParkSmart are classic PHP+MySQL parking management
+    apps: reservation flows, gate control and payment pages with almost no
+    input sanitization, and their /admin surfaces are commonly exposed.
+
+    This template confirms the parking panel and the reservation surface.
+    A match means a parking back-end is present: the immediate next steps
+    are the SQLi probes against the reservation parameters and the default
+    admin credential attempts.
+
+    Two GET requests, read-only.
+  reference:
+    - https://github.com/NujabaIrfan/SmartParkPro
+  tags: parking,smartparkpro,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "SmartPark"
+          - "ParkSmart"
+          - 'name="admin_user"'
+          - 'name="password"'
+        condition: or
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/reservation/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "reservation"
+          - "parking"
+          - "book"
+        condition: or

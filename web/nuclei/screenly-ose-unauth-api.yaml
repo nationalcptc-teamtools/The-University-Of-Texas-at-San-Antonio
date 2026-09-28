@@ -1,0 +1,57 @@
+# Screenly OSE unauthenticated management API.
+id: screenly-ose-unauth-api
+
+info:
+  name: Screenly OSE Unauthenticated Management API
+  author: cptc-toolkit
+  severity: critical
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    Screenly OSE is digital-signage software for kiosk and queue displays. On
+    default installs the management API at /api/v1/ requires no authentication
+    whatsoever, and whoever reaches it controls every screen: playlist
+    changes, asset upload with arbitrary URL, and browser-based content
+    injection to the player.
+
+    This template reads /api/v1/version and lists assets. A match means the
+    sign controller is fully open: a tester can push a new asset URL and have
+    the kiosk render attacker-chosen content, or abuse the asset fetch for
+    SSRF into the internal network. Try asset upload with an internal URL
+    against /api/v1/assets first.
+
+    Two GET requests, no credentials, nothing modified.
+  reference:
+    - https://github.com/Screenly/screenly-ose
+  tags: themepark,signage,unauth,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/version"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json') || contains(body, 'Screenly')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/assets"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "mimetype"
+          - "asset_id"
+        condition: or

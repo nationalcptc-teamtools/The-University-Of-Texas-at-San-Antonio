@@ -14,8 +14,8 @@ info:
     unauthenticated is one of the most reliable findings in this class of
     environment, and it is also the most reliably repeatable.
 
-    This sends INFO, CONFIG GET dir and CONFIG GET dbfilename, and requires
-    both redis_version and dbfilename in the reply. Those are values the
+    This sends CONFIG GET dbfilename and CONFIG GET save, and requires
+    the dbfilename key and its dump.rdb value in the reply. Those are values the
     server RETURNS; the request never mentions redis_version, so nothing
     that reflects its own input back can satisfy this.
 
@@ -52,7 +52,7 @@ tcp:
     read-size: 8192
 
     inputs:
-      - data: "494e464f0d0a434f4e46494720474554206469720d0a434f4e4649472047455420646266696c656e616d650d0a515549540d0a"
+      - data: "434f4e4649472047455420646266696c656e616d650d0a434f4e4649472047455420736176650d0a515549540d0a"
         type: hex
 
     # No `part:` field: in a tcp: template `part: response` yields an empty
@@ -66,5 +66,5 @@ tcp:
       - type: word
         condition: and
         words:
-          - "redis_version"
           - "dbfilename"
+          - "dump.rdb"

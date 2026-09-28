@@ -1,0 +1,42 @@
+# uniCenta oPOS web panel detection.
+id: unicenta-panel-probe
+
+info:
+  name: uniCenta oPOS Web Panel Reachable
+  author: cptc-toolkit
+  severity: info
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    uniCenta oPOS is a Java point-of-sale system; its web-facing components
+    (the scales/report servlets on Tomcat and the Openbravo-derived web
+    root) identify the product by branded markup and the stock stylesheet
+    names.
+
+    This template matches the uniCenta product markers. A match means a POS
+    back-end is present: uniCenta derives from Openbravo POS, so the
+    historical Openbravo servlet paths and their weak-session findings are
+    the next steps.
+
+    One GET request, read-only.
+  reference:
+    - https://unicenta.com/
+  tags: pos,unicenta,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "uniCenta"
+          - "unicenta"
+        condition: or
+      - type: status
+        status:
+          - 200

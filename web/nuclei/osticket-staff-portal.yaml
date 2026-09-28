@@ -1,0 +1,59 @@
+# osTicket staff portal and installer probe.
+id: osticket-staff-portal
+
+info:
+  name: osTicket Staff Portal and Installer Surface
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    osTicket is the support-desk system parks run for guest services. Its
+    staff portal at /scp/ is the target surface, and stock installs
+    commonly leave /setup/ reachable, which re-runs the installer and
+    dumps the database configuration.
+
+    This template probes the staff portal and the installer surface. A
+    match on /setup/ means the installer is exposed - that is application
+    takeover. A match on /scp/ means the staff login is the next step, and
+    osTicket 1.14.x carries the documented CVE-2023-28798 SQLi against it.
+
+    Two GET requests, read-only.
+  reference:
+    - https://github.com/osTicket/osTicket
+  tags: support,osticket,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/scp/login.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "osTicket"
+          - "scp"
+        condition: and
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/setup/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "osTicket"
+          - "Installation"
+          - "install"
+        condition: or

@@ -1,0 +1,49 @@
+# Generic Swagger/OpenAPI surface exposure.
+id: generic-swagger-openapi
+
+info:
+  name: Swagger or OpenAPI Specification Exposed
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 3
+    kind: attack
+  description: |
+    Prototype Go, Node and Python services (the ticket, ride-status and ops
+    apps CPTC environments build with modern frameworks) expose Swagger UI
+    or the raw OpenAPI document without authentication. The document is a
+    complete map of every internal API route including admin and ops paths
+    that no external page links to.
+
+    This template requests the common spec paths and matches the OpenAPI
+    structure. A match means an API contract is in hand: enumerate the
+    documented operations for unauthenticated or weakly-authenticated
+    write operations - those are the fastest route to state change.
+
+    Three GET requests, read-only.
+  reference:
+    - https://swagger.io/specification/
+  tags: api,swagger,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/swagger.json"
+      - "{{BaseURL}}/openapi.json"
+      - "{{BaseURL}}/api/docs"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"openapi"'
+          - '"swagger"'
+          - "swagger-ui"
+        condition: or
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json') || contains(to_lower(body), 'swagger-ui')"

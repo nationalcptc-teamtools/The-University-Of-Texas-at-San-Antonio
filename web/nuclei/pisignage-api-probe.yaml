@@ -1,0 +1,65 @@
+# piSignage unauthenticated API probe.
+id: pisignage-api-probe
+
+info:
+  name: piSignage Player API Exposure
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    piSignage runs on Raspberry Pi digital-signage players. Its local API on
+    port 3000 (or the device web root) answers status and playlist queries
+    without authentication on stock builds, and the same surface accepts
+    playlist changes and system commands.
+
+    This template reads the player status endpoints. A match means a signage
+    player is exposed: playlist control and shell command surfaces are on
+    the same API, so the display is attacker-controllable and the device
+    itself may be reachable for OS command attempts.
+
+    Two GET requests, read-only.
+  reference:
+    - https://pisignage.com/
+  tags: signage,pisignage,api,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/status"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "pisignage"
+          - "playlist"
+          - '"version"'
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1.1/player_status"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "pisignage"
+          - "player"

@@ -1,0 +1,39 @@
+# Magento unauthenticated version disclosure.
+id: magento-version-probe
+
+info:
+  name: Magento Version Disclosure
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Magento Open Source answers /magento_version without authentication with
+    the exact edition and version string (for example Magento/2.4.6). This
+    is the documented software behavior, not a misconfiguration.
+
+    This template reads /magento_version only. A match means a Magento
+    storefront is present with a known version - correlate it against the
+    Magento security advisory feed. Note Magento 2 also leaks the version in
+    the /pub/static and checkout JSON surfaces if this route is rewritten.
+
+    One GET request, read-only.
+  reference:
+    - https://devdocs.magento.com/
+  tags: commerce,magento,version,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/magento_version"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: regex
+        part: body
+        regex:
+          - "(?i)^Magento/[0-9]"

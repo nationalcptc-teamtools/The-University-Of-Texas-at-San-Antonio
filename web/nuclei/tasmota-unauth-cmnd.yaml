@@ -1,0 +1,47 @@
+# Tasmota unauthenticated command endpoint.
+id: tasmota-unauth-cmnd
+
+info:
+  name: Tasmota Unauthenticated Command Endpoint
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    Tasmota firmware runs on ESP8266/ESP32 smart relays commonly wired to
+    gates, lights, pumps and signage in DIY and integrated park builds. On
+    default firmware the /cm command endpoint answers without any
+    authentication, and Status 0 dumps the device identity and version.
+
+    This template sends the read-only Status 0 command only. A match means an
+    unauthenticated device control surface: the same endpoint accepts Power
+    ON/OFF, SetOption and backlog commands, meaning an operator can toggle
+    whatever physical load the relay switches. After a match, power toggling
+    is a single request away - prove control only within scope.
+
+    One GET request. Read-only command; no state change.
+  reference:
+    - https://tasmota.github.io/docs/Commands/
+  tags: ot,iot,tasmota,unauth,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/cm?cmnd=Status%200"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "Status"
+          - "FriendlyName"
+          - "Module"
+        condition: and
+      - type: dsl
+        dsl:
+          - "!contains(to_lower(content_type), 'text/html')"

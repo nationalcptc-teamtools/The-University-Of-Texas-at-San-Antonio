@@ -1,0 +1,44 @@
+# EspoCRM unauthenticated application information endpoint.
+id: espocrm-unauth-app-info
+
+info:
+  name: EspoCRM Unauthenticated App Version Disclosure
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    EspoCRM exposes /api/v1/App without authentication on many installs and
+    the response carries the exact application version plus language and
+    currency settings. Version is the input every CVE decision needs.
+
+    This template reads /api/v1/App only. A match means EspoCRM is present
+    and its version is known - correlate the version against the EspoCRM
+    advisory feed before any exploit attempt. The nearby /install/ leftover
+    is a separate check.
+
+    One GET request, read-only.
+  reference:
+    - https://docs.espocrm.com/
+  tags: crm,espocrm,version,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/App"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"version"'
+          - '"language"'
+        condition: and
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

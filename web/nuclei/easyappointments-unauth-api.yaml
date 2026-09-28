@@ -1,0 +1,45 @@
+# Easy!Appointments unauthenticated API surface.
+id: easyappointments-unauth-api
+
+info:
+  name: Easy!Appointments Unauthenticated API Enumeration
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    Easy!Appointments is a booking and scheduling platform. Older builds
+    leave the /index.php/api/v1/ REST surface reachable without an API key,
+    and that surface lists services, providers and appointment slots.
+
+    This template requests the appointments endpoint without credentials. A
+    match means booking data is enumerable unauthenticated: customer names,
+    emails and phone numbers on past and future appointments. On affected
+    builds the same surface accepts unauthenticated writes.
+
+    One GET request, read-only.
+  reference:
+    - https://github.com/alextselegidis/easyappointments
+  tags: booking,api,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.php/api/v1/appointments"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        words:
+          - "book"
+          - "start_datetime"
+          - "customers"
+        condition: or

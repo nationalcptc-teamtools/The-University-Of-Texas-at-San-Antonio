@@ -1,0 +1,64 @@
+# Cal.com booking platform API probe.
+id: calcom-health-probe
+
+info:
+  name: Cal.com Booking Platform API Reachable
+  author: cptc-toolkit
+  severity: info
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Cal.com (Calendso) is the self-hosted scheduling platform parks run for
+    tour and event bookings. Its API surfaces at /api/ carry booking data,
+    and the health endpoint confirms deployment.
+
+    This template probes the health endpoint and the booking API. A match
+    means a Cal.com deployment is present: the next steps are the unauth
+    booking enumeration on the /api/book endpoints and the default admin
+    credential attempts against /auth/login.
+
+    Two GET requests, read-only.
+  reference:
+    - https://github.com/calcom/cal.com
+  tags: booking,calcom,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/health"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        words:
+          - "healthy"
+          - '"status":"ok"'
+        condition: or
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/book/event"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "book"
+          - "cal.com"
+          - "booking"

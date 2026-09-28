@@ -1,0 +1,67 @@
+# Generic installer/setup leftovers across PHP stacks.
+id: generic-install-leftovers
+
+info:
+  name: Installer or Setup Page Left In Production
+  author: cptc-toolkit
+  severity: critical
+  metadata:
+    max-request: 5
+    kind: attack
+  description: |
+    Every PHP application in the park stack (OSPOS, PrestaShop, SuiteCRM,
+    EspoCRM, OrangeHRM, osTicket, Dolibarr, generic ticket apps) has an
+    installer, and leaving it reachable after deployment is the single most
+    common critical misconfiguration: installers re-create the admin
+    account, rewrite the database connection or dump the schema.
+
+    This template checks the five most common leftover paths and matches
+    installer-specific markers, not generic 200 pages. A match on any path
+    means the application can be re-installed or reconfigured by an
+    unauthenticated visitor: that is effectively application takeover.
+
+    Five GET requests, read-only.
+  reference:
+    - https://owasp.org/www-project-web-security-testing-guide/
+  tags: misconfig,installer,exposure,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/install.php"
+      - "{{BaseURL}}/install/"
+      - "{{BaseURL}}/Web/install/"
+      - "{{BaseURL}}/index.php/install"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "Installation Wizard"
+          - "installation is already"
+          - "Install"
+          - "step=1"
+          - "Setup"
+        condition: or
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/setup/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "Setup Wizard"
+          - "Installation Wizard"
+          - "installation is already"
+          - "step=1"
+        condition: or

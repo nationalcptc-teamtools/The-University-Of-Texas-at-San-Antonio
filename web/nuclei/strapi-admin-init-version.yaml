@@ -1,0 +1,45 @@
+# Strapi unauthenticated version disclosure via admin init.
+id: strapi-admin-init-version
+
+info:
+  name: Strapi Admin Panel Version Disclosure
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Strapi's admin panel bootstrap at /admin/init answers without
+    authentication and carries the exact strapiVersion in the JSON. The
+    admin panel itself at /admin is also confirmed by the same response
+    shape.
+
+    This template reads /admin/init only. A match means a Strapi backend is
+    present with a known version - Strapi 3.x builds carry the documented
+    password-reset and GraphQL disclosure findings, so correlate the version
+    before continuing.
+
+    One GET request, read-only.
+  reference:
+    - https://strapi.io/
+  tags: cms,strapi,version,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin/init"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"strapiVersion"'
+          - '"data"'
+        condition: and
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

