@@ -23,7 +23,7 @@ info:
     Two GETs and one POST. The credential is a documented vendor default.
   reference:
     - https://github.com/SCADA-LTS/Scada-LTS
-  tags: ot,scada,default-login,exposure,attack
+  tags: ot,scada,default-login,exposure,attack,themepark
 
 http:
   - method: GET

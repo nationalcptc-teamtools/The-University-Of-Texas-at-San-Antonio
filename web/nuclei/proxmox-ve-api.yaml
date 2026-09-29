@@ -25,7 +25,7 @@ info:
     Read-only. One GET request, no credentials.
   reference:
     - https://pve.proxmox.com/wiki/API_Viewer
-  tags: infrastructure,remote-management,proxmox,virtualisation,detection
+  tags: infrastructure,remote-management,proxmox,virtualisation,detection,themepark
 
 http:
   - method: GET

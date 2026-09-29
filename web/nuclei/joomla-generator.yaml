@@ -14,7 +14,7 @@ info:
     specific vulnerability. A customized site can remove it. One GET.
   reference:
     - https://raw.githubusercontent.com/joomla/joomla-cms/5.4-dev/libraries/src/Document/Document.php
-  tags: patron,web,joomla,detection
+  tags: patron,web,joomla,detection,themepark
 
 http:
   - method: GET

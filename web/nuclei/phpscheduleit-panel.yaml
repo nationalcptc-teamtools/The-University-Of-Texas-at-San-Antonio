@@ -1,0 +1,54 @@
+# phpScheduleIt legacy booking panel and injection surface.
+id: phpscheduleit-panel
+
+info:
+  name: phpScheduleIt Legacy Booking System
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    phpScheduleIt is the twenty-year-old PHP reservation app a park's back office
+    may still run for internal scheduling. CVE-2008-6132 is an unauthenticated
+    PHP code injection through reserve.php's start_date parameter with a public
+    Metasploit module - the textbook legacy finding.
+
+    This template fingerprints the product via its branded pages and probes
+    reserve.php. A match means the booking system is the injection target: run
+    the documented MSF payload shape against reserve.php?start_date= within
+    scope. The app is unmaintained - assume every historical finding is live.
+
+    Two GET requests, read-only probe.
+  reference:
+    - https://www.exploit-db.com/exploits/9914
+  tags: legacy,booking,phpscheduleit,attack,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "phpScheduleIt"
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/reserve.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "phpScheduleIt"
+      - type: status
+        status:
+          - 200

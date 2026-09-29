@@ -1,0 +1,43 @@
+# Adobe ColdFusion administrator surface.
+id: coldfusion-admin-exposure
+
+info:
+  name: Adobe ColdFusion Administrator Exposed
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    ColdFusion runs ticketing and staff apps at parks that built web systems in
+    the 2000s. The /CFIDE/administrator/ login is the target surface; legacy
+    builds before the 2023/2024 fixes carry documented unauth RCE chains
+    (CVE-2023-26360 class) against the same CFIDE paths.
+
+    This template fingerprints ColdFusion via CFIDE and probes the administrator
+    login. A match means a ColdFusion server is exposed: correlate the version
+    against the Adobe security bulletin feed, then try the documented CFIDE
+    deserialization endpoints.
+
+    Two GET requests, read-only.
+  reference:
+    - https://helpx.adobe.com/security/products/coldfusion.html
+  tags: legacy,coldfusion,java,exposure,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/CFIDE/administrator/index.cfm"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "ColdFusion Administrator"
+          - "ColdFusion"
+        condition: or
+      - type: status
+        status:
+          - 200
+          - 302

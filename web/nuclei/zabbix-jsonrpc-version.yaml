@@ -33,7 +33,7 @@ info:
     credential.
   reference:
     - https://www.zabbix.com/documentation/current/manual/api/reference/rpc/api
-  tags: monitoring,zabbix,detection
+  tags: monitoring,zabbix,detection,themepark
 
 http:
   - method: POST

@@ -23,7 +23,7 @@ info:
     Five GET requests, read-only.
   reference:
     - https://owasp.org/www-project-web-security-testing-guide/
-  tags: misconfig,installer,exposure,attack
+  tags: misconfig,installer,exposure,attack,themepark
 
 http:
   - method: GET

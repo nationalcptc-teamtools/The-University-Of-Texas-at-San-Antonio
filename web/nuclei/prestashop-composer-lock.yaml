@@ -22,7 +22,7 @@ info:
     One GET request, read-only.
   reference:
     - https://devdocs.prestashop.com/
-  tags: commerce,prestashop,exposure,attack
+  tags: commerce,prestashop,exposure,attack,themepark
 
 http:
   - method: GET

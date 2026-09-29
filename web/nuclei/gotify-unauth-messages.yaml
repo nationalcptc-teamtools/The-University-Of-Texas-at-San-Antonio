@@ -1,0 +1,60 @@
+# Gotify push server unauthenticated message surface.
+id: gotify-unauth-messages
+
+info:
+  name: Gotify Push Notification Server Unauthenticated API
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    Gotify is the self-hosted push-notification server parks wire to emergency
+    alerts, ride status and staff paging. Stock deployments leave /message and
+    /application listing readable without a token when the clientApps or
+    application tokens are misconfigured, and the version endpoint always
+    answers unauthenticated.
+
+    This template reads the version endpoint and probes the message API. A match
+    on the version means Gotify is present - correlate the version. A match on
+    messages without auth means every staff notification, emergency broadcast
+    and system alert is readable, and /message?token= semantics let you post
+    fake emergency alerts to every registered device.
+
+    Two GET requests, read-only.
+  reference:
+    - https://gotify.net/docs/
+  tags: notifications,gotify,emergency,attack,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/version"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/message?limit=1"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"messages"'
+          - '"title"'
+        condition: and
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

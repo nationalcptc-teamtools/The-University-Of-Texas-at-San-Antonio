@@ -21,7 +21,7 @@ info:
     Two GET requests, read-only.
   reference:
     - https://github.com/vul-os/beepbite
-  tags: pos,food-service,api,attack
+  tags: pos,food-service,api,attack,themepark
 
 http:
   - method: GET

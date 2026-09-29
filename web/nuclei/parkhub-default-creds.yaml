@@ -21,7 +21,7 @@ info:
     One POST request. The credential is a documented demo default.
   reference:
     - https://github.com/nash87/parkhub-rust
-  tags: parking,parkhub,default-login,attack
+  tags: parking,parkhub,default-login,attack,themepark
 
 http:
   - raw:

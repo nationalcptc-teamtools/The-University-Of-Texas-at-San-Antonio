@@ -1,0 +1,58 @@
+# SharePoint legacy surface detection.
+id: sharepoint-legacy-surface
+
+info:
+  name: SharePoint Legacy Deployment Exposed
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Parks that grew a corporate side run SharePoint for staff documents and
+    schedules. Legacy SharePoint (2010/2013, on-prem) exposes /_vti_bin/ SOAP
+    surfaces and the /_layouts/ path family pre-auth, and old builds carry the
+    documented deserialization and WebPart findings.
+
+    This template fingerprints SharePoint via its fixed paths. A match means a
+    SharePoint farm is exposed: enumerate /_vti_bin/lists.asmx operations and
+    check the build number against the Microsoft advisory feed.
+
+    Two GET requests, read-only.
+  reference:
+    - https://learn.microsoft.com/en-us/sharepoint/
+  tags: legacy,sharepoint,windows,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_vti_inf.html"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "SharePoint"
+          - "FPVersion"
+        condition: or
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/_layouts/settings.aspx"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 302
+          - 401
+      - type: word
+        part: body
+        words:
+          - "SharePoint"
+        condition: or

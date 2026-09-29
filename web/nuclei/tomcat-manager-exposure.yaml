@@ -1,0 +1,53 @@
+# Apache Tomcat manager and version surface.
+id: tomcat-manager-exposure
+
+info:
+  name: Apache Tomcat Manager or Version Page Exposed
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 3
+    kind: detection
+  description: |
+    Tomcat is the twenty-year backbone of park booking and staff web apps. Old
+    builds answer /manager/html with a form whose failure page discloses the
+    exact version, and default or weak manager credentials (tomcat:tomcat,
+    admin:admin on old installs) are a classic path to WAR deployment and shell.
+
+    This template fingerprints the Tomcat version from the error page and probes
+    the manager surface. A match means the servlet container is exposed: try the
+    default manager credentials next, then a WAR deploy for code execution.
+
+    Three GET requests, read-only.
+  reference:
+    - https://tomcat.apache.org/
+  tags: legacy,tomcat,java,exposure,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "Tomcat"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/manager/html"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 401
+          - 200
+      - type: word
+        part: header
+        words:
+          - "Tomcat"
+        condition: or
+

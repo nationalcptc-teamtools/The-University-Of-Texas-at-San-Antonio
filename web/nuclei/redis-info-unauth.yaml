@@ -43,7 +43,7 @@ info:
     cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:C/C:L/I:H/A:N
     cvss-score: 8.1
     cwe-id: CWE-306
-  tags: data,redis,exposure
+  tags: data,redis,exposure,themepark
 
 tcp:
   - host:

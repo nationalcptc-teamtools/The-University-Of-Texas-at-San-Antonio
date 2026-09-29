@@ -21,7 +21,7 @@ info:
     One GET and one POST. The credential is a documented vendor default.
   reference:
     - https://github.com/mighty840/kitchenasty
-  tags: pos,food-service,default-login,attack
+  tags: pos,food-service,default-login,attack,themepark
 
 http:
   - method: GET

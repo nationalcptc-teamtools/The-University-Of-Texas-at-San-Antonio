@@ -27,7 +27,7 @@ info:
     Read-only, by construction. Two GET requests.
   reference:
     - https://autonomylogic.com/docs/2-2-openplc-runtime/
-  tags: ot,plc,openplc,detection
+  tags: ot,plc,openplc,detection,themepark
 
 http:
   - method: GET

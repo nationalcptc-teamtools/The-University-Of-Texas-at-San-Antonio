@@ -1,0 +1,38 @@
+# Telnet service banner grab.
+id: telnet-banner-grab
+
+info:
+  name: Telnet Service Exposed with Banner
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Legacy park infrastructure - old gate controllers, HVAC head-ends, ticket
+    printers - keeps Telnet alive because nobody remembers how it is configured.
+    A Telnet banner often names the OS, the device model, or a login prompt that
+    accepts the vendor default.
+
+    This network template connects to 23 and reads the banner. A match means
+    cleartext remote administration is exposed: note the OS/device from the
+    banner, then try the vendor default credentials over the same socket.
+
+    One connection, banner read only.
+  reference:
+    - https://datatracker.ietf.org/doc/html/rfc854
+  tags: legacy,telnet,protocol,detection,themepark
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 23
+    read-size: 1024
+    inputs:
+      - data: "\r\n"
+        type: text
+    matchers-condition: and
+    matchers:
+      - type: size
+        size:
+          - 8

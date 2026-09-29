@@ -31,7 +31,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://www.jenkins.io/doc/book/using/remote-access-api/
-  tags: devops,ci,jenkins,detection
+  tags: devops,ci,jenkins,detection,themepark
 
 http:
   - method: GET

@@ -20,7 +20,7 @@ info:
     One POST request. The credential is a documented vendor default.
   reference:
     - https://github.com/gamonoid/icehrm
-  tags: hr,icehrm,default-login,attack
+  tags: hr,icehrm,default-login,attack,themepark
 
 http:
   - raw:

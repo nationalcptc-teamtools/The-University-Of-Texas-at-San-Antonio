@@ -24,7 +24,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://www.openhab.org/docs/
-  tags: ot,bms,openhab,detection
+  tags: ot,bms,openhab,detection,themepark
 
 http:
   - method: GET

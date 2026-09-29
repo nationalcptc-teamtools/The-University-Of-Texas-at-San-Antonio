@@ -23,7 +23,7 @@ info:
     Three GET requests, read-only.
   reference:
     - https://swagger.io/specification/
-  tags: api,swagger,exposure,attack
+  tags: api,swagger,exposure,attack,themepark
 
 http:
   - method: GET

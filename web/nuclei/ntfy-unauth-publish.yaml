@@ -1,0 +1,60 @@
+# ntfy self-hosted push service unauthenticated publish/read surface.
+id: ntfy-unauth-publish
+
+info:
+  name: ntfy Push Service Open Publish or Read Access
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    ntfy is the other self-hosted push server parks use for emergency alerts and
+    operational paging. Stock configs often leave topics readable or - worse -
+    publishable without auth. An open publish topic means anyone can inject a
+    fake emergency broadcast to every subscribed phone; an open read topic
+    leaks every operational message.
+
+    This template probes the version endpoint and reads a likely operational
+    topic as JSON. A match on version identifies ntfy. The topic read tells you
+    whether emergency/ops topics leak. Publishing a test message to a topic
+    within scope is a single POST - visible disruption, do it deliberately.
+
+    Two GET requests, read-only.
+  reference:
+    - https://docs.ntfy.sh/
+  tags: notifications,ntfy,emergency,attack,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/v1/health"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/emergency/json"
+      - "{{BaseURL}}/ops/json"
+      - "{{BaseURL}}/alerts/json"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        negative: true
+        words:
+          - '{"code":40'

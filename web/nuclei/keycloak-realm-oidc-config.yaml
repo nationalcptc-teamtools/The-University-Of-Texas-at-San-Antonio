@@ -31,7 +31,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://www.keycloak.org/securing-apps/oidc-layers
-  tags: identity,keycloak,sso,detection
+  tags: identity,keycloak,sso,detection,themepark
 
 http:
   - method: GET

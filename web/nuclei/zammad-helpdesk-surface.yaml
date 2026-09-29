@@ -1,0 +1,62 @@
+# Zammad helpdesk surface and unauth API probe.
+id: zammad-helpdesk-surface
+
+info:
+  name: Zammad Helpdesk API and Public Surface
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Zammad is the self-hosted helpdesk parks deploy for remediation tracking
+    and guest-support tickets (the scenario says remediation moved from a
+    spreadsheet to an internal ticketing process). Its unauth API surface
+    /api/v1/version and the public /api/v1/users/search often disclose the
+    product and, with default access controls, agent ticket metadata.
+
+    This template reads the version API and the unauth API root. A match means
+    a remediation/ticketing plane is exposed: the version feeds the CVE check,
+    and the first reference-queue endpoints are the read surface to try.
+
+    Two GET requests, read-only.
+  reference:
+    - https://zammad.org/
+  tags: ticketing,zammad,remediation,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/version"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: regex
+        part: body
+        regex:
+          - "[0-9]+[.][0-9]+[.][0-9]+"
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/users/me"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 401
+          - 200
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: header
+        words:
+          - "zammad"
+        condition: or

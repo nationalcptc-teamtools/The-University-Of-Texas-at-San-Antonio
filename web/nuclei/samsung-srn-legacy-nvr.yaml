@@ -1,0 +1,60 @@
+# Samsung SRN/SNET legacy NVR unauth surfaces.
+id: samsung-srn-legacy-nvr
+
+info:
+  name: Samsung SRN/SNET Legacy NVR Exposure
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 2
+    kind: attack
+  description: |
+    Samsung Techwin SRN/SNET NVRs secured park CCTV for a decade and are EOL.
+    CVE-2015-8279 is unauthenticated file read and CVE-2015-8280 leaks
+    credentials on these builds - both have public request shapes against the
+    device's CGI/web surface.
+
+    This template fingerprints the SRN/SNET web interface. A match means a
+    legacy NVR is exposed: run the documented CVE-2015-8279/8280 probes, and
+    treat every camera view as in-scope evidence rather than something to browse.
+
+    Two GET requests, read-only.
+  reference:
+    - https://cvefeed.io/vuln/detail/CVE-2015-8279
+  tags: legacy,cctv,samsung,attack,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/cgi-bin/video.cgi"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Samsung"
+          - "SRN"
+          - "SNET"
+        condition: or
+      - type: status
+        status:
+          - 200
+          - 401
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.html"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Samsung"
+          - "SmartCam"
+          - "SRN"
+        condition: or
+      - type: status
+        status:
+          - 200

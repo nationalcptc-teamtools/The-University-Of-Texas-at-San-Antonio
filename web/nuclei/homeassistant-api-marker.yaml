@@ -26,7 +26,7 @@ info:
     Read-only. Two GET requests, no credentials, no token.
   reference:
     - https://www.home-assistant.io/integrations/homeassistant/
-  tags: ot,bms,homeassistant,detection
+  tags: ot,bms,homeassistant,detection,themepark
 
 http:
   - method: GET

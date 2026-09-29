@@ -21,7 +21,7 @@ info:
     Two GET requests, read-only.
   reference:
     - https://github.com/calcom/cal.com
-  tags: booking,calcom,detection
+  tags: booking,calcom,detection,themepark
 
 http:
   - method: GET

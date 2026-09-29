@@ -1,0 +1,58 @@
+# FreeScout helpdesk panel and installer detection.
+id: freescout-helpdesk-panel
+
+info:
+  name: FreeScout Helpdesk Panel or Installer Left Open
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 3
+    kind: detection
+  description: |
+    FreeScout is the lightweight self-hosted helpdesk teams pick over Zammad for
+    remediation tracking and internal ticket queues. Its /login panel and its
+    /install leftover are both common; the installer resets the admin account.
+
+    This template probes the login panel, the installer and the public version
+    marker. A match on the installer means application takeover. A match on the
+    panel means the ticketing plane is exposed - default credential attempts
+    and the password-reset flow are the next steps.
+
+    Three GET requests, read-only.
+  reference:
+    - https://github.com/freescout-helpdesk/freescout
+  tags: ticketing,freescout,remediation,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/login"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "FreeScout"
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/install"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - "FreeScout"
+          - "Install"
+        condition: or
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'text/html')"

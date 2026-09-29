@@ -22,7 +22,7 @@ info:
     One GET request, read-only.
   reference:
     - https://github.com/leosac/access-control
-  tags: ot,access-control,leosac,detection
+  tags: ot,access-control,leosac,detection,themepark
 
 http:
   - method: GET

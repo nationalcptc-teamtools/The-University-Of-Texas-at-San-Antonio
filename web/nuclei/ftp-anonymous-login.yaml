@@ -1,0 +1,43 @@
+# Anonymous FTP login probe (network template).
+id: ftp-anonymous-login
+
+info:
+  name: FTP Server Accepts Anonymous Login
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 1
+    kind: attack
+  description: |
+    Twenty-year-old parks move ride photos, brochures and vendor files over FTP,
+    and the FTP service itself often outlives every migration. Anonymous FTP on
+    old vsftpd/ProFTPD/IIS builds is the classic exposure: whatever sits in the
+    upload tree is readable, and writable trees give the tester a staging point
+    inside the network.
+
+    This network template sends the anonymous USER/PASS sequence and matches the
+    login-accepted reply. A match means anonymous FTP is enabled: enumerate the
+    tree with LIST - look for the Nessus export and the pen-test report the
+    OSINT articles say exist somewhere in the estate.
+
+    One connection, one login sequence, read-only.
+  reference:
+    - https://datatracker.ietf.org/doc/html/rfc959
+  tags: legacy,ftp,protocol,attack,themepark
+
+tcp:
+  - host:
+      - "{{Hostname}}"
+    port: 21
+    read-size: 1024
+    inputs:
+      - data: "USER anonymous\r\nPASS guest@\r\nQUIT\r\n"
+        type: text
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "230"
+          - "logged in"
+          - "access granted"
+        condition: or

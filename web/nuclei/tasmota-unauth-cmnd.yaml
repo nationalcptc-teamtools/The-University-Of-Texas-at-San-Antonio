@@ -23,7 +23,7 @@ info:
     One GET request. Read-only command; no state change.
   reference:
     - https://tasmota.github.io/docs/Commands/
-  tags: ot,iot,tasmota,unauth,attack
+  tags: ot,iot,tasmota,unauth,attack,themepark
 
 http:
   - method: GET

@@ -21,7 +21,7 @@ info:
     One GET request, read-only.
   reference:
     - https://devdocs.magento.com/
-  tags: commerce,magento,version,detection
+  tags: commerce,magento,version,detection,themepark
 
 http:
   - method: GET

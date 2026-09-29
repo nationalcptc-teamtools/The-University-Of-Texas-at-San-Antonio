@@ -26,7 +26,7 @@ info:
     Read-only. One GET request.
   reference:
     - https://www.mongodb.com/docs/manual/reference/
-  tags: data,mongodb,detection
+  tags: data,mongodb,detection,themepark
 
 http:
   - method: GET

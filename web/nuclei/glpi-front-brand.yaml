@@ -29,7 +29,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://glpi-project.org/documentation/
-  tags: infrastructure,glpi,asset,helpdesk,detection
+  tags: infrastructure,glpi,asset,helpdesk,detection,themepark
 
 http:
   - method: GET

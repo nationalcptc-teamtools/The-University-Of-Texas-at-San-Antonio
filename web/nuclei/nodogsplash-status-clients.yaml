@@ -22,7 +22,7 @@ info:
     One GET request, read-only.
   reference:
     - https://github.com/nodogsplash/nodogsplash
-  tags: wifi,captive-portal,nodogsplash,exposure,attack
+  tags: wifi,captive-portal,nodogsplash,exposure,attack,themepark
 
 http:
   - method: GET

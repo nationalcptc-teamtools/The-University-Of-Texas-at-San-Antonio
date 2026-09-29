@@ -15,7 +15,7 @@ info:
     One read-only GET.
   reference:
     - https://raw.githubusercontent.com/goharbor/harbor/main/api/v2.0/swagger.yaml
-  tags: devops,registry,harbor,detection
+  tags: devops,registry,harbor,detection,themepark
 
 http:
   - method: GET

@@ -22,7 +22,7 @@ info:
     One GET request, read-only.
   reference:
     - https://unicenta.com/
-  tags: pos,unicenta,detection
+  tags: pos,unicenta,detection,themepark
 
 http:
   - method: GET

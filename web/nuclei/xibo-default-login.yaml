@@ -21,7 +21,7 @@ info:
     One POST request. The credential is a documented vendor default.
   reference:
     - https://xibosignage.com/
-  tags: signage,xibo,default-login,attack
+  tags: signage,xibo,default-login,attack,themepark
 
 http:
   - raw:

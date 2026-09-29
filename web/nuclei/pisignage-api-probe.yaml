@@ -22,7 +22,7 @@ info:
     Two GET requests, read-only.
   reference:
     - https://pisignage.com/
-  tags: signage,pisignage,api,attack
+  tags: signage,pisignage,api,attack,themepark
 
 http:
   - method: GET

@@ -14,7 +14,7 @@ info:
     permission to publish. One read-only GET; no client connection.
   reference:
     - https://docs.nats.io/reference/system/monitor/varz
-  tags: data,messaging,nats,detection
+  tags: data,messaging,nats,detection,themepark
 
 http:
   - method: GET

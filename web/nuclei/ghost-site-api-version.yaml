@@ -21,7 +21,7 @@ info:
     One GET request, read-only.
   reference:
     - https://ghost.org/docs/
-  tags: cms,ghost,version,detection
+  tags: cms,ghost,version,detection,themepark
 
 http:
   - method: GET

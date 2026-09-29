@@ -34,7 +34,7 @@ info:
     is 0x05, 0x06, 0x0F or 0x10, and fails the run if one is observed.
   reference:
     - https://www.modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf
-  tags: ot,modbus,ics,detection
+  tags: ot,modbus,ics,detection,themepark
 
 tcp:
   - host:

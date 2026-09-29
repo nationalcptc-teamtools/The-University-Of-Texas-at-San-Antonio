@@ -18,7 +18,7 @@ info:
     - https://forum.scadabr.com.br/t/modo-kiosk-para-novatos/3446
     - https://raw.githubusercontent.com/ScadaBR/ScadaBR/master/WebContent/WEB-INF/tags/page.tag
     - https://raw.githubusercontent.com/ScadaBR/ScadaBR/master/WebContent/WEB-INF/jsp/login.jsp
-  tags: ot,scada,scadabr,detection
+  tags: ot,scada,scadabr,detection,themepark
 
 http:
   - method: GET

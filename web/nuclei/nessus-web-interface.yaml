@@ -1,0 +1,63 @@
+# Nessus/Tenable.sc web interface detection.
+id: nessus-web-interface
+
+info:
+  name: Nessus or Tenable Security Center Web Interface
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Nessus (port 8834) is the scanner the scenario's Park Security Platform
+    consumes; Tenable.sc is the aggregator. The web interface leaks the product,
+    build and feed version pre-auth, and historical Nessus builds carry
+    unauth findings (the CVE-2019-6715 report-export class).
+
+    This template probes 8834 and the Tenable.sc path on any port. A match means
+    the vulnerability-scanning plane is exposed: the version identifies the
+    build, and report-export endpoints are the first thing to try within scope.
+    Scanner access often means the tester can read every historical internal
+    finding - including the prior external pen test's remediation status.
+
+    Two GET requests, read-only.
+  reference:
+    - https://docs.tenable.com/nessus/
+  tags: secops,nessus,tenable,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "Nessus"
+          - "Tenable"
+      - type: status
+        status:
+          - 200
+          - 302
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/rest/version"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+      - type: word
+        part: body
+        words:
+          - '"version"'
+          - "tenable"
+        condition: or
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

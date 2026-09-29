@@ -1,0 +1,60 @@
+# Microsoft IIS legacy surface detection.
+id: iis-legacy-surface
+
+info:
+  name: Microsoft IIS Server with Legacy Markers
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    IIS serves the corporate and ticketing sites of every Windows-based park.
+    The Server header discloses the major version, and legacy builds (IIS 6/7.x)
+    carry the short-name enumeration and WebDAV-class findings; .aspx/.asmx
+    surfaces mark .NET apps worth probing for deserialization and viewstate
+    issues.
+
+    This template reads the Server header and probes for .NET markers. A match
+    means a Windows/IIS host is exposed: the version pins the applicable
+    findings, and any .asmx SOAP endpoint is a direct interface to enumerate.
+
+    Two GET requests, read-only.
+  reference:
+    - https://learn.microsoft.com/en-us/iis/
+  tags: legacy,iis,windows,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "Microsoft-IIS"
+      - type: status
+        status:
+          - 200
+          - 403
+          - 401
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: header
+        words:
+          - "ASP.NET"
+          - "X-AspNet-Version"
+        condition: or
+        internal: true
+      - type: word
+        part: header
+        words:
+          - "Microsoft-IIS"

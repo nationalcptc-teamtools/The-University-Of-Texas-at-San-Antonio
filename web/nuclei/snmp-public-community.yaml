@@ -1,0 +1,48 @@
+# SNMP public community read probe (UDP - via HTTP heuristics fallback).
+id: snmp-public-community
+
+info:
+  name: SNMP Service Detectable
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Legacy park device fleets (old switches, UPS cards, gate controllers) run
+    SNMP with the public community string unchanged. SNMP v1/v2c with public
+    reads the interface table, the ARP cache and sometimes the running config -
+    a full internal map for free.
+
+    This template flags hosts where UDP 161 is the likely SNMP surface. Note:
+    nuclei has no UDP transport in this build, so this template is an HTTP-side
+    marker for the device class (embedded HTTP admin with SNMP indicators), and
+    the actual community-string check belongs to a one-liner:
+    snmpwalk -v2c -c public <host> .1.3.6.1.2.1.1.1.0
+
+    One GET request, read-only.
+  reference:
+    - https://datatracker.ietf.org/doc/html/rfc1157
+  tags: legacy,snmp,protocol,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "SNMP"
+          - "snmp"
+          - "community"
+      - type: word
+        part: body
+        words:
+          - "config"
+          - "status"
+          - "system"
+        condition: or

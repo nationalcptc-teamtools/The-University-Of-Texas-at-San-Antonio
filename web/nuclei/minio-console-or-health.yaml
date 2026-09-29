@@ -24,7 +24,7 @@ info:
     Read-only. One GET request, no credentials.
   reference:
     - https://min.io/docs/minio/linux/integrations/healthcheck.html
-  tags: data,object-storage,minio,detection
+  tags: data,object-storage,minio,detection,themepark
 
 http:
   - method: GET

@@ -24,7 +24,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://www.authelia.com/integration/prologue/introduction/
-  tags: identity,authelia,sso,detection
+  tags: identity,authelia,sso,detection,themepark
 
 http:
   - method: GET

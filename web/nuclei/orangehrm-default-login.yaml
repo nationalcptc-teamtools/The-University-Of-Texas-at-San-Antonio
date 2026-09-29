@@ -22,7 +22,7 @@ info:
     One POST request. The credential is a documented vendor default.
   reference:
     - https://github.com/orangehrm/orangehrm
-  tags: hr,orangehrm,default-login,attack
+  tags: hr,orangehrm,default-login,attack,themepark
 
 http:
   - raw:

@@ -1,0 +1,60 @@
+# Trudesk ticketing panel probe.
+id: trudesk-panel-probe
+
+info:
+  name: Trudesk Ticketing Panel Reachable
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Trudesk is the OSS ticketing backend teams deploy for remediation tracking.
+    Its panel sits on :4040 by default and the /api/v1/login surface answers
+    unauth with the product's response shape.
+
+    This template probes the panel and the API login surface. A match means a
+    ticketing plane is exposed: the remediation history - including the prior
+    external pen test's findings status the scenario references - lives behind
+    it. Default credential attempts and password-reset flows are next.
+
+    Two GET requests, read-only.
+  reference:
+    - https://github.com/polonel/trudesk
+  tags: ticketing,trudesk,remediation,detection,themepark
+
+flow: http(1) && http(2)
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Trudesk"
+          - "trudesk"
+        condition: or
+      - type: status
+        status:
+          - 200
+          - 302
+        internal: true
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/v1/login"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 401
+          - 405
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"

@@ -22,7 +22,7 @@ info:
     One GET and one POST. The credential is a documented vendor default.
   reference:
     - https://rapidscada.org/
-  tags: ot,scada,default-login,attack
+  tags: ot,scada,default-login,attack,themepark
 
 http:
   - method: GET

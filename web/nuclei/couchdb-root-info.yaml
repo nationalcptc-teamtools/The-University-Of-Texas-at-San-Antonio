@@ -14,7 +14,7 @@ info:
     database, document, configuration value or user account. One GET.
   reference:
     - https://docs.couchdb.org/en/stable/api/server/common.html
-  tags: data,couchdb,detection
+  tags: data,couchdb,detection,themepark
 
 http:
   - method: GET

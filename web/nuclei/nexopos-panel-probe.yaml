@@ -20,7 +20,7 @@ info:
     Two GET requests, read-only.
   reference:
     - https://github.com/Blair2004/NexoPOS
-  tags: pos,nexopos,detection
+  tags: pos,nexopos,detection,themepark
 
 http:
   - method: GET

@@ -28,7 +28,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://docs.influxdata.com/influxdb/v2/reference/api/
-  tags: ot,telemetry,influxdb,detection
+  tags: ot,telemetry,influxdb,detection,themepark
 
 http:
   - method: GET

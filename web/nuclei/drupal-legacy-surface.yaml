@@ -1,0 +1,57 @@
+# Drupal legacy version surface.
+id: drupal-legacy-surface
+
+info:
+  name: Drupal Version Disclosure (Legacy Builds)
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 2
+    kind: detection
+  description: |
+    Drupal 7 reached EOL and Drupal 6 died years ago, but park sites built in
+    that era still run them. Drupal 7 leaks its version via CHANGELOG.txt and
+    the Drupal générer marker, and Drupalgeddon-class RCEs (SA-CORE-2018-002/
+    003) map to specific 7.x and 8.x ranges.
+
+    This template reads /CHANGELOG.txt and matches the generator marker. A match
+    with a version in the 7.x range means the Drupalgeddon family applies:
+    check the exact version, then the documented PoC for that SA.
+
+    Two GET requests, read-only.
+  reference:
+    - https://www.drupal.org/security
+  tags: legacy,cms,drupal,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/CHANGELOG.txt"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Drupal"
+      - type: regex
+        part: body
+        regex:
+          - "Drupal [6-8]\\.[0-9]+"
+      - type: status
+        status:
+          - 200
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/misc/drupal.js"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Drupal"
+      - type: status
+        status:
+          - 200

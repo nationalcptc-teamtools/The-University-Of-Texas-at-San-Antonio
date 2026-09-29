@@ -21,7 +21,7 @@ info:
     One GET request, read-only.
   reference:
     - https://www.spotipo.com/
-  tags: wifi,spotipo,captive-portal,detection
+  tags: wifi,spotipo,captive-portal,detection,themepark
 
 http:
   - method: GET

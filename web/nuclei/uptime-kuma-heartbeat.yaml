@@ -26,7 +26,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://github.com/louislam/uptime-kuma
-  tags: monitoring,uptime-kuma,detection
+  tags: monitoring,uptime-kuma,detection,themepark
 
 http:
   - method: GET

@@ -30,7 +30,7 @@ info:
     is observed.
   reference:
     - https://www.odva.org/wp-content/uploads/2019/06/cip-vol1-ch1.pdf
-  tags: ot,enip,cip,ics,detection
+  tags: ot,enip,cip,ics,detection,themepark
 
 tcp:
   - host:

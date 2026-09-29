@@ -26,7 +26,7 @@ info:
     Read-only. One GET request, no credentials.
   reference:
     - https://github.com/portainer/portainer/blob/develop/api/portainer.go
-  tags: devops,remote-management,portainer,containers,detection
+  tags: devops,remote-management,portainer,containers,detection,themepark
 
 http:
   - method: GET

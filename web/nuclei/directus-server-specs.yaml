@@ -22,7 +22,7 @@ info:
     Two GET requests, read-only.
   reference:
     - https://docs.directus.io/
-  tags: cms,directus,api,attack
+  tags: cms,directus,api,attack,themepark
 
 http:
   - method: GET

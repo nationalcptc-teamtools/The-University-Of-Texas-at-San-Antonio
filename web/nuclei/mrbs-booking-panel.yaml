@@ -1,0 +1,40 @@
+# MRBS meeting/booking room scheduler panel.
+id: mrbs-booking-panel
+
+info:
+  name: MRBS Booking System Panel
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    MRBS (Meeting Room Booking System) is the twenty-year-old booking PHP app
+    parks still run for room and equipment scheduling. Old builds carry SQLi
+    and auth-bypass findings, and the booking data maps the internal org.
+
+    This template fingerprints MRBS by its page markers. A match means a booking
+    plane is exposed: correlate the build against the MRBS changelog, then try
+    the documented injection parameters from the historical advisories.
+
+    One GET request, read-only.
+  reference:
+    - https://mrbs.sourceforge.io/
+  tags: legacy,booking,mrbs,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/index.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "MRBS"
+          - "Meeting Room Booking"
+        condition: or
+      - type: status
+        status:
+          - 200

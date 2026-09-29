@@ -25,7 +25,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://snipe-it.readme.io/docs
-  tags: infrastructure,snipeit,asset,detection
+  tags: infrastructure,snipeit,asset,detection,themepark
 
 http:
   - method: GET

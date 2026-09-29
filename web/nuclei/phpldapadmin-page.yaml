@@ -15,7 +15,7 @@ info:
     Two read-only GETs and no authentication attempt.
   reference:
     - https://raw.githubusercontent.com/leenooks/phpLDAPadmin/1.2.6.3/lib/page.php
-  tags: identity,ldap,phpldapadmin,detection
+  tags: identity,ldap,phpldapadmin,detection,themepark
 
 http:
   - method: GET

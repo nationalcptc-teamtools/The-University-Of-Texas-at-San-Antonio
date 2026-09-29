@@ -1,0 +1,56 @@
+# Mobile-app backend API surface probe (loyalty/tickets/food-order).
+id: mobileapp-backend-api-probe
+
+info:
+  name: Mobile Application Backend API Exposed
+  author: cptc-toolkit
+  severity: high
+  metadata:
+    max-request: 4
+    kind: attack
+  description: |
+    The scenario's mobile app does guest logins, loyalty points, mobile tickets,
+    food ordering, ride photo purchase and emergency alerts. Those features are
+    served by a backend API - commonly a prototype Go/Node/Python service with
+    /api/auth, /api/loyalty, /api/orders, /api/photos routes that no external
+    page links to but that every app build embeds.
+
+    This template probes the common route families and matches auth/token/loyalty
+    shaped JSON. A match means the patron commerce plane is exposed: enumerate
+    the operations from any embedded OpenAPI spec (the generic-swagger template
+    pairs with this one), then try unauthenticated reads and the loyalty-points
+    mutation endpoints.
+
+    Four GET requests, read-only.
+  reference:
+    - https://owasp.org/www-project-mobile-security-testing-guide/
+  tags: mobile,api,loyalty,attack,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/loyalty/balance"
+      - "{{BaseURL}}/api/v1/loyalty"
+      - "{{BaseURL}}/api/orders"
+      - "{{BaseURL}}/api/v1/photos"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 401
+          - 403
+      - type: dsl
+        dsl:
+          - "contains(to_lower(content_type), 'json')"
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "loyalty"
+          - "points"
+          - "order"
+          - "photo"
+          - "ticket"
+          - "guest"

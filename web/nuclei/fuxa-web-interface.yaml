@@ -29,7 +29,7 @@ info:
     Read-only. One GET request.
   reference:
     - https://github.com/frangoteam/FUXA
-  tags: ot,scada,fuxa,detection
+  tags: ot,scada,fuxa,detection,themepark
 
 http:
   - method: GET

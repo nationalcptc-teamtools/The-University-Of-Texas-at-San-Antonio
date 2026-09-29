@@ -15,7 +15,7 @@ info:
     one version command, then close.
   reference:
     - https://raw.githubusercontent.com/memcached/memcached/master/doc/protocol.txt
-  tags: data,cache,memcached,detection
+  tags: data,cache,memcached,detection,themepark
 
 tcp:
   - host:

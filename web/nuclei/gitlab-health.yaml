@@ -14,7 +14,7 @@ info:
     One read-only GET; no login or project request.
   reference:
     - https://docs.gitlab.com/administration/monitoring/health_check/
-  tags: devops,gitlab,detection
+  tags: devops,gitlab,detection,themepark
 
 http:
   - method: GET

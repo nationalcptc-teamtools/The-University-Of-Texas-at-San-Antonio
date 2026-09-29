@@ -22,7 +22,7 @@ info:
     One GET request, read-only.
   reference:
     - https://strapi.io/
-  tags: cms,strapi,version,detection
+  tags: cms,strapi,version,detection,themepark
 
 http:
   - method: GET

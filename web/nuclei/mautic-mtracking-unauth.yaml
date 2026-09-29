@@ -22,7 +22,7 @@ info:
     Two GET requests, read-only.
   reference:
     - https://www.mautic.org/
-  tags: marketing,mautic,detection
+  tags: marketing,mautic,detection,themepark
 
 http:
   - method: GET

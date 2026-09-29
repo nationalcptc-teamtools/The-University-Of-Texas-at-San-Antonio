@@ -21,7 +21,7 @@ info:
     One GET request, read-only.
   reference:
     - https://github.com/alextselegidis/easyappointments
-  tags: booking,api,exposure,attack
+  tags: booking,api,exposure,attack,themepark
 
 http:
   - method: GET

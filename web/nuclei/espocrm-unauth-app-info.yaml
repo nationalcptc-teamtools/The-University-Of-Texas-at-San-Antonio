@@ -21,7 +21,7 @@ info:
     One GET request, read-only.
   reference:
     - https://docs.espocrm.com/
-  tags: crm,espocrm,version,detection
+  tags: crm,espocrm,version,detection,themepark
 
 http:
   - method: GET

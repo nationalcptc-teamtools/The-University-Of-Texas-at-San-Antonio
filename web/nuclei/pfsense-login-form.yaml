@@ -28,7 +28,7 @@ info:
     Read-only. Two GET requests, no credentials.
   reference:
     - https://docs.netgate.com/pfsense/en/latest/
-  tags: network-edge,pfsense,firewall,detection
+  tags: network-edge,pfsense,firewall,detection,themepark
 
 http:
   - method: GET

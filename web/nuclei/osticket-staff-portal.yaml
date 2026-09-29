@@ -22,7 +22,7 @@ info:
     Two GET requests, read-only.
   reference:
     - https://github.com/osTicket/osTicket
-  tags: support,osticket,exposure,attack
+  tags: support,osticket,exposure,attack,themepark
 
 http:
   - method: GET

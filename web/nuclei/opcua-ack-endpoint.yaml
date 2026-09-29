@@ -32,7 +32,7 @@ info:
     Read-only. One connection, one Hello, closed.
   reference:
     - https://reference.opcfoundation.org/Core/Part1/v104/docs/5.6.3
-  tags: ot,opcua,ics,detection
+  tags: ot,opcua,ics,detection,themepark
 
 tcp:
   - host:

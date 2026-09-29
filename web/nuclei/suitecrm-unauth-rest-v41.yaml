@@ -23,7 +23,7 @@ info:
     One POST request. No credentials, no state change.
   reference:
     - https://docs.suitecrm.com/developer/api/
-  tags: crm,suitecrm,api,attack
+  tags: crm,suitecrm,api,attack,themepark
 
 http:
   - raw:

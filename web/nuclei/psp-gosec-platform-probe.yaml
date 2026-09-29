@@ -1,0 +1,53 @@
+# Go+Docker internal security platform surface probe (PSP pattern).
+id: psp-gosec-platform-probe
+
+info:
+  name: Go/Docker Security Platform or Vulnerability Manager Surface
+  author: cptc-toolkit
+  severity: medium
+  metadata:
+    max-request: 4
+    kind: detection
+  description: |
+    The BFF scenario describes an internally built Park Security Platform (PSP)
+    in Go running on Docker: event aggregation, Nessus integration, remediation
+    tickets and an external review interface that was still under review.
+    Open-source peers an internal builder actually deploys: DefectDojo, Faraday,
+    ArcherySec, SecObserve, Nightingale. Their unauth surfaces share a pattern -
+    a login page, an API root, and often a version/health endpoint that leaks
+    the product.
+
+    This template probes the common login/API/version paths and matches
+    product-specific markers for each known platform. A match means a
+    vulnerability-management plane is exposed: check the product version against
+    its CVE feed, and note that DefectDojo/Faraday report-upload keys are the
+    crown jewels - a leaked upload key lets you push fake "remediated" findings
+    into the SOC's queue.
+
+    Four GET requests, read-only.
+  reference:
+    - https://github.com/DefectDojo/django-DefectDojo
+  tags: secops,vuln-manager,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/login"
+      - "{{BaseURL}}/api/v2/"
+      - "{{BaseURL}}/api/health"
+      - "{{BaseURL}}/dashboard/"
+    redirects: false
+    matchers-condition: or
+    matchers:
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "DefectDojo"
+          - "Faraday"
+          - "ArcherySec"
+          - "SecObserve"
+          - "Nightingale"
+      - type: dsl
+        dsl:
+          - "status_code == 200 && contains(to_lower(body), 'vulnerability') && contains(to_lower(body), 'dashboard')"

@@ -26,7 +26,7 @@ info:
     Read-only. Two GET requests.
   reference:
     - https://openremote.io/docs/
-  tags: ot,bms,openremote,detection
+  tags: ot,bms,openremote,detection,themepark
 
 http:
   - method: GET

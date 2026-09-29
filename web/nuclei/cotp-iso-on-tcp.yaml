@@ -28,7 +28,7 @@ info:
     is present, and it does NOT mean S7 is present.
   reference:
     - https://www.snap7.org/en/doc/official_s7_description.html
-  tags: ot,ics,transport,detection
+  tags: ot,ics,transport,detection,themepark
 
 tcp:
   - host:

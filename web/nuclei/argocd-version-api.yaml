@@ -26,7 +26,7 @@ info:
     Read-only. One GET request, no credentials.
   reference:
     - https://argo-cd.readthedocs.io/en/stable/developer-guide/api-docs/
-  tags: devops,gitops,argocd,detection
+  tags: devops,gitops,argocd,detection,themepark
 
 http:
   - method: GET

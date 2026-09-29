@@ -14,7 +14,7 @@ info:
     establish database access. Two read-only GETs and no submitted form.
   reference:
     - https://raw.githubusercontent.com/phpmyadmin/phpmyadmin/master/resources/templates/login/form.twig
-  tags: data,mysql,phpmyadmin,detection
+  tags: data,mysql,phpmyadmin,detection,themepark
 
 http:
   - method: GET

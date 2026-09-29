@@ -1,0 +1,38 @@
+# Booked Scheduler booking panel detection.
+id: booked-scheduler-panel
+
+info:
+  name: Booked Scheduler Panel
+  author: cptc-toolkit
+  severity: low
+  metadata:
+    max-request: 1
+    kind: detection
+  description: |
+    Booked Scheduler is the maintained successor to phpScheduleIt that parks
+    deployed for room and equipment reservations. Older builds carry auth-bypass
+    and SQLi findings.
+
+    This template fingerprints the product via /Web/index.php. A match means a
+    booking plane is exposed: correlate the build, then try the historical
+    findings against the Web/ route family.
+
+    One GET request, read-only.
+  reference:
+    - https://github.com/BookedScheduler/booked
+  tags: legacy,booking,booked,detection,themepark
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/Web/index.php"
+    redirects: false
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Booked"
+      - type: status
+        status:
+          - 200

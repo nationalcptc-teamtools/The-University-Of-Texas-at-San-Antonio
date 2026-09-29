@@ -15,7 +15,7 @@ info:
     exposure. One read-only GET; no repository or manifest request.
   reference:
     - https://distribution.github.io/distribution/spec/api/
-  tags: devops,registry,containers,detection
+  tags: devops,registry,containers,detection,themepark
 
 http:
   - method: GET

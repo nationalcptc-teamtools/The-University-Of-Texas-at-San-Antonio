@@ -22,7 +22,7 @@ info:
     One GET request, read-only.
   reference:
     - https://github.com/wifidog/wifidog-gateway
-  tags: wifi,captive-portal,wifidog,detection
+  tags: wifi,captive-portal,wifidog,detection,themepark
 
 http:
   - method: GET
