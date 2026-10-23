@@ -1,0 +1,69 @@
+{
+  "variables": {
+    "username": "example-user",
+    "password": "documentation-placeholder-password"
+  },
+  "steps": [
+    {
+      "id": "login-form",
+      "request": {
+        "method": "GET",
+        "url": "https://app.example.test/login"
+      },
+      "expect": {
+        "statuses": [
+          200
+        ]
+      },
+      "extract": {
+        "csrf": {
+          "source": "html",
+          "tag": "input",
+          "match": {
+            "name": "csrf"
+          },
+          "attribute": "value"
+        }
+      }
+    },
+    {
+      "id": "login-submit",
+      "request": {
+        "method": "POST",
+        "url": "https://app.example.test/login",
+        "form": {
+          "username": "{{username}}",
+          "password": "{{password}}",
+          "csrf": "{{csrf}}"
+        }
+      },
+      "expect": {
+        "statuses": [
+          200
+        ]
+      },
+      "extract": {
+        "bearer": {
+          "source": "json",
+          "pointer": "/access_token"
+        }
+      }
+    },
+    {
+      "id": "account",
+      "request": {
+        "method": "GET",
+        "url": "https://app.example.test/api/account",
+        "headers": {
+          "Authorization": "Bearer {{bearer}}"
+        }
+      },
+      "expect": {
+        "statuses": [
+          200
+        ],
+        "contains": "example-user"
+      }
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "contexts": {
+    "application": {
+      "mappings": {
+        "dispatcherServlets": {
+          "dispatcherServlet": [
+            {
+              "handler": "ExampleShipmentController#export",
+              "predicate": "{GET [/shipment-jobs/{id}/export]}",
+              "details": {
+                "requestMappingConditions": {
+                  "methods": [
+                    "GET"
+                  ],
+                  "patterns": [
+                    "/shipment-jobs/{id}/export"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "propertySources": [
+    {
+      "name": "synthetic-configuration",
+      "properties": {
+        "oauth.clientSecret": {
+          "value": "synthetic-client-secret-placeholder",
+          "origin": "documentation fixture"
+        },
+        "build.artifact": {
+          "value": "example-service-1.0.0.jar"
+        }
+      }
+    }
+  ],
+  "info": {
+    "build": {
+      "artifact": "example-service",
+      "version": "1.0.0"
+    },
+    "dependencies": [
+      "example-library-1.2.3.jar"
+    ]
+  }
+}

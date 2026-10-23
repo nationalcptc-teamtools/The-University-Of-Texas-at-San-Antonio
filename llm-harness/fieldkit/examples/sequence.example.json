@@ -1,0 +1,10 @@
+{
+  "protected_url": "/account",
+  "authenticated_contains": "Your private account dashboard",
+  "login": {
+    "url": "/login",
+    "method": "POST",
+    "data": {"username": "REPLACE_WITH_TEST_USER", "password": "REPLACE_WITH_TEST_PASSWORD"}
+  },
+  "logout": {"url": "/logout", "method": "POST"}
+}

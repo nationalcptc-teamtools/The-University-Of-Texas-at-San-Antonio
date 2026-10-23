@@ -1,0 +1,35 @@
+{
+  "steps": [
+    {
+      "request": {
+        "id": "export-baseline",
+        "method": "GET",
+        "url": "https://vendor.example.test/shipment-jobs/11111111-2222-4333-8444-555555555555/export"
+      },
+      "expect": {
+        "statuses": [
+          200
+        ],
+        "contains": "rO0ABXA="
+      }
+    },
+    {
+      "request": {
+        "id": "replay-baseline",
+        "method": "POST",
+        "url": "https://vendor.example.test/shipment-jobs/replay",
+        "json": {
+          "jobId": "11111111-2222-4333-8444-555555555555",
+          "export": "rO0ABXA="
+        }
+      },
+      "expect": {
+        "statuses": [
+          200
+        ],
+        "json_pointer": "/acceptedJobId",
+        "equals": "11111111-2222-4333-8444-555555555555"
+      }
+    }
+  ]
+}

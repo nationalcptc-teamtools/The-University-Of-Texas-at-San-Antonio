@@ -1,0 +1,33 @@
+{
+  "requests": [
+    {
+      "id": "order-read",
+      "method": "GET",
+      "url": "https://app.example.test/api/orders/known-order",
+      "query": {
+        "view": "summary"
+      },
+      "headers": {
+        "Accept": "application/json"
+      }
+    },
+    {
+      "id": "callback-submit",
+      "method": "POST",
+      "url": "https://app.example.test/api/preview",
+      "json": {
+        "callback": "https://app.example.test/preview-result",
+        "item": "known-item"
+      }
+    },
+    {
+      "id": "xml-submit",
+      "method": "POST",
+      "url": "https://app.example.test/api/xml",
+      "headers": {
+        "Content-Type": "application/xml"
+      },
+      "xml": "<request><item>known-item</item></request>"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+# Keep the raw HTTP fixture's CRLF framing and terminating empty line.
+examples/capabilities/request.http -text whitespace=cr-at-eol,-blank-at-eof

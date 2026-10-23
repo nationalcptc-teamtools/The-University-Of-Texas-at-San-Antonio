@@ -1,0 +1,6 @@
+{
+  "kind": "credential_candidate",
+  "resource": "/srv/example-config/.env",
+  "preview": "DB_PASSWORD=[REDACTED]",
+  "note": "Synthetic evidence only."
+}

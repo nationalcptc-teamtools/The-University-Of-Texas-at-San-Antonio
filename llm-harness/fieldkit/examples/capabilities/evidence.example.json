@@ -1,0 +1,19 @@
+{
+  "id": "evidence-000001",
+  "request": {
+    "method": "GET",
+    "url": "https://app.example.test/api/orders/known-order",
+    "headers": {
+      "Authorization": "[REDACTED]"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body_preview": "{\"orderId\":\"known-order\"}",
+    "sha256": "33ed25be4edc055f9155c06f611f62ad46d9eed2fd486758b9d4177dd3d071d3"
+  },
+  "note": "Synthetic format illustration; no assessment request was made."
+}

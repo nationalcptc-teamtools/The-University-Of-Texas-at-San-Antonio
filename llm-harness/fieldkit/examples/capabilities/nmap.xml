@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<nmaprun scanner="nmap" version="7.95" startstr="Synthetic documentation capture">
+  <host><status state="up" reason="user-set"/><address addr="192.0.2.44" addrtype="ipv4"/>
+    <hostnames><hostname name="vendor.example.test" type="user"/></hostnames>
+    <ports><port protocol="tcp" portid="443"><state state="open" reason="syn-ack"/>
+      <service name="https" tunnel="ssl" product="Example fixture" version="1.0"/>
+      <script id="http-title" output="Example application"/>
+    </port></ports>
+  </host>
+  <runstats><finished exit="success" elapsed="0.0"/><hosts up="1" down="0" total="1"/></runstats>
+</nmaprun>

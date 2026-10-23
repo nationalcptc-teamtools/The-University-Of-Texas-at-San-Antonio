@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "module": "linux/exposure-audit",
+  "started_at": "2026-10-08T12:00:00Z",
+  "finished_at": "2026-10-08T12:00:00Z",
+  "completed": true,
+  "settings": {
+    "documentation_example": true
+  },
+  "host": "synthetic-example-host",
+  "results": [],
+  "findings": [
+    {
+      "id": "finding-host-documentation-example",
+      "kind": "credential_candidate",
+      "title": "Credential-shaped configuration candidate",
+      "host": "synthetic-example-host",
+      "resource": "/srv/example-config/.env",
+      "severity": "info",
+      "confidence": "review",
+      "preview": "DB_PASSWORD=[REDACTED]",
+      "evidence": [
+        "host-evidence-000001"
+      ],
+      "impact": "Format illustration; no host inspection or credential validation occurred.",
+      "remediation": "Review ownership, permissions, and secret storage for a real finding."
+    }
+  ],
+  "endpoints": [],
+  "errors": [],
+  "coverage": [
+    {
+      "category": "documentation",
+      "status": "synthetic"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "host-evidence-000001",
+      "file": "host-evidence.example.json",
+      "host": "synthetic-example-host",
+      "source": "synthetic documentation",
+      "private_raw": false
+    }
+  ],
+  "note": "Synthetic host finding illustration; no assessment was run."
+}

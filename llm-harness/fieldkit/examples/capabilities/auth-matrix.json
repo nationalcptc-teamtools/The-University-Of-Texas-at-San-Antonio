@@ -1,0 +1,67 @@
+{
+  "identities": {
+    "owner": "employee",
+    "other": "vendor",
+    "public": "anonymous"
+  },
+  "objects": [
+    {
+      "id": "known-order",
+      "owner": "owner",
+      "request": {
+        "id": "order-resource",
+        "method": "GET",
+        "url": "https://app.example.test/api/orders/known-order"
+      },
+      "checks": {
+        "statuses": [
+          200
+        ],
+        "json_pointer": "/orderId",
+        "equals": "known-order"
+      }
+    }
+  ],
+  "functions": [
+    {
+      "id": "known-status",
+      "request": {
+        "id": "status-resource",
+        "method": "GET",
+        "url": "https://app.example.test/api/status"
+      },
+      "checks": {
+        "statuses": [
+          200
+        ],
+        "contains": "service-status"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "owner-read",
+      "identity": "owner",
+      "resource": "known-order",
+      "expected": "allow"
+    },
+    {
+      "id": "other-read",
+      "identity": "other",
+      "resource": "known-order",
+      "expected": "deny"
+    },
+    {
+      "id": "public-read",
+      "identity": "public",
+      "resource": "known-order",
+      "expected": "deny"
+    },
+    {
+      "id": "public-status",
+      "identity": "public",
+      "resource": "known-status",
+      "expected": "allow"
+    }
+  ]
+}

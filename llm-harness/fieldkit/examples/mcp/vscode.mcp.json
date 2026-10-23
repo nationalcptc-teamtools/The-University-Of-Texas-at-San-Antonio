@@ -1,0 +1,21 @@
+{
+  "servers": {
+    "fieldkit": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/.venv/bin/fieldkit",
+      "args": [
+        "mcp",
+        "--workspace",
+        "${workspaceFolder}",
+        "--output",
+        "artifacts/mcp",
+        "--max-jobs",
+        "2",
+        "--job-timeout",
+        "600",
+        "--max-output",
+        "1048576"
+      ]
+    }
+  }
+}

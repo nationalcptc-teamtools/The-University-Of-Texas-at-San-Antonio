@@ -1,0 +1,11 @@
+{
+  "receipts": [
+    {
+      "callback_id": "REPLACE_WITH_CURRENT_CALLBACK_ID",
+      "url": "https://listener.example.test/receipt/REPLACE_WITH_CURRENT_CALLBACK_ID",
+      "received_at": "2026-10-08T12:00:00+00:00",
+      "source": "documentation-only-listener-record",
+      "method": "GET"
+    }
+  ]
+}

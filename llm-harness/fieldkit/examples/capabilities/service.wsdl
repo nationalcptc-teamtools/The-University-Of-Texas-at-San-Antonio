@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+ xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+ xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:tns="urn:fieldkit:example"
+ targetNamespace="urn:fieldkit:example" name="ExampleService">
+ <wsdl:types><xsd:schema targetNamespace="urn:fieldkit:example" elementFormDefault="qualified">
+  <xsd:element name="ReadStatus"><xsd:complexType><xsd:sequence>
+   <xsd:element name="itemId" type="xsd:string"/>
+  </xsd:sequence></xsd:complexType></xsd:element>
+ </xsd:schema></wsdl:types>
+ <wsdl:message name="ReadStatusInput"><wsdl:part name="parameters" element="tns:ReadStatus"/></wsdl:message>
+ <wsdl:portType name="ExamplePortType"><wsdl:operation name="ReadStatus">
+  <wsdl:input message="tns:ReadStatusInput"/>
+ </wsdl:operation></wsdl:portType>
+ <wsdl:binding name="ExampleBinding" type="tns:ExamplePortType">
+  <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+  <wsdl:operation name="ReadStatus"><soap:operation soapAction="urn:fieldkit:example/ReadStatus"/>
+   <wsdl:input><soap:body use="literal"/></wsdl:input>
+  </wsdl:operation>
+ </wsdl:binding>
+ <wsdl:service name="ExampleService"><wsdl:port name="ExamplePort" binding="tns:ExampleBinding">
+  <soap:address location="https://app.example.test/soap"/>
+ </wsdl:port></wsdl:service>
+</wsdl:definitions>

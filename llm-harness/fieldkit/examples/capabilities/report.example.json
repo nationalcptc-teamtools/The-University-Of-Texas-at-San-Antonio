@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "module": "web/request-replay",
+  "started_at": "2026-10-08T12:00:00Z",
+  "finished_at": "2026-10-08T12:00:00Z",
+  "completed": true,
+  "settings": {
+    "documentation_example": true
+  },
+  "target_origins": [
+    "https://app.example.test"
+  ],
+  "results": [
+    {
+      "kind": "request_replay",
+      "request_id": "order-read",
+      "url": "https://app.example.test/api/orders/known-order",
+      "method": "GET",
+      "outcome": "observed",
+      "evidence": [
+        "evidence-000001"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "finding-documentation-example",
+      "kind": "request_observation",
+      "title": "Known resource response captured",
+      "url": "https://app.example.test/api/orders/known-order",
+      "severity": "info",
+      "confidence": "observed",
+      "validation_status": "observed",
+      "evidence": [
+        "evidence-000001"
+      ],
+      "impact": "Format illustration only; no vulnerability was assessed.",
+      "remediation": "Review application-specific controls if a real assessment identifies a weakness."
+    }
+  ],
+  "endpoints": [
+    {
+      "url": "https://app.example.test/api/orders/known-order",
+      "method": "GET",
+      "authorized": false
+    }
+  ],
+  "errors": [],
+  "evidence": [
+    {
+      "id": "evidence-000001",
+      "file": "evidence.example.json",
+      "source": "synthetic documentation"
+    }
+  ],
+  "note": "Synthetic report; this example does not assert that a scan ran."
+}

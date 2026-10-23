@@ -1,0 +1,13 @@
+{
+  "issuer": "https://vendor.example.test/oidc",
+  "authorization_endpoint": "https://vendor.example.test/oidc/authorize",
+  "token_endpoint": "https://vendor.example.test/oidc/token",
+  "jwks_uri": "https://vendor.example.test/oidc/jwks",
+  "scopes_supported": [
+    "openid",
+    "shipments"
+  ],
+  "code_challenge_methods_supported": [
+    "S256"
+  ]
+}

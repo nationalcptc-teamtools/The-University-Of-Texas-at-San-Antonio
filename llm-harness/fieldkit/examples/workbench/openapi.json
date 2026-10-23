@@ -1,0 +1,45 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Synthetic shipment API",
+    "version": "1.0"
+  },
+  "servers": [
+    {
+      "url": "https://vendor.example.test"
+    }
+  ],
+  "paths": {
+    "/shipments/queue": {
+      "post": {
+        "operationId": "queueShipment",
+        "responses": {
+          "200": {
+            "description": "Queued"
+          }
+        }
+      }
+    },
+    "/shipment-jobs/{id}/export": {
+      "get": {
+        "operationId": "exportShipment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Application-generated export"
+          }
+        }
+      }
+    }
+  }
+}

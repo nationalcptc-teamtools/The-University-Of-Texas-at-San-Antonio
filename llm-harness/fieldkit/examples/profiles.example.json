@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "user": {
+      "origins": ["https://app.example.test"],
+      "cookies": {"session": "REPLACE_WITH_USER_SESSION"}
+    },
+    "admin": {
+      "origins": ["https://app.example.test"],
+      "headers": {"Authorization": "Bearer REPLACE_WITH_ADMIN_TOKEN"}
+    }
+  }
+}

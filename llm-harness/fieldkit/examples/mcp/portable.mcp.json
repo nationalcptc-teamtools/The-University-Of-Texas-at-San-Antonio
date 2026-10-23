@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "fieldkit": {
+      "type": "stdio",
+      "command": "/absolute/path/to/cptc-private-toolkit/llm-harness/fieldkit/.venv/bin/fieldkit",
+      "args": [
+        "mcp",
+        "--workspace",
+        "/absolute/path/to/cptc-private-toolkit/llm-harness/fieldkit",
+        "--output",
+        "artifacts/mcp",
+        "--max-jobs",
+        "2",
+        "--job-timeout",
+        "600",
+        "--max-output",
+        "1048576"
+      ]
+    }
+  }
+}

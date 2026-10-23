@@ -40,3 +40,11 @@ recorded in the readiness documents.
 External source may enter this repository only through the reviewed license
 gate in [THIRD-PARTY-LICENSES.md](docs/harness/THIRD-PARTY-LICENSES.md). Do not
 push this repository to the public team-tools project.
+
+## Fieldkit
+
+[Fieldkit](fieldkit/README.md) is the standalone web and Linux assessment toolkit in
+`fieldkit/`, including its CLI, interactive console, optional MCP server, examples,
+and tests. Follow its installation guide from `llm-harness/fieldkit` and use a
+separate virtual environment. It is not registered with the guarded harness broker
+and does not inherit the broker's policy or evidence controls.

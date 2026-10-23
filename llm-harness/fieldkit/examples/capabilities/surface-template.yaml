@@ -1,0 +1,16 @@
+id: fieldkit-example-surface
+info:
+  name: Documentation fixture surface marker
+  author: fieldkit
+  severity: info
+  description: A static fingerprint only; no vulnerability proof.
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/fixture-marker"
+    redirects: false
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "FIELDKIT_DOCUMENTATION_FIXTURE"

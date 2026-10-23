@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.25,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fieldkit-pentest"
+version = "0.2.0"
+description = "Modular web and Linux assessment tooling with a command line and interactive console."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27,<1",
+  "prompt-toolkit>=3.0.47,<4",
+  "rich>=13.7,<15",
+  "PyYAML>=6,<7",
+  "cryptography>=43",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
+browser = ["playwright>=1.48,<2"]
+mcp = ["mcp>=2.3,<3", "anyio>=4.5,<5"]
+mssql = ["impacket>=0.12,<1"]
+
+[project.scripts]
+fieldkit = "fieldkit.cli:main"
+fieldkit-mcp = "fieldkit.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fieldkit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["cptc-private-toolkit", "output", "tmp"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
