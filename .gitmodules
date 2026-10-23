@@ -5,4 +5,7 @@
 [submodule "web/php2shell-poc"]
 	path = web/php2shell-poc
 	url = https://github.com/Moriz82/php2shell-poc.git
+[submodule "windows/NetExec"]
+	path = windows/NetExec
+	url = https://github.com/gallantcrusader/NetExec.git
 	branch = main
