@@ -2,3 +2,7 @@
 	path = linux/Edamame-NG
 	url = https://github.com/Moriz82/Edamame-NG.git
 	branch = main
+[submodule "web/php2shell-poc"]
+	path = web/php2shell-poc
+	url = https://github.com/Moriz82/php2shell-poc.git
+	branch = main
